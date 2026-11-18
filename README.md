@@ -1,13 +1,11 @@
 # Laravel 13 Starter
 
-Opinionated starter template for Laravel 13 applications built with Livewire 4 and Flux UI Pro, shipped with a Docker-based development environment and a CI pipeline that enforces lint, static analysis, and test coverage.
+Opinionated starter template for Laravel 13 applications, shipped with a Docker-based development environment and a CI pipeline that enforces lint, static analysis, and test coverage.
 
 ## Stack
 
 - **PHP** 8.4
 - **Laravel** 13
-- **Livewire** 4
-- **Flux UI Pro** 2 (requires a license — see below)
 - **Tailwind CSS** 4 + Vite
 - **MySQL** 8.0 and **Redis** (separate containers for app and tests)
 - **PHPUnit** 12, **Larastan/PHPStan** 3, **Laravel Pint** 1
@@ -16,7 +14,6 @@ Opinionated starter template for Laravel 13 applications built with Livewire 4 a
 ## Requirements
 
 - Docker and Docker Compose
-- A Flux UI Pro license — the `auth.json` file must be populated before running `composer install`. See [Flux Pro installation](https://fluxui.dev/docs/installation).
 - `laravel-13-start.localhost` resolves automatically on macOS; on Linux add an entry to `/etc/hosts`.
 
 ## Quick Start
@@ -84,7 +81,7 @@ Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 5. **Docker push** — publishes the image to GHCR once all checks pass.
 6. **Cleanup** — deletes the per-run image cache entry.
 
-Required secrets: `COMPOSER_AUTH` (for Flux Pro) and `GITHUB_TOKEN` (provided by Actions).
+Required secrets: `GITHUB_TOKEN` (provided by Actions).
 
 ## Project Layout Notes
 
