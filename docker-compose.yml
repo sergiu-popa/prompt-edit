@@ -142,6 +142,22 @@ services:
       retries: 3
       timeout: 5s
 
+  playwright:
+    container_name: 'prompt-edit-playwright'
+    image: 'mcr.microsoft.com/playwright:v1.65.1-noble'
+    profiles: ['e2e']
+    network_mode: 'service:app'
+    ipc: host
+    init: true
+    working_dir: '/var/www'
+    environment:
+      E2E_BASE_URL: 'http://127.0.0.1:8080'
+      CI: '${CI:-}'
+    volumes:
+      - '.:/var/www'
+    depends_on:
+      - app
+
 networks:
   prompt-edit:
     name: prompt-edit
