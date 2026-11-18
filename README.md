@@ -80,7 +80,8 @@ Defined in `docker-compose.yml`:
 | --- | --- | --- |
 | `traefik` | `prompt-edit-traefik` | Reverse proxy, exposes the app at `prompt-edit.localhost` |
 | `app` | `prompt-edit-app` | PHP 8.4 application container (built from `.docker/Dockerfile`) |
-| `worker` | `prompt-edit-worker` | Queue worker |
+| `worker` | `prompt-edit-worker` | Queue worker (`queue:work`) |
+| `scheduler` | `prompt-edit-scheduler` | Scheduler (`schedule:work`) |
 | `postgres` / `test-postgres` | `prompt-edit-postgres` / `-test-postgres` | Application and tmpfs-backed test databases (PostgreSQL 17) |
 | `playwright` | `prompt-edit-playwright` | Playwright 1.65.1 browsers (profile `e2e`; shares the app container's network) |
 | `redis` / `test-redis` | `prompt-edit-redis` / `-test-redis` | Application and test Redis instances |
