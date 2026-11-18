@@ -286,6 +286,7 @@ jobs:
       - name: Start the app
         run: |
           docker run -d --name app \
+            -e LOG_CHANNEL=stderr \
             -e REDIS_HOST -e DB_CONNECTION -e DB_HOST -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
             --network $JOB_DOCKER_NETWORK \
             ${{ env.DOCKER_BRANCH_IMAGE }}
