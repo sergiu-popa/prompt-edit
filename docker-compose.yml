@@ -59,8 +59,6 @@ services:
       args:
         WWWGROUP: '${WWWGROUP}'
         WWWUSER: '${WWWUSER}'
-      secrets:
-        - composer_auth
     depends_on:
       - traefik
       - mysql
@@ -80,7 +78,6 @@ services:
     environment:
       WWWUSER: '${WWWUSER}'
       COMPOSER_HOME: '/tmp/.composer'
-      COMPOSER_AUTH: '${COMPOSER_AUTH}'
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
@@ -102,8 +99,6 @@ services:
       args:
         WWWGROUP: '${WWWGROUP}'
         WWWUSER: '${WWWUSER}'
-      secrets:
-        - composer_auth
     depends_on:
       - app
     extra_hosts:
@@ -111,7 +106,6 @@ services:
     environment:
       WWWUSER: '${WWWUSER}'
       COMPOSER_HOME: '/tmp/.composer'
-      COMPOSER_AUTH: '${COMPOSER_AUTH}'
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
@@ -161,6 +155,3 @@ volumes:
   laravel-13-start-redis:
     driver: local
 
-secrets:
-  composer_auth:
-    environment: COMPOSER_AUTH
