@@ -58,11 +58,9 @@ jobs:
             --target ci \
             -t ${{ env.DOCKER_BRANCH_IMAGE }} \
             --cache-from ${{ env.DOCKER_CACHE_IMAGE }} \
-            --secret id=composer_auth,env=COMPOSER_AUTH \
             .
         env:
           DOCKER_BUILDKIT: 1
-          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
       - name: Save docker image tar
         run: |
           docker save -o /tmp/${{ env.IMAGE_NAME }}-${{ github.run_id }}.tar ${{ env.DOCKER_BRANCH_IMAGE }}
@@ -90,8 +88,6 @@ jobs:
           tools: composer
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
-        env:
-          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
       - name: Run lint
         run: composer lint
 
