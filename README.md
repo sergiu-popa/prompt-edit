@@ -14,7 +14,7 @@ Opinionated starter template for Laravel 13 applications, shipped with a Docker-
 ## Requirements
 
 - Docker and Docker Compose
-- `laravel-13-start.localhost` resolves automatically on macOS; on Linux add an entry to `/etc/hosts`.
+- `prompt-edit.localhost` resolves automatically on macOS; on Linux add an entry to `/etc/hosts`.
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ Opinionated starter template for Laravel 13 applications, shipped with a Docker-
 make setup
 ```
 
-This target copies `.env.example` to `.env`, boots the containers, installs composer and npm dependencies, generates the app key, runs migrations, and builds frontend assets. The app will be available at http://laravel-13-start.localhost.
+This target copies `.env.example` to `.env`, boots the containers, installs composer and npm dependencies, generates the app key, runs migrations, and builds frontend assets. The app will be available at http://prompt-edit.localhost.
 
 To run Vite in dev mode instead of a one-shot build:
 
@@ -32,7 +32,7 @@ make npm-dev
 
 ## Make Targets
 
-All commands run inside the `laravel-13-start-app` container.
+All commands run inside the `prompt-edit-app` container.
 
 ### Containers
 - `make up` / `make down` / `make restart` — start, stop, restart the stack
@@ -62,11 +62,11 @@ Defined in `docker-compose.yml`:
 
 | Service | Container | Purpose |
 | --- | --- | --- |
-| `traefik` | `laravel-13-start-traefik` | Reverse proxy, exposes the app at `laravel-13-start.localhost` |
-| `app` | `laravel-13-start-app` | PHP 8.4 application container (built from `.docker/Dockerfile`) |
-| `worker` | `laravel-13-start-worker` | Queue worker |
-| `mysql` / `test-mysql` | `laravel-13-start-mysql` / `-test-mysql` | Application and tmpfs-backed test databases |
-| `redis` / `test-redis` | `laravel-13-start-redis` / `-test-redis` | Application and test Redis instances |
+| `traefik` | `prompt-edit-traefik` | Reverse proxy, exposes the app at `prompt-edit.localhost` |
+| `app` | `prompt-edit-app` | PHP 8.4 application container (built from `.docker/Dockerfile`) |
+| `worker` | `prompt-edit-worker` | Queue worker |
+| `mysql` / `test-mysql` | `prompt-edit-mysql` / `-test-mysql` | Application and tmpfs-backed test databases |
+| `redis` / `test-redis` | `prompt-edit-redis` / `-test-redis` | Application and test Redis instances |
 
 Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 

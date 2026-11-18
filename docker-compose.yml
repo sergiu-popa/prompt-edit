@@ -1,7 +1,7 @@
 services:
   traefik:
     image: traefik:v2.11
-    container_name: 'laravel-13-start-traefik'
+    container_name: 'prompt-edit-traefik'
     ports:
       - '80:80'
     volumes:
@@ -12,10 +12,10 @@ services:
       - '--providers.docker.exposedbydefault=false'
       - '--entrypoints.web.address=:80'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
   mysql:
-    container_name: 'laravel-13-start-mysql'
+    container_name: 'prompt-edit-mysql'
     image: 'mysql:8.0'
     ports:
       - '3306:3306'
@@ -25,31 +25,31 @@ services:
       MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
-      - 'laravel-13-start-mysql:/var/lib/mysql'
+      - 'prompt-edit-mysql:/var/lib/mysql'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-psecret"]
       retries: 3
       timeout: 5s
 
   redis:
-    container_name: 'laravel-13-start-redis'
+    container_name: 'prompt-edit-redis'
     image: 'redis:alpine'
     ports:
       - '6379:6379'
     volumes:
-      - 'laravel-13-start-redis:/data'
+      - 'prompt-edit-redis:/data'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       retries: 3
       timeout: 5s
 
   app:
-    container_name: 'laravel-13-start-app'
-    image: laravel-13-start-app
+    container_name: 'prompt-edit-app'
+    image: prompt-edit-app
     entrypoint: ['/app/entrypoint.sh']
     command: ["web"]
     build:
@@ -72,7 +72,7 @@ services:
       - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
     labels:
       - traefik.enable=true
-      - traefik.http.routers.web.rule=Host(`laravel-13-start.localhost`)
+      - traefik.http.routers.web.rule=Host(`prompt-edit.localhost`)
       - traefik.http.routers.web.entrypoints=web
       - traefik.http.services.web.loadbalancer.server.port=8080
     environment:
@@ -85,11 +85,11 @@ services:
     volumes:
       - '.:/var/www'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
   worker:
-    container_name: 'laravel-13-start-worker'
-    image: laravel-13-start-app
+    container_name: 'prompt-edit-worker'
+    image: prompt-edit-app
     entrypoint: ['/app/entrypoint.sh']
     command: ["worker"]
     build:
@@ -112,10 +112,10 @@ services:
     volumes:
       - '.:/var/www'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
   test-mysql:
-    container_name: 'laravel-13-start-test-mysql'
+    container_name: 'prompt-edit-test-mysql'
     image: 'mysql:8.0'
     tmpfs: /var/lib/mysql
     ports:
@@ -126,32 +126,32 @@ services:
       MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-psecret"]
       retries: 3
       timeout: 5s
 
   test-redis:
-    container_name: 'laravel-13-start-test-redis'
+    container_name: 'prompt-edit-test-redis'
     image: 'redis:alpine'
     ports:
       - '6381:6379'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       retries: 3
       timeout: 5s
 
 networks:
-  laravel-13-start:
-    name: laravel-13-start
+  prompt-edit:
+    name: prompt-edit
     driver: bridge
 
 volumes:
-  laravel-13-start-mysql:
+  prompt-edit-mysql:
     driver: local
-  laravel-13-start-redis:
+  prompt-edit-redis:
     driver: local
 
