@@ -135,21 +135,22 @@ jobs:
     needs: [docker-build, lint]
     timeout-minutes: 25
     env:
-      DB_HOST: mysql
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
       REDIS_HOST: redis
-      DB_DATABASE: laravel
-      DB_USERNAME: root
+      DB_DATABASE: prompt_edit_test
+      DB_USERNAME: prompt_edit
       DB_PASSWORD: secret
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:17-alpine
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: false
-          MYSQL_ROOT_PASSWORD: secret
-          MYSQL_DATABASE: laravel
+          POSTGRES_DB: prompt_edit_test
+          POSTGRES_USER: prompt_edit
+          POSTGRES_PASSWORD: secret
         ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+          - 5432:5432
+        options: --health-cmd="pg_isready -U prompt_edit" --health-interval=10s --health-timeout=5s --health-retries=5
       redis:
         image: redis
         ports:
@@ -173,12 +174,13 @@ jobs:
           docker load -i /tmp/${{ env.IMAGE_NAME }}-${{ github.run_id }}.tar
       - name: Resolve services network
         run: |
-          SERVICE_NETWORK=$(docker inspect ${{ job.services.mysql.id }} --format '{{ range $k, $v := .NetworkSettings.Networks }}{{ println $k }}{{ end }}' | sed -n '1p')
+          SERVICE_NETWORK=$(docker inspect ${{ job.services.postgres.id }} --format '{{ range $k, $v := .NetworkSettings.Networks }}{{ println $k }}{{ end }}' | sed -n '1p')
           echo "JOB_DOCKER_NETWORK=$SERVICE_NETWORK" >> $GITHUB_ENV
       - name: Migrate the database
         run: |
           docker run \
             -e REDIS_HOST \
+            -e DB_CONNECTION \
             -e DB_HOST \
             -e DB_DATABASE \
             -e DB_USERNAME \
@@ -191,6 +193,7 @@ jobs:
         run: |
           docker run \
             -e REDIS_HOST \
+            -e DB_CONNECTION \
             -e DB_HOST \
             -e DB_DATABASE \
             -e DB_USERNAME \

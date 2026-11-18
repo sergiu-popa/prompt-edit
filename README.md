@@ -7,7 +7,7 @@ Opinionated starter template for Laravel 13 applications, shipped with a Docker-
 - **PHP** 8.4
 - **Laravel** 13
 - **Tailwind CSS** 4 + Vite
-- **MySQL** 8.0 and **Redis** (separate containers for app and tests)
+- **PostgreSQL** 17 and **Redis** (separate containers for app and tests)
 - **PHPUnit** 12, **Larastan/PHPStan** 3, **Laravel Pint** 1
 - **Laravel Boost** for AI-assisted development
 
@@ -42,7 +42,7 @@ All commands run inside the `prompt-edit-app` container.
 
 ### Database
 - `make migrate` / `make fresh` / `make seed` / `make refresh`
-- `make migrate-test` / `make fresh-test` / `make refresh-test` — same commands against the isolated test MySQL container
+- `make migrate-test` / `make fresh-test` / `make refresh-test` — same commands against the isolated test Postgres container
 
 ### Frontend
 - `make npm` — install npm dependencies
@@ -65,7 +65,7 @@ Defined in `docker-compose.yml`:
 | `traefik` | `prompt-edit-traefik` | Reverse proxy, exposes the app at `prompt-edit.localhost` |
 | `app` | `prompt-edit-app` | PHP 8.4 application container (built from `.docker/Dockerfile`) |
 | `worker` | `prompt-edit-worker` | Queue worker |
-| `mysql` / `test-mysql` | `prompt-edit-mysql` / `-test-mysql` | Application and tmpfs-backed test databases |
+| `postgres` / `test-postgres` | `prompt-edit-postgres` / `-test-postgres` | Application and tmpfs-backed test databases (PostgreSQL 17) |
 | `redis` / `test-redis` | `prompt-edit-redis` / `-test-redis` | Application and test Redis instances |
 
 Xdebug is available by setting `XDEBUG_MODE` in `.env`.
@@ -77,7 +77,7 @@ Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 1. **Build image** — builds the `ci` target of `.docker/Dockerfile`, pushes/caches it against a branch tag, and shares it with downstream jobs via the GitHub Actions cache.
 2. **Code style** — `composer lint` (Pint in `--test` mode).
 3. **Static analysis** — `composer stan` (PHPStan with result cache restored from the `main` branch).
-4. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against MySQL and Redis service containers. **Builds fail if coverage drops below 80%.**
+4. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against Postgres and Redis service containers. **Builds fail if coverage drops below 80%.**
 5. **Docker push** — publishes the image to GHCR once all checks pass.
 6. **Cleanup** — deletes the per-run image cache entry.
 

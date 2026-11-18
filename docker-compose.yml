@@ -14,22 +14,21 @@ services:
     networks:
       - prompt-edit
 
-  mysql:
-    container_name: 'prompt-edit-mysql'
-    image: 'mysql:8.0'
+  postgres:
+    container_name: 'prompt-edit-postgres'
+    image: 'postgres:17-alpine'
     ports:
-      - '3306:3306'
+      - '${FORWARD_DB_PORT:-5432}:5432'
     environment:
-      MYSQL_DATABASE: '${DB_DATABASE:-laravel}'
-      MYSQL_ROOT_HOST: '%'
-      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      POSTGRES_DB: '${DB_DATABASE:-prompt_edit}'
+      POSTGRES_USER: '${DB_USERNAME:-prompt_edit}'
+      POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
     volumes:
-      - 'prompt-edit-mysql:/var/lib/mysql'
+      - 'prompt-edit-postgres:/var/lib/postgresql/data'
     networks:
       - prompt-edit
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-psecret"]
+      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE:-prompt_edit}", "-U", "${DB_USERNAME:-prompt_edit}"]
       retries: 3
       timeout: 5s
 
@@ -61,8 +60,8 @@ services:
         WWWUSER: '${WWWUSER}'
     depends_on:
       - traefik
-      - mysql
-      - test-mysql
+      - postgres
+      - test-postgres
       - redis
       - test-redis
     extra_hosts:
@@ -114,21 +113,20 @@ services:
     networks:
       - prompt-edit
 
-  test-mysql:
-    container_name: 'prompt-edit-test-mysql'
-    image: 'mysql:8.0'
-    tmpfs: /var/lib/mysql
+  test-postgres:
+    container_name: 'prompt-edit-test-postgres'
+    image: 'postgres:17-alpine'
+    tmpfs: /var/lib/postgresql/data
     ports:
-      - '3307:3306'
+      - '${FORWARD_TEST_DB_PORT:-5433}:5432'
     environment:
-      MYSQL_DATABASE: '${DB_DATABASE:-laravel}'
-      MYSQL_ROOT_HOST: '%'
-      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      POSTGRES_DB: 'prompt_edit_test'
+      POSTGRES_USER: 'prompt_edit'
+      POSTGRES_PASSWORD: 'secret'
     networks:
       - prompt-edit
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-psecret"]
+      test: ["CMD", "pg_isready", "-q", "-d", "prompt_edit_test", "-U", "prompt_edit"]
       retries: 3
       timeout: 5s
 
@@ -150,7 +148,7 @@ networks:
     driver: bridge
 
 volumes:
-  prompt-edit-mysql:
+  prompt-edit-postgres:
     driver: local
   prompt-edit-redis:
     driver: local

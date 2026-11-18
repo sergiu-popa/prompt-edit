@@ -24,13 +24,13 @@ migrate:
 	docker exec prompt-edit-app php artisan migrate
 
 migrate-test:
-	docker exec -e DB_HOST=prompt-edit-test-mysql prompt-edit-app php artisan migrate
+	docker exec -e DB_HOST=test-postgres -e DB_DATABASE=prompt_edit_test prompt-edit-app php artisan migrate
 
 fresh:
 	docker exec prompt-edit-app php artisan migrate:fresh
 
 fresh-test:
-	docker exec -e DB_HOST=prompt-edit-test-mysql prompt-edit-app php artisan migrate:fresh
+	docker exec -e DB_HOST=test-postgres -e DB_DATABASE=prompt_edit_test prompt-edit-app php artisan migrate:fresh
 
 seed:
 	docker exec prompt-edit-app php artisan db:seed
