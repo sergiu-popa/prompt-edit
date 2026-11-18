@@ -15,10 +15,10 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/prompts (PROMPTS) - v0
 - larastan/larastan (LARASTAN) - v3
 - laravel/boost (BOOST) - v2
-- laravel/mcp (MCP) - v0
+- laravel/mcp (MCP) - v1
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1
-- phpunit/phpunit (PHPUNIT) - v12
+- phpunit/phpunit (PHPUNIT) - v13
 - @inertiajs/vue3 (INERTIA_VUE) - v3
 - tailwindcss (TAILWINDCSS) - v4
 - typescript (TYPESCRIPT) - v6
@@ -113,7 +113,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 # Inertia
 
 - Inertia creates fully client-side rendered SPAs without modern SPA complexity, leveraging existing server-side patterns.
-- Components live in `resources/js/Pages` (unless specified in `vite.config.js`). Use `Inertia::render()` for server-side routing instead of Blade views.
+- Components live in `resources/js/pages` (lowercase; resolved in `resources/js/app.ts`, Vite config is `vite.config.ts`). Use `Inertia::render()` for server-side routing instead of Blade views.
 - ALWAYS use `search-docs` tool for version-specific Inertia documentation and updated code examples.
 
 # Inertia v3

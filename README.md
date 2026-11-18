@@ -9,7 +9,7 @@ Opinionated starter template for Laravel 13 applications, shipped with a Docker-
 - **Inertia** 3 + **Vue** 3 + **TypeScript** 6
 - **Tailwind CSS** 4 + Vite
 - **PostgreSQL** 17 and **Redis** (separate containers for app and tests)
-- **PHPUnit** 12, **Larastan/PHPStan** 3, **Laravel Pint** 1
+- **PHPUnit** 13, **Larastan/PHPStan** 3, **Laravel Pint** 1
 - **ESLint**, **Prettier**, **vue-tsc**
 - **Laravel Boost** for AI-assisted development
 
