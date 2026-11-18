@@ -5,10 +5,14 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
+        "test": "vitest run",
+        "test:unit": "vitest run --project unit",
+        "test:integration": "vitest run --project integration",
+        "test:watch": "vitest",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write resources/js",
-        "format:check": "prettier --check resources/js",
+        "format": "prettier --write resources/js tests/js",
+        "format:check": "prettier --check resources/js tests/js",
         "types": "vue-tsc --noEmit"
     },
     "devDependencies": {
@@ -17,16 +21,19 @@
         "@types/node": "^22.20.5",
         "@vitejs/plugin-vue": "^6.0.11",
         "@vue/eslint-config-typescript": "^14.9.0",
+        "@vue/test-utils": "^2.6.0",
         "concurrently": "^10.0.5",
         "eslint": "^10.15.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-vue": "^10.12.1",
+        "jsdom": "^31.0.1",
         "laravel-vite-plugin": "^3.0.0",
         "prettier": "^3.10.1",
         "prettier-plugin-tailwindcss": "^0.8.1",
         "tailwindcss": "^4.0.0",
         "typescript": "~6.0.3",
         "vite": "^8.0.0",
+        "vitest": "^5.1.1",
         "vue": "^3.5.45",
         "vue-tsc": "^3.3.14"
     }

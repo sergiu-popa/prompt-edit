@@ -3,8 +3,15 @@
         "target": "ES2022",
         "module": "ESNext",
         "moduleResolution": "bundler",
-        "lib": ["ES2022", "DOM", "DOM.Iterable"],
-        "types": ["vite/client", "node"],
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "types": [
+            "vite/client",
+            "node"
+        ],
         "strict": true,
         "noUncheckedIndexedAccess": true,
         "noImplicitOverride": true,
@@ -15,8 +22,17 @@
         "noEmit": true,
         "jsx": "preserve",
         "paths": {
-            "@/*": ["./resources/js/*"]
+            "@/*": [
+                "./resources/js/*"
+            ]
         }
     },
-    "include": ["resources/js/**/*.ts", "resources/js/**/*.d.ts", "resources/js/**/*.vue", "vite.config.ts"]
+    "include": [
+        "resources/js/**/*.ts",
+        "resources/js/**/*.d.ts",
+        "resources/js/**/*.vue",
+        "tests/js/**/*.ts",
+        "vite.config.ts",
+        "vitest.config.ts"
+    ]
 }
