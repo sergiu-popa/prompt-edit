@@ -57,7 +57,20 @@ All commands run inside the `prompt-edit-app` container.
 - `make stan` — PHPStan / Larastan
 - `make test` — PHPUnit (optionally `make test filter=testName`)
 - `make test-unit` / `make test-feature`
-- `make check` — lint + stan + test + js-check
+- `make js-test` — Vitest unit + integration projects
+- `make e2e` — production build, then Playwright (desktop + mobile) in the `playwright` Docker service; `make e2e filter="name"` to grep
+- `make check` — lint + stan + test + js-check + js-test
+
+## Testing
+
+| Layer | Tool | Location | Run |
+| --- | --- | --- | --- |
+| PHP unit and feature (HTTP, Inertia props, jobs) | PHPUnit against `test-postgres` | `tests/Unit`, `tests/Feature` | `make test` |
+| JS unit — pure `resources/js/lib` functions and composables | Vitest (`unit` project, node) | `tests/js/unit` | `make js-test` |
+| JS integration — mounted components and pages, Inertia mocked | Vitest + Vue Test Utils (`integration` project, jsdom) | `tests/js/integration` | `make js-test` |
+| End-to-end — critical user flows in a real browser | Playwright (`playwright` Compose service) | `tests/e2e` | `make e2e` |
+
+Every Playwright test also fails if the browser logs a console or page error (`tests/e2e/fixtures.ts`).
 
 ## Docker Services
 
@@ -69,6 +82,7 @@ Defined in `docker-compose.yml`:
 | `app` | `prompt-edit-app` | PHP 8.4 application container (built from `.docker/Dockerfile`) |
 | `worker` | `prompt-edit-worker` | Queue worker |
 | `postgres` / `test-postgres` | `prompt-edit-postgres` / `-test-postgres` | Application and tmpfs-backed test databases (PostgreSQL 17) |
+| `playwright` | `prompt-edit-playwright` | Playwright 1.65.1 browsers (profile `e2e`; shares the app container's network) |
 | `redis` / `test-redis` | `prompt-edit-redis` / `-test-redis` | Application and test Redis instances |
 
 Xdebug is available by setting `XDEBUG_MODE` in `.env`.
@@ -79,11 +93,12 @@ Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 
 1. **Build image** — builds the `ci` target of `.docker/Dockerfile`, pushes/caches it against a branch tag, and shares it with downstream jobs via the GitHub Actions cache.
 2. **Code style** — `composer lint` (Pint in `--test` mode).
-3. **Frontend checks** — `npm ci`, ESLint, Prettier check, `vue-tsc` and a production build on Node 22.
+3. **Frontend checks** — `npm ci`, ESLint, Prettier check, `vue-tsc`, Vitest and a production build on Node 22.
 4. **Static analysis** — `composer stan` (PHPStan with result cache restored from the `main` branch).
 5. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against Postgres and Redis service containers. **Builds fail if coverage drops below 80%.**
-6. **Docker push** — publishes the image to GHCR once all checks pass.
-7. **Cleanup** — deletes the per-run image cache entry.
+6. **E2E** — boots the CI image against Postgres + Redis services and runs Playwright inside the app container's network; uploads the report on failure.
+7. **Docker push** — publishes the image to GHCR once all checks pass.
+8. **Cleanup** — deletes the per-run image cache entry.
 
 Required secrets: `GITHUB_TOKEN` (provided by Actions).
 
