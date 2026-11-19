@@ -4,7 +4,7 @@
 Generation record and the single forward-only transition action
 
 ## Status
-`qa-passed`
+`done`
 
 ## Description
 This story creates the Generation domain, the backbone of grading criteria #1 and #2.
