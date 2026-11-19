@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -170,6 +171,26 @@ trait InteractsWithFakePixelforge
         self::assertIsInt($job->delay, 'The fake delays its jobs by whole seconds.');
 
         return $job->delay;
+    }
+
+    /**
+     * Posts every captured webhook to our real endpoint, byte for byte and
+     * with exactly its captured headers, in the order the fake sent them.
+     *
+     * @return list<TestResponse>
+     */
+    protected function replayFakeWebhooks(): array
+    {
+        return array_map(function (Request $request): TestResponse {
+            $headers = array_map(fn (array $values): string => implode(', ', $values), $request->headers());
+
+            return $this->call(
+                'POST',
+                (string) parse_url($request->url(), PHP_URL_PATH),
+                server: $this->transformHeadersToServerVars($headers),
+                content: $request->body(),
+            );
+        }, $this->fakeWebhookRequests());
     }
 
     protected function fakeGenerationRow(string $providerId): FakePixelforgeGeneration
