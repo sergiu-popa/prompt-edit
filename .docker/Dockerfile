@@ -17,6 +17,7 @@ RUN apt-get update \
         libzip-dev \
         libpng-dev \
         libicu-dev \
+        libpq-dev \
         supervisor \
         git \
         unzip \
@@ -27,7 +28,7 @@ RUN docker-php-ext-install \
         mbstring \
         gd \
         pdo \
-        pdo_mysql \
+        pdo_pgsql \
         zip \
         pcntl \
         intl \
@@ -69,8 +70,7 @@ RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH \
-    composer install \
+RUN composer install \
     --no-dev \
     --ignore-platform-reqs \
     --no-interaction \
@@ -135,8 +135,7 @@ RUN chown -R $WWWUSER:$WWWGROUP .
 
 USER www-data
 
-RUN --mount=type=secret,id=composer_auth,env=COMPOSER_AUTH \
-    composer install \
+RUN composer install \
     --prefer-dist \
     --no-scripts \
     --optimize-autoloader
