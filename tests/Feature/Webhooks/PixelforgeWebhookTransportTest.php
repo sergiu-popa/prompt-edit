@@ -255,7 +255,9 @@ final class PixelforgeWebhookTransportTest extends TestCase
 
     /**
      * With a sentinel secret, no log line of any outcome carries the secret
-     * or the body, in its message or its context.
+     * or the body, in its message or its context. Nor does it carry any part
+     * of the generation object: the user's prompt and the signed image URL
+     * appear only in the body.
      *
      * @param  Closure(Generation): string  $bodyFor
      * @param  Closure(string, int, string): ?string  $sign  the signature header, from the body, now and the secret
@@ -271,12 +273,16 @@ final class PixelforgeWebhookTransportTest extends TestCase
         $this->deliverPixelforgeWebhook($body, ['Pixelforge-Signature' => $sign($body, now()->getTimestamp(), $sentinel)])->assertStatus($status);
 
         $this->assertSame($logs, $this->loggedMessages() !== []);
+        $imageUrl = self::lighthouseSucceededObjectFor($lighthouse)['image_url'];
+        $this->assertIsString($imageUrl);
 
         foreach ($this->loggedMessages() as $message) {
             $line = $message->message . ' ' . json_encode($message->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
 
             $this->assertStringNotContainsString($sentinel, $line);
             $this->assertStringNotContainsString($body, $line);
+            $this->assertStringNotContainsString($lighthouse->prompt, $line);
+            $this->assertStringNotContainsString($imageUrl, $line);
         }
     }
 
