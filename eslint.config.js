@@ -4,15 +4,18 @@ import vue from 'eslint-plugin-vue';
 
 /**
  * D-24: only resources/js/lib/money.ts formats money. `toFixed` and currency-style
- * `Intl.NumberFormat` / `toLocaleString` anywhere else fail the lint. The core rule
- * sees scripts and the Vue rule sees template expressions, so both get the selectors.
+ * `Intl.NumberFormat` / `toLocaleString` anywhere else fail the lint, however the name
+ * is spelled (`x.toFixed`, `x['toFixed']`, `` style: `currency` ``). The core rule sees
+ * scripts and the Vue rule sees template expressions, so both get the selectors.
  */
 const MONEY_FORMATTING_MESSAGE = 'Format money with resources/js/lib/money.ts (D-24), never with toFixed or currency-style Intl.';
 
+/** A name written as an identifier, a string (`['toFixed']`, `'style'`) or a template literal. */
+const named = (path, name) => `:matches([${path}.name='${name}'], [${path}.value='${name}'], [${path}.quasis.0.value.cooked='${name}'])`;
+
 const moneyFormattingSelectors = [
-    { selector: "MemberExpression[property.name='toFixed']", message: MONEY_FORMATTING_MESSAGE },
-    { selector: "Property[key.name='style'][value.value='currency']", message: MONEY_FORMATTING_MESSAGE },
-    { selector: "Property[key.value='style'][value.value='currency']", message: MONEY_FORMATTING_MESSAGE },
+    { selector: `MemberExpression${named('property', 'toFixed')}`, message: MONEY_FORMATTING_MESSAGE },
+    { selector: `Property${named('key', 'style')}${named('value', 'currency')}`, message: MONEY_FORMATTING_MESSAGE },
 ];
 
 export default defineConfigWithVueTs(

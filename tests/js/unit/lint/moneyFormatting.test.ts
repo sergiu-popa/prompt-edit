@@ -99,6 +99,32 @@ describe('the money-formatting lint rule', () => {
     );
 
     it(
+        'rejects toFixed reached through a computed property',
+        async () => {
+            const errors = await moneyFormattingErrors(
+                "export const a = (1.5)['toFixed'](2);\nexport const b = (1.5)[`toFixed`](2);\n",
+                TS_FILE,
+            );
+
+            expect(errors).toHaveLength(2);
+        },
+        TIMEOUT_MS,
+    );
+
+    it(
+        'rejects a currency style written as a template literal',
+        async () => {
+            const errors = await moneyFormattingErrors(
+                "export const usd = new Intl.NumberFormat('en-US', { style: `currency`, currency: 'USD' });\n",
+                TS_FILE,
+            );
+
+            expect(errors).toHaveLength(1);
+        },
+        TIMEOUT_MS,
+    );
+
+    it(
         'allows the same code in resources/js/lib/money.ts',
         async () => {
             const errors = await moneyFormattingErrors(
@@ -114,7 +140,10 @@ describe('the money-formatting lint rule', () => {
     it(
         'allows plain number formatting',
         async () => {
-            const errors = await moneyFormattingErrors("export const count = new Intl.NumberFormat('en-US').format(4012);\n", TS_FILE);
+            const errors = await moneyFormattingErrors(
+                "export const count = new Intl.NumberFormat('en-US', { style: 'decimal' }).format(4012);\n",
+                TS_FILE,
+            );
 
             expect(errors).toStrictEqual([]);
         },
