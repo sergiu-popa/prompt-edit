@@ -1,18 +1,18 @@
 # QA — PE-007-credit-ledger-hold-settle-release
 
-**Verdict: QA FAILED**
+**Verdict: QA PASSED**
 
-One item fails: the logging clause of AC18 for a succeeded object without `usage`. Everything else passes. Status stays `qa-ready`. See *Failures*.
+Every AC passes. The one failure from the first run (AC18, logging the generation id for a succeeded object without `usage`) is fixed in `cfa63c4` and re-verified below. Status moves to `qa-passed`.
 
-Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 2). Branch `pe-007-credit-ledger-hold-settle-release` at `6177ebc`, worktree clean before this run.
+Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 2). Branch `pe-007-credit-ledger-hold-settle-release` at `b3875fc`, worktree clean at the start of this run. This run supersedes the first run, which ended QA FAILED.
 
 ## Suite
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Full check | `chain-make.sh chain check` | Exit 0. Pint: PASS, 124 files. Larastan: no errors. PHPUnit 608 passed (2,730 assertions), none skipped, risky or incomplete. ESLint, Prettier and vue-tsc clean. Vitest 107 passed. |
+| Full check | `chain-make.sh chain check` | Exit 0. Pint: PASS, 124 files. Larastan: no errors. PHPUnit 610 passed (2,750 assertions), none skipped, risky or incomplete. ESLint, Prettier and vue-tsc clean. Vitest 107 passed (9 files). |
 
-Log: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-007/check-run1.log`.
+Log: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-007/check-run2.log`.
 
 ## Acceptance criteria
 
@@ -33,31 +33,31 @@ Log: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-
 | 13 late processing after succeeded; failed after succeeded; succeeded after provider failed: nothing written | `TransitionGenerationActionExactlyOnceTest::test_a_later_snapshot_never_changes_a_terminal_generations_money` (3 rows) | Pass |
 | 14 DB rejects a second hold/release/charge per generation; null generation never collides | `CreditLedgerEntryTest::test_the_database_refuses_a_second_entry_of_one_type_for_a_generation` (3 types); `test_entries_without_a_generation_never_collide` | Pass |
 | 15 bypassed guard: duplicates ignored, transaction usable, one of each, logged | `TransitionGenerationActionExactlyOnceTest::test_duplicates_left_by_a_bypassed_status_guard_are_ignored_and_logged` | Pass |
-| 16 two connections: one release and one charge; succeeded vs failed gives one outcome, failed never charged | `TransitionGenerationActionConcurrencyTest::test_two_simultaneous_appliers_of_one_snapshot_write_the_row_once`; `test_a_succeeded_and_a_failed_snapshot_at_once_settle_exactly_one_outcome` (real child processes, lock-wait asserted) | Pass |
+| 16 two connections: one release and one charge; succeeded vs failed gives one outcome, failed never charged | `TransitionGenerationActionConcurrencyTest::test_two_simultaneous_appliers_of_one_snapshot_write_the_row_once`; `test_a_succeeded_and_a_failed_snapshot_at_once_settle_exactly_one_outcome` (real child processes) | Pass |
 | 17 failing ledger insert rolls back status, costs and entries, for all four terminal paths | `TransitionGenerationActionExactlyOnceTest::test_a_failing_settlement_write_rolls_the_whole_transition_back` (4 rows) | Pass |
 | 18 bad rate: throws, logs generation id, writes nothing | `TransitionGenerationActionExactlyOnceTest::test_a_rate_that_is_not_a_whole_nanodollar_is_refused_logged_and_writes_nothing` | Pass |
-| 18 missing usage: throws, writes nothing | `TransitionGenerationActionExactlyOnceTest::test_a_succeeded_object_without_usage_is_refused_before_it_reaches_the_generation` | Pass for throw and no-write. **Fail for "logs the generation id"**, see *Failures*. |
+| 18 missing usage: throws, logs generation id, writes nothing | `TransitionGenerationActionExactlyOnceTest::test_a_succeeded_object_without_usage_is_refused_logged_and_writes_nothing` (log context `generation_id`, `provider_id`, `error` asserted exactly); `GenerationSnapshotTest::test_an_incomplete_succeeded_snapshot_without_our_generation_id_logs_a_null_id`; `test_a_valid_snapshot_logs_nothing` | Pass (fixed in `cfa63c4`, see *First run*) |
 | 19 update and delete throw, row unchanged; `created_at` only | `CreditLedgerEntryTest::test_updating_an_entry_throws_and_leaves_the_row_unchanged`; `test_saving_a_changed_entry_throws_and_leaves_the_row_unchanged`; `test_deleting_an_entry_throws_and_leaves_the_row_unchanged`; `test_an_entry_reads_back_with_its_casts_and_a_creation_time` | Pass |
 | 20 D-09: stays failed; provider cost 305,510,000 plus usage, rates and `completed_at` recorded; charge 0; net 0; anomaly logged; replay changes nothing | `TransitionGenerationActionConflictsTest::test_the_lighthouse_succeeding_after_a_local_failure_records_its_cost_but_charges_nothing` | Pass |
 
 ## Money check
 
-I recomputed each figure in the story from its formula, separately from the code. All match the assertions.
+I recomputed each figure from the story's formulas, separately from the code. All match the assertions.
 
 - Provider max, Lighthouse: 14×5,000 + 765×10,000 + 6,450×40,000 + 8,000×12,500 = 365,720,000. ×1.25 = 457,150,000.
 - Provider max, docs maximum: 373,875,000. ×1.25 = 467,343,750.
 - AC5 provider: 60,000 + 7,650,000 + 258,000,000 + 39,800,000 = 305,510,000. ×1.25 = 381,887,500 (exact).
-- AC6 provider: 575,000 + 15,300,000 + 258,000,000 + 100,000,000 = 373,875,000.
+- AC6 provider: 575,000 + 15,300,000 + 258,000,000 + 100,000,000 = 373,875,000. Charge 467,343,750, equal to the hold.
 - AC7 provider: 65,013 + 11,200,000 + 3,125,000 = 14,390,013. ×1.25 = 17,987,516.25, ceil 17,987,517.
 - AC7 hold: 75,000 + 11,200,000 + 6,250,000 = 17,525,000. ×1.25 = 21,906,250.
 - AC8 provider: 65,000 + 22,400,000 + 3,125,000 = 25,590,000. ×1.25 = 31,987,500.
 - Factory: provider 87,450,000, charge 109,312,500.
 
-Each charge is recorded once. Replays and concurrent appliers are covered by the exactly-once and concurrency tests above.
+Each charge is recorded once. Replays and concurrent appliers are covered by the exactly-once and concurrency tests above, which all pass in this run.
 
 ## Edge cases
 
-No scratch probes were added. The edge cases are the named tests above: replay, concurrent applier, succeeded versus failed race, bypassed guard, rounding boundary (AC7's `5.001`), exactly-at-hold boundary (AC6), above-hold (AC8), non-whole rate (AC18) and the local-failure-then-provider-success path (AC20). Every case passes in the full run.
+No scratch probes were added. The edge cases are the named tests above: replay, concurrent applier, succeeded versus failed race, bypassed guard, rounding boundary (AC7's `5.001`), exactly-at-hold boundary (AC6), above-hold (AC8), non-whole rate (AC18), missing usage (AC18), and the local-failure-then-provider-success path (AC20). Every case passes in the full run.
 
 Not probed: a succeeded snapshot with all-zero usage. The story does not specify it, and it is not in scope.
 
@@ -65,29 +65,13 @@ Not probed: a succeeded snapshot with all-zero usage. The story does not specify
 
 The full PHPUnit, Vitest, Larastan, Pint, ESLint, Prettier and vue-tsc suites pass. No pre-existing test was removed or skipped.
 
-## Failures
+## First run
 
-**AC18, missing-usage half: "logs the generation id" is not met in this story.**
-
-- The refusal happens in `GenerationSnapshot::from()`, which throws `InvalidGenerationSnapshotException` for a succeeded object without `usage`. The Pixelforge parser has no `Log::` call, so no generation id is logged.
-- The test `test_a_succeeded_object_without_usage_is_refused_before_it_reaches_the_generation` asserts the throw and the unchanged row. It does not assert a log entry, and its docblock says logging is the caller's job.
-- Review round 1 (W1) accepted this and moved the obligation to PE-008 and PE-014. PE-008's Technical Notes carry it. PE-014 covers per-row exceptions with the generation id.
-- The story's AC18 text is unchanged and still says the snapshot "throws, writes nothing and logs the generation id". This QA run cannot waive the AC, so it is recorded as a failure.
-
-To clear it, either:
-
-1. Add a `Log::error` with `generation_id` (from `metadata.generation_id`) and the snapshot id inside the parser's rejection path, then add an assertion for it; or
-2. Amend AC18 in `story.md` to say the parsing caller logs the id, and re-run QA. The PE-008 and PE-014 hand-offs already exist.
-
-Choosing between these is a scope decision for the story owner.
-
-- [x] **Resolved (`cfa63c4`), option 1.** The AC text stands, so the code now meets it. `GenerationSnapshot::from()` logs at error level, with `generation_id` (from `metadata.generation_id`, null when absent), `provider_id` and the error, before it throws for a succeeded object without `usage`, `rates`, `image_url` or `completed_at`. The AC18 test is now `test_a_succeeded_object_without_usage_is_refused_logged_and_writes_nothing` and asserts the throw, the unchanged row, the single hold and the exact log entry. `GenerationSnapshotTest` now boots the app, asserts the log for all four missing fields, a null id when metadata has none, and no log for a valid snapshot. PE-008's hand-off stays: it adds the webhook event id and decides the response. `chain check` exit 0: Pint PASS (124 files), Larastan no errors, PHPUnit 610 passed (2,751 assertions), ESLint, Prettier and vue-tsc clean, Vitest 107 passed.
-
-No other AC fails. No Critical review items are open.
+The first QA run (commit `9d8cdcc`) ended QA FAILED on one item: AC18's "logs the generation id" for a succeeded object without `usage`. The parser did not log it, and the test asserted only the throw. The fix is in `cfa63c4`: `GenerationSnapshot::from()` logs at error level with `generation_id` (from `metadata.generation_id`, null when absent), `provider_id` and the error, before it throws. This run re-verified it in code and tests (see the AC 18 row). The story's AC text was not changed.
 
 ## Visual verification
 
-No UI in this story (`story.md`: "No UI"). It is backend only. No browser pass, screenshots, horizontal-scroll check, console check or E2E run applies in this worktree. The orchestrator re-runs the E2E suite on the main stack.
+No UI in this story (`story.md`: "No UI"). It is backend only. No browser pass, screenshots, horizontal-scroll check, console check or E2E run applies in this worktree, and none was attempted. The orchestrator re-runs the E2E suite on the main stack.
 
 No fixture rows were written to any shared database. All tests ran in the isolated chain test database, under `RefreshDatabase` or truncation. The concurrency test truncates the chain test database in teardown, as planned.
 
