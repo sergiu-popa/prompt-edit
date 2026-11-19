@@ -116,6 +116,9 @@ Serves grading #1 correct money (the balance is the ledger sum, the hold is the 
   - D-14 is shared with PE-007: the hold mechanics live there, and the enforcement lives here.
   - requirements.md §3, and §6 on rates changing between estimate and creation.
 - **Ledger contents (PE-007):** entries are `hold`, `release` and `charge`, and this story adds `grant` and `purchase`. Provider cost and user charge also live on the generation, so the balance query never needs to exclude anything provider-related.
+- **Ledger guards left open by PE-007:**
+  - `unique(generation_id, type)` does not limit an entry without a generation, so nothing stops a `hold`, `release` or `charge` with a null `generation_id`. Once `grant` and `purchase` exist, add a CHECK that those three types always carry a generation.
+  - `SettleGenerationCreditsAction` inserts with `ON CONFLICT DO NOTHING` and no conflict target (D-25), so it swallows any unique violation on the table. If this story adds another unique index, purchases and grants must not reuse that writer.
 - **Locking:**
   - Check the balance and write the hold in one transaction, under the user-row lock, or two tabs can both pass the check and overspend.
   - Compute the balance in a single aggregate query, not per entry.
