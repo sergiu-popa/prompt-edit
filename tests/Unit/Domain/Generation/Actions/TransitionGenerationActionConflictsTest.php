@@ -12,6 +12,7 @@ use App\Domain\Generation\Models\Generation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\CapturesLogMessages;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
@@ -23,6 +24,7 @@ use Tests\TestCase;
 final class TransitionGenerationActionConflictsTest extends TestCase
 {
     use CapturesLogMessages;
+    use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
     use RefreshDatabase;
@@ -123,18 +125,21 @@ final class TransitionGenerationActionConflictsTest extends TestCase
 
     /**
      * D-09: a 409 made us fail the row locally, but the generation Pixelforge
-     * already held under our key went on to succeed.
+     * already held under our key went on to succeed. Pixelforge bills it, so
+     * its cost is recorded for the operator report, but the user is not
+     * charged.
      */
-    public function test_a_succeeded_snapshot_over_a_locally_failed_row_is_ignored_and_logged(): void
+    public function test_a_succeeded_snapshot_over_a_locally_failed_row_records_the_provider_cost_and_is_logged(): void
     {
         $generation = Generation::factory()->failedLocally()->create();
         $snapshot = self::snapshotFor($generation, GenerationStatus::Succeeded);
-        $before = $this->rawGenerationRow($generation);
-        $this->travel(1)->minutes();
 
         $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $this->transitionGeneration($generation, $snapshot));
 
-        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $row = $this->reloadedGeneration($generation);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(87_450_000, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
         $this->assertConflictLogged(
             'Ignored a Pixelforge snapshot whose terminal status contradicts the generation\'s.',
             [
@@ -146,6 +151,49 @@ final class TransitionGenerationActionConflictsTest extends TestCase
                 'outcome' => 'ignored_conflict',
             ],
         );
+    }
+
+    /**
+     * AC20, on the docs' example: the provider cost, usage, rates and
+     * completion are kept to match `/v1/usage`, and the net stays 0.
+     */
+    public function test_the_lighthouse_succeeding_after_a_local_failure_records_its_cost_but_charges_nothing(): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+        $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $snapshot = self::lighthouseSucceededSnapshotFor($generation);
+
+        $outcome = $this->transitionGeneration($generation, $snapshot);
+
+        $row = $this->reloadedGeneration($generation);
+        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $outcome);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(305_510_000, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
+        $this->assertSame(
+            [12, 765, 6_450, 3_184],
+            [$row->input_text_tokens, $row->input_image_tokens, $row->output_tokens, $row->reasoning_tokens],
+        );
+        $this->assertSame(
+            ['input_text_tokens' => '5.00', 'input_image_tokens' => '10.00', 'output_tokens' => '40.00', 'reasoning_tokens' => '12.50'],
+            $row->rates,
+        );
+        $this->assertSameInstant('2026-11-18T23:59:59Z', $row->completed_at);
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($generation));
+        $this->assertSame(0, $this->ledgerNetFor($generation));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame($generation->id, $logged[0]->context['generation_id']);
+        $this->assertSame($snapshot->id, $logged[0]->context['incoming_provider_id']);
+
+        $before = $this->rawGenerationRow($generation);
+        $this->travel(1)->minutes();
+
+        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $this->transitionGeneration($generation, self::lighthouseSucceededSnapshotFor($row)));
+
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($generation));
     }
 
     /**

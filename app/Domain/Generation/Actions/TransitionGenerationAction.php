@@ -25,7 +25,9 @@ use Illuminate\Support\Facades\Log;
  * The single path that changes a generation's status (D-06): create and replay
  * responses, webhooks and the poller bring a Pixelforge snapshot, and submit
  * failures bring a local failure. Status only moves to a higher rank, terminal
- * statuses never change, and only an `Applied` outcome writes.
+ * statuses never change, and only an `Applied` outcome changes the status.
+ * The one write on another outcome is D-09's provider cost after a local
+ * failure.
  *
  * Money moves with the status, in the same transaction: a succeeded snapshot
  * is priced from its own usage and rates before anything is written, then the
@@ -71,6 +73,10 @@ final class TransitionGenerationAction
 
             if ($outcome === GenerationTransitionOutcome::Applied) {
                 $this->apply($locked, $change);
+            }
+
+            if ($change instanceof GenerationSnapshot && $this->isUnrecordedSuccessAfterLocalFailure($locked, $change, $outcome)) {
+                $this->recordProviderCostOnly($locked, $change);
             }
 
             return $outcome;
@@ -203,6 +209,45 @@ final class TransitionGenerationAction
     {
         $this->write($locked, [...$this->snapshotAttributes($snapshot), ...self::FREE]);
         $this->settleGenerationCredits->execute($locked->id, null);
+    }
+
+    /**
+     * D-09: we failed the row locally (a 409 at submit), yet the generation
+     * Pixelforge already held under our key succeeded. The row's usage is
+     * still empty until it is recorded, so a replay writes nothing.
+     */
+    private function isUnrecordedSuccessAfterLocalFailure(Generation $locked, GenerationSnapshot $snapshot, GenerationTransitionOutcome $outcome): bool
+    {
+        return $outcome === GenerationTransitionOutcome::IgnoredConflict
+            && $snapshot->status === GenerationStatus::Succeeded
+            && $locked->local_failure_reason !== null
+            && $locked->output_tokens === null;
+    }
+
+    /**
+     * Pixelforge bills that generation on its `completed_at` day, so its cost,
+     * usage, rates and completion are kept for the operator report to match
+     * `/v1/usage`. The status stays failed, the user charge stays 0 and the
+     * ledger is untouched: the user is never charged for it. The conflict log
+     * already written is the anomaly log.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function recordProviderCostOnly(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        [$providerCost] = $this->price($locked, $snapshot);
+
+        $this->write($locked, [
+            'provider_cost_nanodollars' => $providerCost->amount,
+            'input_text_tokens' => $snapshot->usage?->inputTextTokens,
+            'input_image_tokens' => $snapshot->usage?->inputImageTokens,
+            'output_tokens' => $snapshot->usage?->outputTokens,
+            'reasoning_tokens' => $snapshot->usage?->reasoningTokens,
+            'rates' => $snapshot->rates,
+            'completed_at' => $snapshot->completedAt,
+        ]);
     }
 
     /**
