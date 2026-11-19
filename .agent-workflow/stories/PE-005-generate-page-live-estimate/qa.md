@@ -2,94 +2,99 @@
 
 **Verdict: QA FAILED**
 
-Run on branch `pe-005-generate-page-live-estimate` at `623ae83`. Prerequisites checked: story status `qa-ready`, review verdict `APPROVE`. Status stays `qa-ready`.
+Run on branch `pe-005-generate-page-live-estimate` at `94bbb0b` (the QA-fix round). Prerequisites checked: story status `qa-ready`, review verdict `APPROVE`. Status stays `qa-ready`.
 
 ## Failing items
 
-1. **AC11 layout at 375px: the breakdown overflows the estimate card.** In the AC3 state (High, Landscape, 1 reference), the breakdown table's right edge is at 365.66px, but the card's inner edge is at 359px. That is 6.66px past the card border, so the right-hand amounts (`$0.0077`, `<$0.0001 – $0.0001`, `$0.4571`) cross the card edge. The table is 333px wide with no internal scroll, and the document never scrolls sideways, so the existing no-horizontal-scroll check does not catch it. The Playwright mobile project (Pixel 7, 412px) does not reproduce it either. Measured overflow at 768 and 1440: 0px.
-   - Fix: make the breakdown fit the card at phone width (narrower label or token columns, or let the token cell wrap below about 400px). Then re-run the 375 browser pass and add a 375 layout assertion to `generate.spec.ts`.
-   - Screenshots: `ac3-375.png`, `ac3-panel-375.png` (see Visual verification).
-   - [x] **Fixed** in `17ba3a2` (engineer, QA fix round). `EstimateBreakdown` sits in a container query: below 32rem (the phone card and the desktop sidebar) each line stacks its cost under its tokens and the totals run label-left, cost-right; from 32rem it stays a three-column table. Table semantics are unchanged (Chromium ARIA snapshot at 375 still shows `rowheader` and `cell`). `generate.spec.ts` now asserts every amount and the table sit inside the card's content box at the project's width and at 375px in the AC3 state; it failed before the fix (table right 365.66) and passes in both projects after.
+1. **AC5 tap: the exact value closes on the tap that opens it (touch, Chromium emulation).** Tapping the `$0.4571` amount in the AC3 state (Playwright `mobile` project, Pixel 7 device, `hasTouch`, 412px) opens the tip, then closes it about 14ms later.
+   - Trace (`performance.now()` ms after the tap starts): `pointerdown@43, touchstart@43, touchend@43, mouseover@43, mouseenter@43, mousedown@44, focus@44, mouseup@44, click@44, mouseout@58, mouseleave@58`. The tooltip is shown after `click` and hidden by `mouseleave`.
+   - Control: plain buttons ("Add reference image") and labels ("Low") get the same `mouseout` and `mouseleave` 12–16ms after a tap, with no user action. The emulator emits them, and `MoneyAmount.vue` closes the tip on `mouseleave`.
+   - Measured: `toBeVisible()` passed once, then the tip's bounding box was `null` in the same test. A later check read `isVisible() === false` 300ms after the tap. The screenshot taken after the tap shows no tooltip (`recheck-shots/tap-revealed.png`).
+   - Tap elsewhere closes the tip correctly (`toBeHidden` passed), and the button's accessible description is `$0.457137500`, so the value is exposed.
+   - Real-device behaviour was not tested; this is the browser the pass drives.
+   - Fix: stop relying on `mouseenter`/`mouseleave` for touch input. Either check `pointerType === 'mouse'` before hover handling, or open on `click` and close on outside `pointerdown`, `blur` or Escape. Then add a `hasTouch` assertion to `generate.spec.ts` that the tip stays visible after `tap()` and hides after tapping elsewhere. This is the review's open touch-close suggestion, now a required fix.
+
+## Fixed since the last run (re-verified)
+
+- **AC11 at 375px (previous failing item 1): fixed.** The breakdown's table right edge is at 342px and the card's content edge at 359px at 375, and no amount crosses the card (`outsideAmounts: []` at 375, 768 and 1440, across 22 amount elements). The stacked layout is applied at 375.
+- **Token counts on one line (previous non-blocking item): fixed.** Each count is one line at 375, 768 and 1440 (`≈ 8–12`, `765 × 1 = 765`, `6,450`, `1,000–8,000`). `High · 1536×1024` is a secondary line by design. At 1440 the panel is 384px wide and the label, token and cost sit on one row.
 
 ## Non-blocking
 
-- At 1440 the Tokens column wraps: `1,000–` / `8,000`, `765 × 1 =` / `765`, `High ·` / `1536×1024`. The mockup keeps these on one line. Cosmetic only.
-  - [x] **Fixed** in `17ba3a2` and `471f0a7`. The stacked layout gives the tokens the full width beside the label, and the count itself is `whitespace-nowrap`. At 1440 each line reads on one line (`≈ 8–12 estimated`, `765 × 1 = 765 exact`, `1,000–8,000 estimated`, `6,450 exact`), with `High · 1536×1024` on its own secondary line.
-  - Re-checked at 375, 768 and 1440 in the AC3 state: no amount past the card at any width; 768 shows the three-column table with every row on one line. Screenshots (not committed): `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-005/fix-shots/` (`ac3-{375,768,1440}.png`, `ac3-panel-{375,768,1440}.png`).
+- Review suggestions still open (`EstimateBreakdown` hard-coded flags, `25%` copy, live-region scope, `ReferenceImagesField` count and keys). None is a QA failure.
 - 768px is a single column (the panel sits after the form). Breakpoint is `lg` (1024px). The story says "desktop shows two columns" without a number, so this is treated as correct.
-- Touch tap was not exercised. The pass used click and keyboard focus, not a `hasTouch` context. The review's open touch-close suggestion (`MoneyAmount`) is untested.
-- Review suggestions remain open (`EstimateBreakdown` hard-coded flags, `25%` copy, live-region scope, `ReferenceImagesField` count and keys). None is a QA failure.
 
 ## Suite
 
 | Check | Command | Result |
 | --- | --- | --- |
-| PHP lint, Larastan, PHPUnit | `make check` (lint, stan, test, js-check, js-test in order) | Exit 0. PHPUnit 415 tests, 1,592 assertions, all passed. Lint and stan ran before tests and did not stop the target. |
-| JS lint, Prettier, vue-tsc | `make js-check` | Clean. |
-| Vitest | `make js-test` | 21 files, 262 tests, all passed. |
-| E2E, both projects | `make e2e` | 14 passed (7 desktop, 7 mobile). Includes `generate.spec.ts` in both. Log: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-005/e2e-baseline.log` |
-| Browser pass | Temporary `tests/e2e/qa-shots.spec.ts` (deleted, copy in scratch) | 1 passed at 375, 768 and 1440. No console or page errors (fixture guard), no horizontal scroll, no XHR or fetch while editing. |
+| PHP lint, Larastan, PHPUnit | `make check`, plus `make lint`, `make stan`, `make test` individually | Exit 0. Pint 87 files PASS, Larastan clean, PHPUnit 415 tests, 1,592 assertions, all passed. |
+| JS lint, Prettier, vue-tsc | `make js-check` (in `make check`) | Clean. |
+| Vitest | `make js-test` (in `make check`) | 21 files, 262 tests, all passed. |
+| E2E, both projects | `make e2e` | 14 passed (7 desktop, 7 mobile). Includes `generate.spec.ts` in both. Users created by the run (IDs 64, 65) were deleted. |
+| Browser pass 375/768/1440 | Temporary `tests/e2e/qa-shots.spec.ts` (deleted; copy in scratch) | 1 passed. No console or page errors (fixture guard), no horizontal scroll (0px at all widths), no XHR or fetch while editing. |
+| Token lines and amount fit | Temporary `tests/e2e/qa-tokens.spec.ts` (deleted; copy in scratch) | 1 passed at all widths. Measurements in `recheck-shots/token-lines.json`. |
+| Touch tap | Temporary `tests/e2e/qa-tap.spec.ts` (deleted; copies in scratch) | Failed. See Failing item 1. |
 
 ## Acceptance criteria
 
 | AC | Covered by | Result |
 | --- | --- | --- |
-| 1 Generate page is the signed-in home; guests to `/login`; props and TS types | `GenerationFormPageTest` (`test_a_guest_is_sent_to_sign_in`, `test_the_signed_in_home_is_the_generate_page`, `test_the_page_gets_only_the_shared_props_pricing_and_limits`, `test_the_limits_prop_holds_pixelforges_input_limits`); E2E redirects to `/dashboard` | Pass |
-| 2 Defaults `$0.0581 – $0.0863`, typically `$0.0722`, "0 tokens. Start typing your prompt." | `EstimatePanel.test.ts` ("headlines the defaults", "asks for a prompt while it is empty"); E2E; browser pass at 375, 768, 1440 | Pass |
-| 3 Live figures for Medium, High, Landscape and one reference, no request | `useEstimate.test.ts` (follows prompt, quality, size); E2E walk-through; browser pass at all widths | Pass |
-| 4 Breakdown table, exact and estimated flags, markup applied once | `EstimatePanel.test.ts` ("breaks the cost down per token type…", "adds a references line…", "multiplies the references line…"); browser `innerText` matches every row | Pass |
-| 5 Exact 9-decimal value on hover, keyboard focus or tap, exposed to AT | `MoneyAmount.test.ts` ("describes the button with the exact 9-decimal value…", "hides the exact value until asked for"); `EstimatePanel.test.ts` ("reveals the exact value of every amount it shows"); browser: keyboard reveal (see Visual verification) | Pass (tap not exercised) |
-| 6 Pricing copy, no ceiling wording | `EstimatePanel.test.ts` ("always shows the pricing copy", "never presents the max as a ceiling"); browser `innerText` of the panel contains no "at most", "guaranteed" or "never more than" | Pass |
-| 7 Prompt counter in code points, `👍🏽` = 2, no `maxlength`, over-limit error | `PromptField.test.ts` (counts code points, accepts exactly 4,000, "shorten by 1" at 4,001, over-limit error, "never limits the textarea length", describedby); browser over-limit state | Pass |
-| 8 Size and quality groups, keyboard operable with visible labels | `RadioGroup.test.ts`; E2E arrow-key step | Pass |
-| 9 Reference rows: add and remove, cap of 4, +765 tokens each, blank rows ignored, invalid URL still counted, http(s) hint | `ReferenceImagesField.test.ts` (adds, removes, caps at 4, hint after blur, no flash while typing); `useEstimate.test.ts` (ignores blank rows, counts an invalid row, per-reference figure); `referenceImages.test.ts`; browser cap and invalid-URL states | Pass |
-| 10 "We couldn't calculate an estimate right now." on malformed pricing; nothing throws | `EstimatePanel.test.ts` ("shows a message instead of numbers when the estimate is unavailable"); `useEstimate.test.ts` (unavailable state) | Pass |
-| 11 Two columns on desktop, panel in view; single column on mobile; no horizontal scroll | E2E `generate.spec.ts` (both projects, no horizontal scroll); browser pass: two columns at 1440 and sticky (see Visual verification); **375: breakdown overflows the card by 6.66px** | **Fail** (see Failing item 1) |
-| 12 `lib/money.ts` formatting: 4 decimals, half away from zero, `<$0.0001`, 9 decimals, negatives | `money.test.ts` (46 cases, every AC12 row and plan boundary) | Pass |
-| 13 `lib/money.ts` throws on non-integer, NaN, Infinity, out-of-range; no other formatting | `money.test.ts` (guards); `moneyFormatting.test.ts` (7 tests run the project's real ESLint config; `toFixed` in a `.ts` file is rejected) | Pass |
+| 1 Generate page is the signed-in home; guests to `/login`; props and TS types | `GenerationFormPageTest` (guest redirect, signed-in home, props exactly `auth`, `errors`, `pricing`, `limits`, limits 4,000 and 4); E2E redirect to `/dashboard` | Pass |
+| 2 Defaults `$0.0581 – $0.0863`, typically `$0.0722`, "0 tokens. Start typing your prompt." | `EstimatePanel.test.ts`; E2E; browser pass at 375, 768, 1440 | Pass |
+| 3 Live figures for Medium, High, Landscape, one reference; no request | `useEstimate.test.ts`; E2E walk-through (no XHR/fetch); browser pass at all widths | Pass |
+| 4 Breakdown table, exact and estimated flags, markup applied once | `EstimatePanel.test.ts` breakdown tests; browser `innerText` matches every row at all widths | Pass |
+| 5 Exact 9-decimal value on hover, keyboard focus or tap; exposed to AT | `MoneyAmount.test.ts`; `EstimatePanel.test.ts`; browser keyboard reveal at all widths (8 Tab presses to AC3 max, 12 to cap max); E2E hover/focus | Pass for hover and keyboard. **Fail for tap** (Failing item 1) |
+| 6 Pricing copy, no ceiling wording | `EstimatePanel.test.ts` ("always shows the pricing copy", "never presents the max as a ceiling"); browser `innerText` has no "at most", "guaranteed" or "never more than" | Pass |
+| 7 Prompt counter in code points, `👍🏽` = 2, no `maxlength`, over-limit error | `PromptField.test.ts`; browser over-limit state at all widths | Pass |
+| 8 Size and quality groups, keyboard operable, visible labels | `RadioGroup.test.ts`; E2E arrow-key step | Pass |
+| 9 Reference rows: add/remove, cap 4, +765 each, blanks ignored, invalid URL still counted, http(s) hint | `ReferenceImagesField.test.ts`; `useEstimate.test.ts`; `referenceImages.test.ts`; browser cap and invalid-URL states | Pass |
+| 10 Unavailable message on malformed pricing; nothing throws | `EstimatePanel.test.ts`; `useEstimate.test.ts` | Pass |
+| 11 Two columns on desktop; single column on mobile; no horizontal scroll | E2E both projects; browser: two columns at 1440, stacked at 375 and 768, 0px overflow everywhere, breakdown inside card at 375 | Pass (fixed since last run) |
+| 12 `lib/money.ts` formatting | `money.test.ts` (46 cases) | Pass |
+| 13 `lib/money.ts` guards; no other formatting | `money.test.ts`; `moneyFormatting.test.ts` (7 tests run the project's real ESLint config) | Pass |
 
 ## Edge cases probed
 
-- Prompt over the limit: `4,012 / 4,000` in red, error text "Shorten your prompt by 12.", and the estimate keeps updating (`$0.3530 – $0.4643`).
-- Four references (cap): add button disabled, "Up to 4 reference images." shown, headline `$0.3764 – $0.4858 typically $0.4311`.
-- Invalid URL on a reference row: hint shown after blur, headline unchanged at the cap figures (still counted).
-- Emoji counting, 4,000 and 4,001 boundaries, blank rows, malformed pricing: unit and integration tests above.
+- Prompt over the limit (4,012): `4,012 / 4,000` in red, error text, estimate keeps updating (`$0.3530 – $0.4643`).
+- Four references (cap): add button disabled, hint shown, headline `$0.3764 – $0.4858 typically $0.4311`; 4,000 and 4,001 boundaries covered by unit tests.
+- Invalid URL on a reference row: hint after blur, headline unchanged (still counted).
+- Touch: tap reveal fails (Failing item 1); tap elsewhere dismisses.
 - Guest access: redirect to sign-in (`test_a_guest_is_sent_to_sign_in`).
 
 ## Visual verification
 
-Browser: Chromium via Playwright, the `desktop` device profile with the viewport set to 375, 768 and 1440 (the mobile project's Pixel 7 device was not used). Signed in once as the demo user, then `goto /dashboard` per width. The temporary spec was deleted; its copy and all screenshots are in scratch.
+Browser: Chromium via Playwright. Desktop profile at 375, 768 and 1440 for the browser pass; `mobile` (Pixel 7, `hasTouch`) for the tap checks. Signed in as the demo user, then `goto /dashboard` per width. Temporary specs were deleted from the repo.
 
-Screenshots: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-005/shots/` (full pages: `defaults-{w}.png`, `ac3-{w}.png`, `ac3-panel-{w}.png`, `ac3-exact-focus-{w}.png`, `over-limit-{w}.png`, `cap-{w}.png`, `invalid-url-{w}.png`; `measurements.json`).
+Screenshots and measurements (not committed): `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-005/recheck-shots/` (`defaults-{w}.png`, `ac3-{w}.png`, `ac3-panel-{w}.png`, `ac3-exact-focus-{w}.png`, `over-limit-{w}.png`, `cap-{w}.png`, `invalid-url-{w}.png`, `tap-after-tap.png`, `tap-revealed.png`; `measurements.json`, `token-lines.json`).
 
 | Check | 375 | 768 | 1440 |
 | --- | --- | --- | --- |
 | Defaults headline | `$0.0581 – $0.0863 typically $0.0722` | same | same |
-| AC3 headline (High, Landscape, 1 ref) | `$0.3477 – $0.4571 typically $0.4024` | same | same |
-| Layout | single column, panel after form | single column, panel after form | two columns: form x 232–792, panel x 824–1208 |
+| AC3 headline | `$0.3477 – $0.4571 typically $0.4024` | same | same |
+| Layout | single column, panel after form | single column | two columns: form x 232–792, panel x 824–1208 |
 | Document horizontal overflow | 0px | 0px | 0px |
-| Breakdown past card edge | **6.66px** (table right 365.66, card inner 359) | 0px | 0px |
-| Over-limit counter and error | `4,012 / 4,000` red, error shown | same | same |
-| Over-limit headline | `$0.3530 – $0.4643 typically $0.4086` | same | same |
-| Cap at 4: headline, add button, hint | `$0.3764 – $0.4858 typically $0.4311`, disabled, hint shown | same | same |
-| Invalid URL: hint and headline | hint shown, headline unchanged | same | same |
-| Keyboard to AC3 max (`$0.4571`) | 8 Tab presses; tooltip `$0.457137500`; accessible description matches | same | same |
-| Keyboard to cap max (`$0.4858`) | 12 Tab presses; tooltip `$0.485825000`; accessible description matches | same | same |
+| Breakdown table right / card content right | 342 / 359 (inside) | 670 table, inside | inside |
+| Amounts outside card | none of 22 | none of 22 | none of 22 |
+| Token lines (AC3 state) | one line each | one line each | one line each |
+| Sticky panel after scroll to bottom | not sticky (stacked); scrolls with page | not sticky (stacked) | sticky: panel y 96, bottom 868 of 900 |
+| Over-limit counter and headline | `4,012 / 4,000` red; `$0.3530 – $0.4643` | same | same |
+| Cap headline and add button | `$0.3764 – $0.4858`, disabled | same | same |
+| Keyboard to AC3 max | 8 Tab presses; tooltip `$0.457137500` | same | same |
+| Keyboard to cap max | 12 Tab presses; tooltip `$0.485825000` | same | same |
+| Tap to AC3 max (`mobile` project) | tip opens then closes ~14ms later | — | — |
 | XHR or fetch while editing | 0 | 0 | 0 |
 | Console or page errors | 0 | 0 | 0 |
-| Sticky panel after scroll to bottom | not sticky (stacked); page scrolls with it | not sticky (stacked) | page taller than viewport; panel top 60px, bottom 868px of 900px |
-
-Cross-check of the cap figures against the story's arithmetic: 447,575,000 + 4 × 9,562,500 = 485,825,000 (max, `$0.4858`); 338,175,000 + 38,250,000 = 376,425,000 (min, `$0.3764`); 392,875,000 + 38,250,000 = 431,125,000 (typical, `$0.4311`). All match the screen.
 
 What I looked at:
-- **1440 AC3:** two columns, the panel beside the form, the estimate headline and the breakdown matching the AC4 table (`<$0.0001 – $0.0001`, `$0.0077`, `$0.2580`, `$0.0125 – $0.1000`, `$0.2782 – $0.3657`, `$0.0695 – $0.0914`, `$0.3477 – $0.4571`). The amounts are right-aligned in their column. The exact-value tooltip sits above the focused amount. Tokens wrap (see Non-blocking).
-- **Error states (1440, 375):** the textarea border and counter go red and the error sits under the field with an icon. The estimate stays on screen.
-- **Cap and invalid URL (1440, 768, 375):** the disabled add button and the hint read as the mockup shows. The invalid row is red with its message beneath, and the figures do not change.
-- **375 AC3 and cap:** the form and panel stack with no page scroll. The breakdown runs past the card border on the right (Failing item 1).
+- **375 AC3 (`ac3-375.png`, `ac3-panel-375.png`):** the form stacks above the card. Every amount is inside the card, with costs right-aligned under each token count. The reference row shows the `×` and `+$0.0096 each` hint.
+- **1440 defaults and AC3 (`defaults-1440.png`, `ac3-panel-1440.png`):** the panel sits beside the form. Each token count is on one line with its cost right-aligned. `High · 1536×1024` is a secondary line.
+- **375 over-limit (`over-limit-375.png`):** the textarea and counter go red, with the error under the field. The estimate stays on screen.
+- **Tap (`tap-revealed.png`):** taken after the tooltip had closed. The estimate headline is visible with no tooltip.
 
 ## Cleanup
 
-- The browser pass created no rows; it only signs in as the demo user and does not submit.
-- `make e2e` signed up two users (`e2e-desktop-0-0-…`, `e2e-mobile-7-0-…`, IDs 56 and 57). I deleted those two. User count is back to the pre-run 47, and the demo user is still present.
-- `tests/e2e/auth.spec.ts` never deletes its sign-up users, so 46 older `e2e-*@promptedit.test` rows from earlier runs today remain. They are not from this step, so they were left alone.
-- The temporary spec was removed from the repo. `test-results/qa/` was removed. `git status` is clean apart from this file.
+- The browser pass and tap checks sign in only; they create no rows.
+- `make e2e` created two sign-up users (IDs 64 and 65, `e2e-desktop-0-0-…` and `e2e-mobile-7-0-…`). Both were deleted by ID.
+- User count: 53 before the run, 53 after cleanup. The demo user is present.
+- Temporary specs (`qa-shots`, `qa-tokens`, `qa-tap`) were removed from the repo. `test-results/` was removed. `git status` shows only this file.
