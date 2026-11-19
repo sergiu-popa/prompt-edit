@@ -7,4 +7,5 @@ export const paths = {
     register: '/register',
     logout: '/logout',
     dashboard: '/dashboard',
+    generations: '/generations',
 } as const;

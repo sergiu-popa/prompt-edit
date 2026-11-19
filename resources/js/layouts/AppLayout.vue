@@ -12,8 +12,10 @@ defineSlots<{
 const page = usePage();
 const userName = computed(() => page.props.auth.user?.name ?? '');
 
-/** PE-011 adds History here. */
-const navItems = [{ label: 'Generate', href: paths.dashboard }] as const;
+const navItems = [
+    { label: 'Generate', href: paths.dashboard },
+    { label: 'History', href: paths.generations },
+] as const;
 
 /** Inertia's page URL is the path plus any query string or fragment. */
 const currentPath = computed(() => page.url.split(/[?#]/, 1)[0]);
