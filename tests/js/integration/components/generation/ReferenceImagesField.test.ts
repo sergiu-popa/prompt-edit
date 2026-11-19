@@ -12,12 +12,17 @@ const HINT = 'Enter an http:// or https:// image URL.';
 
 let wrapper: VueWrapper | undefined;
 
-function mountField(modelValue: string[] = [], perReferenceNanodollars: number | null = 9_562_500): VueWrapper {
+function mountField(
+    modelValue: string[] = [],
+    perReferenceNanodollars: number | null = 9_562_500,
+    errors: { error?: string; rowErrors?: Record<number, string> } = {},
+): VueWrapper {
     const field = mount(ReferenceImagesField, {
         props: {
             modelValue,
             max: 4,
             perReferenceNanodollars,
+            ...errors,
             'onUpdate:modelValue': (value: string[] | undefined) => field.setProps({ modelValue: value }),
         },
         attachTo: document.body,
@@ -192,5 +197,34 @@ describe('ReferenceImagesField', () => {
 
         expect(visibleText(field)).not.toContain(HINT);
         expect(rowInputs(field)[0]?.attributes('aria-invalid')).toBeUndefined();
+    });
+
+    it("shows a row's server error in place of its hint and marks the row invalid", () => {
+        const field = mountField(['https://example.com/a.png', 'https://example.com/a b.png'], 9_562_500, {
+            rowErrors: { 1: 'Enter an http:// or https:// image URL.' },
+        });
+
+        const [first, second] = rowInputs(field);
+        expect(first!.attributes('aria-invalid')).toBeUndefined();
+        expect(second!.attributes('aria-invalid')).toBe('true');
+        expect(descriptionOf(field, second!.element)).toBe('Enter an http:// or https:// image URL.');
+        expect(field.findAll('[id$="-hint"]')).toHaveLength(0);
+    });
+
+    it('shows a row error over the shape hint, so the row has one message', async () => {
+        const field = mountField(['example.com/a.png'], 9_562_500, { rowErrors: { 0: 'Use a URL of 2,048 characters or fewer.' } });
+
+        await rowInputs(field)[0]!.trigger('blur');
+
+        expect(descriptionOf(field, rowInputs(field)[0]!.element)).toBe('Use a URL of 2,048 characters or fewer.');
+        expect(visibleText(field)).not.toContain(HINT);
+    });
+
+    it('shows a list error under the rows and describes the group with it', () => {
+        const field = mountField(['https://example.com/a.png'], 9_562_500, { error: 'Add up to 4 reference images.' });
+
+        const describedBy = field.get('fieldset').attributes('aria-describedby');
+        expect(describedBy).toBeTruthy();
+        expect(field.get(`[id="${describedBy}"]`).text()).toBe('Add up to 4 reference images.');
     });
 });

@@ -24,3 +24,29 @@ export function isHttpImageUrl(value: string): boolean {
         return false;
     }
 }
+
+/**
+ * The row index of each counted row, captured when the form is submitted, so a server
+ * error on `reference_images.N` can be shown on the row it came from.
+ */
+export function submittedRowIndexes(rows: readonly string[]): number[] {
+    return rows.flatMap((row, index) => (row.trim() === '' ? [] : [index]));
+}
+
+/** The server's `reference_images.N` errors, keyed by the row each submitted reference came from. */
+export function referenceRowErrors(
+    indexes: readonly number[],
+    errors: Readonly<Record<string, string | undefined>>,
+): Record<number, string> {
+    const rowErrors: Record<number, string> = {};
+
+    indexes.forEach((rowIndex, submittedIndex) => {
+        const message = errors[`reference_images.${submittedIndex}`];
+
+        if (message !== undefined) {
+            rowErrors[rowIndex] = message;
+        }
+    });
+
+    return rowErrors;
+}

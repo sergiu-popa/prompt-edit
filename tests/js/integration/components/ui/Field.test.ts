@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 
 import Field from '@/components/ui/Field.vue';
+import FieldError from '@/components/ui/FieldError.vue';
 
 type FieldSlotProps = { id: string; describedBy: string | undefined; invalid: boolean };
 
@@ -86,5 +87,21 @@ describe('Field', () => {
         expect(wrapper.get('#prompt-aside').text()).toBe('40 / 4,000');
         expect(wrapper.get('#prompt-aside').element.parentElement).toBe(wrapper.get('label').element.parentElement);
         expect(wrapper.get('textarea').attributes('aria-describedby')).toBe('prompt-aside prompt-hint');
+    });
+
+    it('renders its error through FieldError, with the id the input points at', () => {
+        const wrapper = mountField({ label: 'Password', id: 'password', error: 'Too short.' });
+
+        expect(wrapper.findComponent(FieldError).props()).toStrictEqual({ id: 'password-error', message: 'Too short.' });
+    });
+});
+
+describe('FieldError', () => {
+    it('shows the message with a warning icon hidden from assistive technology', () => {
+        const wrapper = mount(FieldError, { props: { id: 'prompt-error', message: 'Enter a prompt.' } });
+
+        expect(wrapper.attributes('id')).toBe('prompt-error');
+        expect(wrapper.text()).toBe('Enter a prompt.');
+        expect(wrapper.get('svg').attributes('aria-hidden')).toBe('true');
     });
 });

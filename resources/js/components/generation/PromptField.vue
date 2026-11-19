@@ -8,8 +8,13 @@ import { countCodePoints, formatCount } from '@/lib/counting';
 /**
  * The prompt and its code-point counter. Going over the limit is an error state only:
  * typing and pasting are never blocked or truncated, and the estimate keeps following.
+ * Its own over-limit message wins over the server's, since it follows every keystroke.
  */
-const props = defineProps<{ maxCharacters: number }>();
+const props = defineProps<{
+    maxCharacters: number;
+    /** The server's error for the prompt, until the prompt changes. */
+    serverError?: string;
+}>();
 
 const prompt = defineModel<string>({ required: true });
 
@@ -19,7 +24,7 @@ const charactersOver = computed(() => characterCount.value - props.maxCharacters
 const error = computed(() =>
     charactersOver.value > 0
         ? `Pixelforge accepts at most ${formatCount(props.maxCharacters)} characters. Shorten your prompt by ${formatCount(charactersOver.value)}.`
-        : undefined,
+        : props.serverError,
 );
 </script>
 

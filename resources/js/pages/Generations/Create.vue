@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
-import { computed, useId } from 'vue';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref, useId, watch } from 'vue';
 
 import EstimatePanel from '@/components/estimate/EstimatePanel.vue';
 import PromptField from '@/components/generation/PromptField.vue';
@@ -13,7 +13,7 @@ import { useFocusFirstInvalidField } from '@/composables/useFocusFirstInvalidFie
 import { canSubmitGeneration } from '@/lib/generationForm';
 import { DEFAULT_QUALITY, DEFAULT_SIZE, QUALITY_OPTIONS, SIZE_OPTIONS } from '@/lib/imageOptions';
 import { paths } from '@/lib/paths';
-import { countedReferenceImages } from '@/lib/referenceImages';
+import { countedReferenceImages, referenceRowErrors, submittedRowIndexes } from '@/lib/referenceImages';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { GenerationFormInput, GenerationInputLimits, GenerationSubmission } from '@/types/generation';
 import type { PricingTable } from '@/types/pricing';
@@ -39,11 +39,45 @@ const { estimate, referenceImageCount, perReferenceNanodollars } = useEstimate((
 
 const canSubmit = computed(() => canSubmitGeneration(form, props.limits, estimate.value !== null));
 
+/** Where each submitted reference came from, so `reference_images.N` errors land on their rows. */
+const submittedRows = ref<number[]>([]);
+
+const fieldErrors = computed<Record<string, string | undefined>>(() => form.errors);
+const rowErrors = computed(() => referenceRowErrors(submittedRows.value, fieldErrors.value));
+
+/** The throttle and a stale form belong to no field, so they come from the page's errors. */
+const page = usePage();
+const formError = computed(() => (form.processing ? undefined : (page.props.errors.submission ?? page.props.errors.submission_token)));
+
+/** A field's server error goes as soon as that field changes. */
+watch(
+    () => form.prompt,
+    () => form.clearErrors('prompt'),
+);
+watch(
+    () => form.size,
+    () => form.clearErrors('size'),
+);
+watch(
+    () => form.quality,
+    () => form.clearErrors('quality'),
+);
+watch(
+    () => form.reference_images,
+    () => {
+        const referenceKeys = Object.keys(form.errors).filter((key) => key === 'reference_images' || key.startsWith('reference_images.'));
+
+        form.clearErrors(...(referenceKeys as (keyof GenerationFormInput)[]));
+    },
+);
+
 function submit(): void {
     // The disabled button stops clicks and Enter in a field; this stops a second submit before it re-renders.
     if (!canSubmit.value || form.processing) {
         return;
     }
+
+    submittedRows.value = submittedRowIndexes(form.reference_images);
 
     form.transform((data): GenerationSubmission => ({
         prompt: data.prompt,
@@ -73,13 +107,15 @@ function submit(): void {
             -->
             <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:grid-rows-[auto_1fr] lg:items-start">
                 <form :id="formId" ref="formElement" novalidate class="flex min-w-0 flex-col gap-8" @submit.prevent="submit">
-                    <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" />
-                    <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" />
-                    <RadioGroup v-model="form.quality" legend="Quality" :options="QUALITY_OPTIONS" />
+                    <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" :server-error="form.errors.prompt" />
+                    <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" :error="form.errors.size" />
+                    <RadioGroup v-model="form.quality" legend="Quality" :options="QUALITY_OPTIONS" :error="form.errors.quality" />
                     <ReferenceImagesField
                         v-model="form.reference_images"
                         :max="limits.max_reference_images"
                         :per-reference-nanodollars="perReferenceNanodollars"
+                        :error="fieldErrors.reference_images"
+                        :row-errors="rowErrors"
                     />
                 </form>
 
@@ -97,6 +133,7 @@ function submit(): void {
                     :form-id="formId"
                     :disabled="!canSubmit"
                     :busy="form.processing"
+                    :error="formError"
                 />
             </div>
         </div>

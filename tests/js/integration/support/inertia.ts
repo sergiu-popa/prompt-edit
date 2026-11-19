@@ -42,11 +42,18 @@ export function givenVisitsStayPending() {
 
 /**
  * Every POST comes back with these validation errors, in the order Inertia reports them.
+ * Like Inertia, it also puts them in the page's `errors` prop, where a page reads the
+ * errors that belong to no form field.
  */
 export function givenVisitsFailWith(errors: Record<string, string>) {
     return vi.spyOn(router, 'post').mockImplementation((_url, _data, options: VisitOptions = {}) => {
         options.onStart?.(pendingVisit);
+        page.props.errors = errors;
         options.onError?.(errors);
         options.onFinish?.(finishedVisit);
     });
+}
+
+export function givenNoErrors(): void {
+    page.props.errors = {};
 }

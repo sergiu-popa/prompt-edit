@@ -1,10 +1,11 @@
 import { router } from '@inertiajs/core';
 import type { VueWrapper } from '@vue/test-utils';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fixturePricing, fixturePricingWith, LIGHTHOUSE_PROMPT } from '../../../support/pricing';
 import { givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
+import { descriptionOf, inputLabelled } from '../../support/form';
 import { visibleText } from '../../support/text';
 
 import Create from '@/pages/Generations/Create.vue';
@@ -263,6 +264,99 @@ describe('Generate page', () => {
             expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
             expect(generateButton(wrapper).attributes('aria-busy')).toBe('true');
             expect(post).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('server errors', () => {
+        async function submitLighthouseRejectedWith(errors: Record<string, string>, referenceRows = ['https://example.com/style.png']) {
+            givenVisitsFailWith(errors);
+            const wrapper = mount(Create, { props: { pricing: fixturePricing, limits: LIMITS }, attachTo: document.body });
+
+            await wrapper.get('textarea').setValue('A lighthouse on a cliff at dawn, oil painting');
+            for (const row of referenceRows) {
+                await addReference(wrapper, row);
+            }
+            await wrapper.get('form').trigger('submit');
+            await flushPromises();
+
+            return wrapper;
+        }
+
+        function textarea(wrapper: VueWrapper): HTMLTextAreaElement {
+            return wrapper.get<HTMLTextAreaElement>('textarea').element;
+        }
+
+        it('shows a prompt error under the prompt, keeps the input and moves focus to it', async () => {
+            const wrapper = await submitLighthouseRejectedWith({ prompt: 'The prompt must be 4,000 characters or fewer.' });
+
+            expect(textarea(wrapper).getAttribute('aria-invalid')).toBe('true');
+            expect(descriptionOf(wrapper, textarea(wrapper))).toContain('The prompt must be 4,000 characters or fewer.');
+            expect(textarea(wrapper).value).toBe('A lighthouse on a cliff at dawn, oil painting');
+            expect(document.activeElement).toBe(textarea(wrapper));
+            wrapper.unmount();
+        });
+
+        it('clears a field error as soon as that field changes', async () => {
+            const wrapper = await submitLighthouseRejectedWith({ prompt: 'Enter a prompt.', size: 'Choose a size.' });
+
+            await wrapper.get('textarea').setValue('A lighthouse at dusk');
+
+            expect(textarea(wrapper).getAttribute('aria-invalid')).toBeNull();
+            expect(visibleText(wrapper.get('form'))).not.toContain('Enter a prompt.');
+            expect(visibleText(wrapper.get('form'))).toContain('Choose a size.');
+            wrapper.unmount();
+        });
+
+        it('shows a size error on the size group', async () => {
+            const wrapper = await submitLighthouseRejectedWith({ size: 'Choose a size.' });
+
+            const group = wrapper.findAll('fieldset').find((fieldset) => fieldset.find('legend').text() === 'Size')!;
+            expect(wrapper.get(`[id="${group.attributes('aria-describedby')}"]`).text()).toBe('Choose a size.');
+            wrapper.unmount();
+        });
+
+        it('shows a reference error on the row it came from, skipping the blank rows that were not sent', async () => {
+            const wrapper = await submitLighthouseRejectedWith({ 'reference_images.1': 'Enter an http:// or https:// image URL.' }, [
+                'https://example.com/style.png',
+                '   ',
+                'https://example.com/a b.png',
+            ]);
+
+            const third = inputLabelled(wrapper, 'Reference image 3');
+            expect(third.getAttribute('aria-invalid')).toBe('true');
+            expect(descriptionOf(wrapper, third)).toBe('Enter an http:// or https:// image URL.');
+            expect(inputLabelled(wrapper, 'Reference image 1').getAttribute('aria-invalid')).toBeNull();
+            expect(third.value).toBe('https://example.com/a b.png');
+            expect(document.activeElement).toBe(third);
+            wrapper.unmount();
+        });
+
+        it('shows a list error on the references group', async () => {
+            const wrapper = await submitLighthouseRejectedWith({ reference_images: 'Add up to 4 reference images.' });
+
+            const group = wrapper.findAll('fieldset').find((fieldset) => fieldset.find('legend').text().startsWith('Reference images'))!;
+            expect(wrapper.get(`[id="${group.attributes('aria-describedby')}"]`).text()).toBe('Add up to 4 reference images.');
+            wrapper.unmount();
+        });
+
+        it.each([
+            [
+                'the throttle',
+                { submission: "You're submitting too quickly. Try again in 42 s." },
+                "You're submitting too quickly. Try again in 42 s.",
+            ],
+            ['a bad submission token', { submission_token: 'Reload the page and try again.' }, 'Reload the page and try again.'],
+        ])('announces %s beside Generate and keeps the form as it was', async (_case, errors, message) => {
+            const wrapper = await submitLighthouseRejectedWith(errors);
+
+            expect(wrapper.get('[data-submit-area] [role="alert"]').text()).toBe(message);
+            expect(textarea(wrapper).value).toBe('A lighthouse on a cliff at dawn, oil painting');
+            expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+            wrapper.unmount();
+        });
+
+        it('has no alert before anything is submitted', () => {
+            expect(mountPage().find('[role="alert"]').exists()).toBe(false);
         });
     });
 

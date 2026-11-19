@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 
+import FieldError from '@/components/ui/FieldError.vue';
+
 const props = defineProps<{
     label: string;
     hint?: string;
@@ -39,22 +41,6 @@ const slotProps = computed(() => {
         </div>
         <slot v-bind="slotProps" />
         <p v-if="hint" :id="hintId" class="text-sm text-zinc-500">{{ hint }}</p>
-        <p v-if="error" :id="errorId" class="flex items-start gap-1.5 text-sm text-red-600">
-            <svg
-                class="mt-0.5 size-4 shrink-0"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-            >
-                <path d="M8 1.75 14.75 13.75H1.25Z" />
-                <path d="M8 6.25v3.25" />
-                <path d="M8 11.75v.01" />
-            </svg>
-            <span>{{ error }}</span>
-        </p>
+        <FieldError v-if="error" :id="errorId" :message="error" />
     </div>
 </template>
