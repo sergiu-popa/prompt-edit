@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import Button from '@/components/ui/Button.vue';
 import { paths } from '@/lib/paths';
@@ -13,8 +13,16 @@ const slots = defineSlots<{
 const page = usePage();
 const userName = computed(() => page.props.auth.user?.name ?? '');
 
+/** Set before the POST, so a second click can't send the old CSRF token after the first signs out. */
+const isSigningOut = ref(false);
+
 function signOut(): void {
-    router.post(paths.logout);
+    if (isSigningOut.value) {
+        return;
+    }
+
+    isSigningOut.value = true;
+    router.post(paths.logout, {}, { onFinish: () => (isSigningOut.value = false) });
 }
 </script>
 
@@ -31,7 +39,14 @@ function signOut(): void {
                     <slot name="nav" />
                 </nav>
                 <p class="order-3 w-full min-w-0 truncate text-sm text-zinc-600 sm:ml-auto sm:w-auto sm:max-w-64">{{ userName }}</p>
-                <Button variant="secondary" class="order-2 ml-auto sm:order-4 sm:ml-0" @click="signOut">Sign out</Button>
+                <Button
+                    variant="secondary"
+                    class="order-2 ml-auto sm:order-4 sm:ml-0"
+                    :busy="isSigningOut"
+                    busy-label="Signing out…"
+                    @click="signOut"
+                    >Sign out</Button
+                >
             </div>
         </header>
 

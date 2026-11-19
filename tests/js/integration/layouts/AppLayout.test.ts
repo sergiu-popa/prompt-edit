@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 
-import { givenSignedInAs } from '../support/inertia';
+import { givenSignedInAs, givenVisitsStayPending } from '../support/inertia';
 
 describe('AppLayout', () => {
     beforeEach(() => {
@@ -36,7 +36,21 @@ describe('AppLayout', () => {
         await signOut.trigger('click');
 
         expect(post).toHaveBeenCalledTimes(1);
-        expect(post).toHaveBeenCalledWith('/logout');
+        expect(post).toHaveBeenCalledWith('/logout', {}, expect.any(Object));
+    });
+
+    it('shows a busy Sign out and sends one request however often it is clicked', async () => {
+        const post = givenVisitsStayPending();
+        const wrapper = mount(AppLayout);
+
+        await wrapper.get('header button').trigger('click');
+        await wrapper.get('header button').trigger('click');
+
+        const signOut = wrapper.get('header button');
+        expect(signOut.text()).toBe('Signing out…');
+        expect(signOut.attributes('disabled')).toBeDefined();
+        expect(signOut.attributes('aria-busy')).toBe('true');
+        expect(post).toHaveBeenCalledTimes(1);
     });
 
     it('renders the page inside <main>', () => {
