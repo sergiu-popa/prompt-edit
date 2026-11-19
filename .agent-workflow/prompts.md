@@ -70,3 +70,11 @@ steer the work.
 | Queue, cache and sessions in production? | Database driver |
 | How do the worker and scheduler run? | systemd + cron |
 | Who deploys after each merge? | The assistant runs `dep deploy` |
+
+**Prompt 8** (PE-004, after installing the PHP Postgres driver on the droplet)
+
+> apt install php8.4-pgsql executed. Given me the command for the rest of them
+
+**Prompt 9** (PE-004)
+
+> You can ssh into the droplet with root, so show me commands before you run them

@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Answer only for APP_URL's host and its subdomains, outside local and tests. Production's
+        // proxy chain hands PHP a client's X-Forwarded-Host as the Host, so without this every
+        // URL the app builds for that request would point at the spoofed host (D-21).
+        $middleware->trustHosts();
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);

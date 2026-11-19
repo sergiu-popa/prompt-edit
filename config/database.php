@@ -134,6 +134,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Database Backups
+    |--------------------------------------------------------------------------
+    |
+    | Where `app:backup-database` writes its nightly pg_dump files. Only the
+    | production server sets it, so local and CI never schedule a backup.
+    |
+    */
+
+    'backups' => [
+        'path' => env('DB_BACKUP_PATH'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redis Databases
     |--------------------------------------------------------------------------
     |
