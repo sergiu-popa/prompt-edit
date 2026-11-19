@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Actions;
 
 use App\Domain\Billing\Enums\CreditLedgerEntryType;
+use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Billing\ValueObjects\Nanodollars;
 
@@ -16,13 +17,16 @@ use App\Domain\Billing\ValueObjects\Nanodollars;
  */
 final class HoldGenerationCreditsAction
 {
+    /**
+     * @throws NanodollarOverflowException when the negated max leaves the 64-bit range
+     */
     public function execute(int $userId, string $generationId, Nanodollars $maxUserPrice): void
     {
         CreditLedgerEntry::query()->create([
             'user_id' => $userId,
             'generation_id' => $generationId,
             'type' => CreditLedgerEntryType::Hold,
-            'amount_nanodollars' => -$maxUserPrice->amount,
+            'amount_nanodollars' => Nanodollars::zero()->minus($maxUserPrice)->amount,
         ]);
     }
 }
