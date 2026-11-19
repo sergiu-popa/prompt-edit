@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { expectNoHorizontalScroll } from './support/layout';
 
 test('renders the welcome page through Inertia', async ({ page }) => {
     await page.goto('/');
@@ -10,7 +11,5 @@ test('renders the welcome page through Inertia', async ({ page }) => {
 test('has no horizontal scroll', async ({ page }) => {
     await page.goto('/');
 
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-
-    expect(overflow).toBe(0);
+    await expectNoHorizontalScroll(page);
 });
