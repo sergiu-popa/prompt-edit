@@ -39,7 +39,7 @@ trait InteractsWithGenerations
     }
 
     /**
-     * The docs' example request: high, 1536x1024 and one reference image.
+     * The docs' example request: high, 1536x1024 and the docs' one reference image.
      * Static, so data providers can build it too.
      */
     protected static function lighthouseRequest(): NewGenerationData
@@ -48,7 +48,7 @@ trait InteractsWithGenerations
             self::LIGHTHOUSE_PROMPT,
             ImageSize::Landscape,
             ImageQuality::High,
-            ['https://example.com/lighthouse-reference.png'],
+            ['https://example.com/style.png'],
         );
     }
 

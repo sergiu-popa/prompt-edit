@@ -153,7 +153,7 @@ final class HttpPixelforgeClientTest extends TestCase
             'quality' => 'high',
             'reference_images' => ['https://example.com/style.png'],
             'metadata' => ['generation_id' => self::GENERATION_ID],
-        ], self::decodedBody($this->recordedCreateRequests()[0]));
+        ], self::decodedRequestBody($this->recordedCreateRequests()[0]));
     }
 
     public function test_no_reference_images_sends_no_reference_key(): void
@@ -162,7 +162,7 @@ final class HttpPixelforgeClientTest extends TestCase
 
         $this->client()->createGeneration(new CreateGenerationPayloadData(self::GENERATION_ID, self::LIGHTHOUSE_PROMPT, ImageSize::Square, ImageQuality::Medium, []));
 
-        $this->assertSame(['prompt', 'size', 'quality', 'metadata'], array_keys(self::decodedBody($this->recordedCreateRequests()[0])));
+        $this->assertSame(['prompt', 'size', 'quality', 'metadata'], array_keys(self::decodedRequestBody($this->recordedCreateRequests()[0])));
     }
 
     public function test_a_unicode_prompt_is_sent_unchanged(): void
@@ -171,7 +171,7 @@ final class HttpPixelforgeClientTest extends TestCase
 
         $this->client()->createGeneration(new CreateGenerationPayloadData(self::GENERATION_ID, self::UNICODE_PROMPT, ImageSize::Landscape, ImageQuality::High, []));
 
-        $this->assertSame(self::UNICODE_PROMPT, self::decodedBody($this->recordedCreateRequests()[0])['prompt']);
+        $this->assertSame(self::UNICODE_PROMPT, self::decodedRequestBody($this->recordedCreateRequests()[0])['prompt']);
     }
 
     /**
@@ -465,18 +465,6 @@ final class HttpPixelforgeClientTest extends TestCase
             ...self::pixelforgeFixture('generation-queued'),
             'metadata' => ['generation_id' => self::GENERATION_ID],
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private static function decodedBody(Request $request): array
-    {
-        $body = json_decode($request->body(), associative: true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($body);
-
-        /** @var array<string, mixed> $body */
-        return $body;
     }
 
     /**

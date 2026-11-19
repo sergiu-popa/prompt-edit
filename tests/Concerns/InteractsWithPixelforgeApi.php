@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Domain\Generation\Models\Generation;
+use App\Jobs\SubmitGenerationJob;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
@@ -91,6 +93,30 @@ trait InteractsWithPixelforgeApi
             PixelforgeErrorCode::RateLimitExceeded, PixelforgeErrorCode::ConcurrencyLimitExceeded, PixelforgeErrorCode::DailyLimitExceeded => 'rate_limit_error',
             PixelforgeErrorCode::Overloaded => 'api_error',
         };
+    }
+
+    /**
+     * One attempt of the submit job, resolved through the container as the
+     * worker runs it. Whatever the attempt throws is rethrown.
+     */
+    protected function runSubmitJob(Generation $generation): void
+    {
+        $this->app->call([new SubmitGenerationJob($generation->id), 'handle']);
+    }
+
+    /**
+     * The request's JSON body as decoded, so an assertion never depends on how
+     * `/` or non-ASCII characters were escaped.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function decodedRequestBody(Request $request): array
+    {
+        $body = json_decode($request->body(), associative: true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($body);
+
+        /** @var array<string, mixed> $body */
+        return $body;
     }
 
     /**
