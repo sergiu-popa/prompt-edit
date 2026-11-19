@@ -21,14 +21,14 @@ const COPY = [
     'Amounts are rounded to 4 decimals. Hover, focus or tap one for the exact value.',
 ];
 
-function mountPanel(prompt: string, quality: ImageQuality, size: ImageSize): VueWrapper {
-    const estimate = estimateGenerationCost(fixturePricing, { prompt, quality, size, reference_image_count: 0 });
+function mountPanel(prompt: string, quality: ImageQuality, size: ImageSize, referenceImageCount = 0): VueWrapper {
+    const estimate = estimateGenerationCost(fixturePricing, { prompt, quality, size, reference_image_count: referenceImageCount });
 
-    return mount(EstimatePanel, { props: { estimate, quality, size } });
+    return mount(EstimatePanel, { props: { estimate, quality, size, referenceImageCount } });
 }
 
 function mountUnavailable(): VueWrapper {
-    return mount(EstimatePanel, { props: { estimate: null, quality: 'medium', size: '1024x1024' } });
+    return mount(EstimatePanel, { props: { estimate: null, quality: 'medium', size: '1024x1024', referenceImageCount: 0 } });
 }
 
 /** The visible tokens and cost cells of the breakdown row headed `label`. */
@@ -74,6 +74,34 @@ describe('EstimatePanel', () => {
         expect(breakdownRow(wrapper, '+ 25%')).toStrictEqual(['', '$0.0676 – $0.0895']);
         expect(breakdownRow(wrapper, 'You pay')).toStrictEqual(['', '$0.3382 – $0.4476']);
         expect(visibleText(wrapper.get('[aria-live="polite"]'))).toBe('$0.3382 – $0.4476 typically $0.3929');
+    });
+
+    it('adds a references line and marks it exact, as in the full AC4 table', () => {
+        const wrapper = mountPanel(LIGHTHOUSE_PROMPT, 'high', '1536x1024', 1);
+
+        expect(rowLabels(wrapper)).toStrictEqual([
+            'Prompt text',
+            'Reference images',
+            'Output',
+            'Reasoning',
+            'Pixelforge cost',
+            '+ 25%',
+            'You pay',
+        ]);
+        expect(breakdownRow(wrapper, 'Prompt text')).toStrictEqual(['≈ 8–12 estimated', '<$0.0001 – $0.0001']);
+        expect(breakdownRow(wrapper, 'Reference images')).toStrictEqual(['765 × 1 = 765 exact', '$0.0077']);
+        expect(breakdownRow(wrapper, 'Output')).toStrictEqual(['6,450 exact High · 1536×1024', '$0.2580']);
+        expect(breakdownRow(wrapper, 'Reasoning')).toStrictEqual(['1,000–8,000 estimated', '$0.0125 – $0.1000']);
+        expect(breakdownRow(wrapper, 'Pixelforge cost')).toStrictEqual(['', '$0.2782 – $0.3657']);
+        expect(breakdownRow(wrapper, '+ 25%')).toStrictEqual(['', '$0.0695 – $0.0914']);
+        expect(breakdownRow(wrapper, 'You pay')).toStrictEqual(['', '$0.3477 – $0.4571']);
+        expect(visibleText(wrapper.get('[aria-live="polite"]'))).toBe('$0.3477 – $0.4571 typically $0.4024');
+    });
+
+    it('multiplies the references line by the counted rows', () => {
+        const wrapper = mountPanel(LIGHTHOUSE_PROMPT, 'high', '1536x1024', 3);
+
+        expect(breakdownRow(wrapper, 'Reference images')).toStrictEqual(['765 × 3 = 2,295 exact', '$0.0230']);
     });
 
     it('reveals the exact value of every amount it shows', () => {

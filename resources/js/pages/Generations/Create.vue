@@ -4,6 +4,7 @@ import { reactive } from 'vue';
 
 import EstimatePanel from '@/components/estimate/EstimatePanel.vue';
 import PromptField from '@/components/generation/PromptField.vue';
+import ReferenceImagesField from '@/components/generation/ReferenceImagesField.vue';
 import RadioGroup from '@/components/ui/RadioGroup.vue';
 import { useEstimate } from '@/composables/useEstimate';
 import { DEFAULT_QUALITY, DEFAULT_SIZE, QUALITY_OPTIONS, SIZE_OPTIONS } from '@/lib/imageOptions';
@@ -18,7 +19,7 @@ const props = defineProps<{
 
 const form = reactive<GenerationFormInput>({ prompt: '', size: DEFAULT_SIZE, quality: DEFAULT_QUALITY, reference_images: [] });
 
-const { estimate } = useEstimate(() => props.pricing, form);
+const { estimate, referenceImageCount, perReferenceNanodollars } = useEstimate(() => props.pricing, form);
 </script>
 
 <template>
@@ -33,10 +34,20 @@ const { estimate } = useEstimate(() => props.pricing, form);
                 <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" />
                 <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" />
                 <RadioGroup v-model="form.quality" legend="Quality" :options="QUALITY_OPTIONS" />
+                <ReferenceImagesField
+                    v-model="form.reference_images"
+                    :max="limits.max_reference_images"
+                    :per-reference-nanodollars="perReferenceNanodollars"
+                />
             </form>
 
             <aside class="min-w-0 lg:sticky lg:top-6">
-                <EstimatePanel :estimate="estimate" :quality="form.quality" :size="form.size" />
+                <EstimatePanel
+                    :estimate="estimate"
+                    :quality="form.quality"
+                    :size="form.size"
+                    :reference-image-count="referenceImageCount"
+                />
             </aside>
         </div>
     </AppLayout>

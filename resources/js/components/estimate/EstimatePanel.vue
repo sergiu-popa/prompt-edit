@@ -17,6 +17,7 @@ defineProps<{
     estimate: GenerationCostEstimate | null;
     quality: ImageQuality;
     size: ImageSize;
+    referenceImageCount: number;
 }>();
 
 const headingId = useId();
@@ -49,7 +50,13 @@ const copy = [
             </div>
         </div>
 
-        <EstimateBreakdown v-if="estimate" :estimate="estimate" :quality="quality" :size="size" />
+        <EstimateBreakdown
+            v-if="estimate"
+            :estimate="estimate"
+            :quality="quality"
+            :size="size"
+            :reference-image-count="referenceImageCount"
+        />
 
         <ul class="flex flex-col gap-1.5 border-t border-zinc-200 pt-4 text-sm text-zinc-600">
             <li v-for="statement in copy" :key="statement">{{ statement }}</li>

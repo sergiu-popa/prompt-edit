@@ -16,6 +16,8 @@ const props = defineProps<{
     estimate: GenerationCostEstimate;
     quality: ImageQuality;
     size: ImageSize;
+    /** The counted (non-blank) reference rows; the references line shows only when there are some. */
+    referenceImageCount: number;
 }>();
 
 interface TokenLine {
@@ -39,8 +41,10 @@ function tokenRange(bounds: EstimateBounds): string {
 const tokenLines = computed<TokenLine[]>(() => {
     const { lines, prompt_characters: promptCharacters } = props.estimate;
     const text = lines.input_text_tokens;
+    const images = lines.input_image_tokens;
+    const referenceCount = props.referenceImageCount;
 
-    return [
+    const promptLine: TokenLine =
         promptCharacters === 0
             ? {
                   label: 'Prompt text',
@@ -55,7 +59,25 @@ const tokenLines = computed<TokenLine[]>(() => {
                   flag: 'estimated',
                   detail: null,
                   cost: text.provider_nanodollars,
-              },
+              };
+
+    /** "765 × 1 = 765": the per-image count is exact, so the division is too. */
+    const referencesLines: TokenLine[] =
+        referenceCount > 0
+            ? [
+                  {
+                      label: 'Reference images',
+                      tokens: `${formatCount(images.tokens.max / referenceCount)} × ${formatCount(referenceCount)} = ${formatCount(images.tokens.max)}`,
+                      flag: 'exact',
+                      detail: null,
+                      cost: images.provider_nanodollars,
+                  },
+              ]
+            : [];
+
+    return [
+        promptLine,
+        ...referencesLines,
         {
             label: 'Output',
             tokens: tokenRange(lines.output_tokens.tokens),
