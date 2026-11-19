@@ -7,6 +7,7 @@ namespace App\Domain\Generation\Actions;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
+use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ final class TransitionGenerationAction
     /**
      * The given model is used only for its key and is never mutated; callers
      * refresh it.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
      */
     public function execute(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
     {
@@ -122,15 +125,32 @@ final class TransitionGenerationAction
     }
 
     /**
-     * The values are filled onto the locked model so the casts apply.
+     * The values are filled onto the locked model so the casts (and the
+     * offset-carrying date format) apply. The UPDATE is conditional on the
+     * status read under the lock, so even a missed lock cannot double-apply.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
      */
     private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
     {
+        $readStatus = $locked->status;
+
         $locked->fill($change instanceof GenerationSnapshot
             ? $this->snapshotAttributes($change)
             : $this->localFailureAttributes($change));
+        $locked->updateTimestamps();
 
-        $locked->save();
+        $updated = Generation::query()
+            ->whereKey($locked->getKey())
+            ->where('status', $readStatus->value)
+            ->toBase()
+            ->update($locked->getDirty());
+
+        if ($updated !== 1) {
+            throw ConcurrentGenerationTransitionException::rowChanged($locked->id, $readStatus, $locked->status);
+        }
+
+        $locked->syncOriginal();
     }
 
     /**

@@ -9,9 +9,11 @@ use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -254,6 +256,60 @@ final class TransitionGenerationActionTest extends TestCase
 
         $this->assertSame(GenerationStatus::Pending, $generation->status);
         $this->assertNull($generation->provider_id);
+    }
+
+    public function test_an_applied_snapshot_keeps_its_instants_exact_under_a_non_utc_session(): void
+    {
+        $phpTimezone = date_default_timezone_get();
+        $generation = Generation::factory()->processing()->create();
+
+        try {
+            date_default_timezone_set('Europe/Bucharest');
+            DB::statement("SET TIME ZONE 'Europe/Bucharest'");
+
+            $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
+
+            $this->assertInstant('2026-11-18T23:59:59Z', $this->reloaded($generation)->completed_at);
+            $this->assertSame(
+                '2026-11-18',
+                DB::scalar("select (completed_at at time zone 'UTC')::date from generations where id = ?", [$generation->id]),
+            );
+        } finally {
+            date_default_timezone_set($phpTimezone);
+        }
+    }
+
+    /**
+     * Defence in depth: even if the row lock were missed, the write only lands
+     * on the status the action read.
+     */
+    public function test_a_row_that_changed_under_a_missed_lock_is_never_overwritten(): void
+    {
+        $generation = Generation::factory()->processing()->create();
+        $snapshot = self::snapshotFor($generation, GenerationStatus::Succeeded);
+        $before = $this->rawRow($generation);
+        $changedUnderTheLock = false;
+
+        DB::listen(function (QueryExecuted $query) use ($generation, &$changedUnderTheLock): void {
+            if ($changedUnderTheLock || ! str_contains($query->sql, 'for update')) {
+                return;
+            }
+
+            $changedUnderTheLock = true;
+            DB::table('generations')->where('id', $generation->id)->update(['status' => GenerationStatus::Succeeded->value]);
+        });
+
+        try {
+            $this->transition($generation, $snapshot);
+            $this->fail('The transition overwrote a row that changed under it.');
+        } catch (ConcurrentGenerationTransitionException $exception) {
+            $this->assertStringContainsString($generation->id, $exception->getMessage());
+            $this->assertStringContainsString('processing', $exception->getMessage());
+            $this->assertStringContainsString('succeeded', $exception->getMessage());
+        }
+
+        $this->assertTrue($changedUnderTheLock);
+        $this->assertSame($before, $this->rawRow($generation));
     }
 
     private function givenAGeneration(GenerationStatus $status): Generation
