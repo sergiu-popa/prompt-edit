@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\Actions;
 
 use App\Domain\Generation\Actions\TransitionGenerationAction;
+use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
+use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Carbon\CarbonImmutable;
@@ -94,6 +96,80 @@ final class TransitionGenerationActionTest extends TestCase
         }
 
         $this->assertSame($before, $this->rawRow($generation));
+    }
+
+    /**
+     * AC8's local-failure column: Pixelforge has created nothing, so only a
+     * pending row may fail here.
+     *
+     * @return array<string, array{GenerationStatus, GenerationTransitionOutcome}>
+     */
+    public static function localFailurePairs(): array
+    {
+        return [
+            'pending row' => [GenerationStatus::Pending, GenerationTransitionOutcome::Applied],
+            'queued row' => [GenerationStatus::Queued, GenerationTransitionOutcome::RefusedConflict],
+            'processing row' => [GenerationStatus::Processing, GenerationTransitionOutcome::RefusedConflict],
+            'succeeded row' => [GenerationStatus::Succeeded, GenerationTransitionOutcome::IgnoredTerminal],
+            'failed row' => [GenerationStatus::Failed, GenerationTransitionOutcome::IgnoredTerminal],
+        ];
+    }
+
+    #[DataProvider('localFailurePairs')]
+    public function test_a_local_failure_reports_its_outcome_and_only_an_applied_one_writes(
+        GenerationStatus $rowStatus,
+        GenerationTransitionOutcome $expected,
+    ): void {
+        $generation = $this->givenAGeneration($rowStatus);
+        $before = $this->rawRow($generation);
+        $this->travel(1)->minutes();
+
+        $outcome = $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+
+        $this->assertSame($expected, $outcome);
+
+        if ($expected === GenerationTransitionOutcome::Applied) {
+            $this->assertSame('failed', $this->rawRow($generation)['status']);
+
+            return;
+        }
+
+        $this->assertSame($before, $this->rawRow($generation));
+    }
+
+    public function test_an_applied_local_failure_records_the_reason_and_the_providers_error(): void
+    {
+        $generation = Generation::factory()->create();
+
+        $outcome = $this->transition($generation, new LocalGenerationFailureData(
+            LocalFailureReason::ContentPolicyViolation,
+            'content_policy_violation',
+            'The prompt was rejected by the content policy.',
+            'prompt',
+        ));
+
+        $row = $this->reloaded($generation);
+        $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(LocalFailureReason::ContentPolicyViolation, $row->local_failure_reason);
+        $this->assertSame('content_policy_violation', $row->error_code);
+        $this->assertSame('The prompt was rejected by the content policy.', $row->error_message);
+        $this->assertSame('prompt', $row->error_param);
+        $this->assertNull($row->provider_id);
+    }
+
+    public function test_a_local_failure_with_only_a_reason_leaves_every_error_column_empty(): void
+    {
+        $generation = Generation::factory()->create();
+
+        $outcome = $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+
+        $row = $this->rawRow($generation);
+        $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
+        $this->assertSame('content_policy_violation', $row['local_failure_reason']);
+        $this->assertNull($row['error_code']);
+        $this->assertNull($row['error_message']);
+        $this->assertNull($row['error_param']);
     }
 
     public function test_an_applied_queued_snapshot_records_the_provider_id_and_creation_time(): void
@@ -193,7 +269,7 @@ final class TransitionGenerationActionTest extends TestCase
         };
     }
 
-    private function transition(Generation $generation, GenerationSnapshot $change): GenerationTransitionOutcome
+    private function transition(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
     {
         return $this->app->make(TransitionGenerationAction::class)->execute($generation, $change);
     }
