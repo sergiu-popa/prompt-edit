@@ -83,9 +83,6 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     }
 
     /**
-     * @throws AmbiguousPixelforgeOutcomeException
-     */
-    /**
      * Configured once it has a key to send.
      *
      * @phpstan-assert-if-true non-empty-string $this->apiKey
@@ -95,6 +92,9 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         return $this->apiKey !== null && $this->apiKey !== '';
     }
 
+    /**
+     * @throws AmbiguousPixelforgeOutcomeException
+     */
     private function generationFrom(Response $response): GenerationSnapshot
     {
         try {
