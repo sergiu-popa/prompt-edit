@@ -1,3 +1,5 @@
+import type { Locator } from '@playwright/test';
+
 import { expect, test } from './fixtures';
 import { DEMO_USER, signIn, uniqueEmail } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
@@ -70,6 +72,31 @@ test('signs the demo user in and out with the keyboard alone', async ({ page }) 
     await page.keyboard.press('Enter');
 
     await expect(page).toHaveURL('/');
+});
+
+test('the header keeps the brand, the name and Sign out on one row, even with a long name', async ({ page }, testInfo) => {
+    const name = `Augusta${'x'.repeat(53)}`;
+
+    await page.goto('/register');
+    await page.getByLabel('Name').fill(name);
+    await page.getByLabel('Email').fill(uniqueEmail(testInfo));
+    await page.getByLabel('Password', { exact: true }).fill('correct-password');
+    await page.getByLabel('Confirm password').fill('correct-password');
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page).toHaveURL('/dashboard');
+
+    const banner = page.getByRole('banner');
+    const middleOf = async (locator: Locator): Promise<number> => {
+        const box = (await locator.boundingBox())!;
+
+        return Math.round(box.y + box.height / 2);
+    };
+    const brand = await middleOf(banner.getByRole('link', { name: 'PromptEdit' }));
+
+    // On a phone the nav takes the second row; the name must not take a third.
+    expect(await middleOf(banner.getByText(name)), 'the name on the brand row').toBe(brand);
+    expect(await middleOf(banner.getByRole('button', { name: 'Sign out' })), 'Sign out on the brand row').toBe(brand);
+    await expectNoHorizontalScroll(page);
 });
 
 test('the auth pages and the signed-in home have no horizontal scroll', async ({ page }) => {

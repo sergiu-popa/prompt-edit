@@ -36,14 +36,18 @@ function signOut(): void {
 <template>
     <div class="min-h-screen bg-zinc-50">
         <!--
-            Mobile: the brand and Sign out share the first row, then the nav and the name wrap below.
-            From `sm`: brand, nav, then the name and Sign out on the right.
+            Mobile: a grid of two rows. The brand, the name (truncated, so it never pushes Sign out
+            off the row) and Sign out share the first; the nav has the second to itself.
+            From `sm`: one flex row of brand, nav, then the name and Sign out on the right.
+            The DOM order is the desktop order, so the tab order is the same at every width.
         -->
         <header class="border-b border-zinc-200 bg-white">
-            <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 sm:px-6">
-                <Link :href="paths.dashboard" class="order-1 text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
-                <!-- On a phone the nav starts its own row, pulled left so the first label lines up with the brand. -->
-                <nav aria-label="Main" class="order-3 -ml-2.5 flex w-full items-center gap-1 text-sm sm:order-2 sm:ml-0 sm:w-auto">
+            <div
+                class="mx-auto grid max-w-5xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 sm:flex sm:gap-x-6 sm:px-6"
+            >
+                <Link :href="paths.dashboard" class="text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
+                <!-- On a phone the nav is pulled left so its first label lines up with the brand. -->
+                <nav aria-label="Main" class="col-span-3 row-start-2 -ml-2.5 flex items-center gap-1 text-sm sm:ml-0">
                     <Link
                         v-for="item in navItems"
                         :key="item.href"
@@ -53,15 +57,10 @@ function signOut(): void {
                         >{{ item.label }}</Link
                     >
                 </nav>
-                <p class="order-4 w-full min-w-0 truncate text-sm text-zinc-600 sm:order-3 sm:ml-auto sm:w-auto sm:max-w-64">
+                <p class="col-start-2 row-start-1 min-w-0 truncate text-right text-sm text-zinc-600 sm:ml-auto sm:max-w-64 sm:text-left">
                     {{ userName }}
                 </p>
-                <Button
-                    variant="secondary"
-                    class="order-2 ml-auto sm:order-4 sm:ml-0"
-                    :busy="isSigningOut"
-                    busy-label="Signing out…"
-                    @click="signOut"
+                <Button variant="secondary" class="col-start-3 row-start-1" :busy="isSigningOut" busy-label="Signing out…" @click="signOut"
                     >Sign out</Button
                 >
             </div>
