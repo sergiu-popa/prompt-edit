@@ -15,6 +15,7 @@ use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Fake\AdvanceFakeGenerationJob;
+use App\Support\Pixelforge\Fake\FakeChaos;
 use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
 use App\Support\Pixelforge\Fake\FakeKeywords;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
@@ -48,6 +49,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      */
     public function __construct(
         private FakeUsageGenerator $usageGenerator,
+        private FakeChaos $chaos,
         #[Config('pixelforge.webhook_secret'), SensitiveParameter]
         private ?string $webhookSecret,
         #[Config('pricing.rates')]
@@ -72,7 +74,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      *
      * @throws PixelforgeNotConfiguredException when there is no secret to sign webhooks with
      * @throws ContentPolicyViolationException for `[blocked]`
-     * @throws OverloadedException for `[overloaded]`
+     * @throws OverloadedException for `[overloaded]` or a chaos 503
      * @throws IdempotencyKeyReusedException
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
@@ -90,6 +92,10 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             throw $this->refusal($rejection);
         }
 
+        if ($this->chaos->overloadsCreate()) {
+            throw $this->refusal(PixelforgeErrorCode::Overloaded);
+        }
+
         $id = 'gen_' . Str::ulid();
         $requestHash = hash('sha256', $payload->toJson());
 
@@ -98,10 +104,10 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             'request_hash' => $requestHash,
             'snapshot' => $this->creationSnapshot($id, $payload),
             'usage' => $this->usageGenerator->generate($payload),
-            'outcome' => $keywords->outcome() ?? FakeGenerationOutcome::Succeeded,
+            'outcome' => $keywords->outcome() ?? ($this->chaos->failsGeneration() ? FakeGenerationOutcome::InternalError : FakeGenerationOutcome::Succeeded),
             'processing_seconds' => $keywords->slow ? $this->slowProcessingSeconds : $this->processingSeconds,
             'image_ttl_seconds' => $keywords->expire ? $this->expireTtlSeconds : $this->imageTtlSeconds,
-            'duplicates_webhooks' => $keywords->duplicate,
+            'duplicates_webhooks' => $keywords->duplicate || $this->chaos->duplicatesWebhooks(),
         ]);
 
         if ($generation->wasRecentlyCreated) {

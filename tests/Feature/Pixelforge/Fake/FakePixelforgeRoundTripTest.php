@@ -97,6 +97,29 @@ final class FakePixelforgeRoundTripTest extends TestCase
     }
 
     /**
+     * The story's literal Lighthouse, with every webhook duplicated by chaos
+     * rather than by a keyword, is charged once within its own window.
+     */
+    public function test_a_lighthouse_duplicated_by_chaos_is_charged_once_within_its_estimate(): void
+    {
+        config(['pixelforge.fake.chaos.duplicate_percent' => 100]);
+        $generation = $this->app->make(CreateGenerationAction::class)->execute(User::factory()->create(), self::lighthouseRequest());
+
+        $responses = $this->replayFakeWebhooks();
+
+        $this->assertCount(4, $responses);
+        $this->assertTrue(array_all($responses, fn (TestResponse $response): bool => $response->isSuccessful()));
+
+        $charge = $this->chargeFromTheSucceededWebhook();
+        $this->assertSame(
+            [['hold', -self::LIGHTHOUSE_HOLD], ['release', self::LIGHTHOUSE_HOLD], ['charge', -$charge]],
+            $this->ledgerEntriesFor($generation),
+        );
+        $this->assertGreaterThanOrEqual(347_750_000, $charge);
+        $this->assertLessThanOrEqual(457_150_000, $charge);
+    }
+
+    /**
      * ceil(provider × 125 ÷ 100) of the replayed succeeded body's usage,
      * computed here from the docs' rates.
      */

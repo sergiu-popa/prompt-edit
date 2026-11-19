@@ -11,9 +11,11 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  * brackets, anywhere in the prompt, ignoring ASCII case.
  *
  * Precedence: a rejection comes first and stores nothing, `[blocked]` before
- * `[overloaded]`. An accepted create then ends as `[fail]` decides. The
- * modifiers `[slow]`, `[duplicate]` and the fake-only `[expire]` combine with
- * any accepted outcome.
+ * `[overloaded]` (a chaos 503 follows them). An accepted create then ends as
+ * `[fail]`, else `[succeed]`, decides (a chaos `internal_error` follows
+ * them, so `[succeed]` only rules out a random failure). The modifiers
+ * `[slow]`, `[duplicate]` and the fake-only `[expire]` combine with any
+ * accepted outcome.
  */
 final readonly class FakeKeywords
 {
@@ -21,6 +23,7 @@ final readonly class FakeKeywords
         public bool $blocked,
         public bool $overloaded,
         public bool $fail,
+        public bool $succeed,
         public bool $slow,
         public bool $duplicate,
         public bool $expire,
@@ -32,6 +35,7 @@ final readonly class FakeKeywords
             self::has($prompt, '[blocked]'),
             self::has($prompt, '[overloaded]'),
             self::has($prompt, '[fail]'),
+            self::has($prompt, '[succeed]'),
             self::has($prompt, '[slow]'),
             self::has($prompt, '[duplicate]'),
             self::has($prompt, '[expire]'),
@@ -61,6 +65,10 @@ final readonly class FakeKeywords
     {
         if ($this->fail) {
             return FakeGenerationOutcome::GenerationFailed;
+        }
+
+        if ($this->succeed) {
+            return FakeGenerationOutcome::Succeeded;
         }
 
         return null;

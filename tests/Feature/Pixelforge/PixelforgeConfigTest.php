@@ -30,6 +30,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_FAKE_SLOW_SECONDS',
         'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
         'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS',
+        'PIXELFORGE_FAKE_CHAOS_PERCENT',
     ];
 
     /**
@@ -205,6 +206,41 @@ final class PixelforgeConfigTest extends TestCase
             'a word' => ['abc'],
             'negative' => ['-1'],
             'a fraction' => ['2.5'],
+        ];
+    }
+
+    public function test_chaos_is_off_by_default(): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
+
+        $this->assertSame(['overloaded_percent' => 0, 'internal_error_percent' => 0, 'duplicate_percent' => 0], $fake['chaos']);
+    }
+
+    public function test_one_chaos_percent_feeds_every_chaos_outcome(): void
+    {
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_CHAOS_PERCENT' => '25']);
+
+        $this->assertSame(['overloaded_percent' => 25, 'internal_error_percent' => 25, 'duplicate_percent' => 25], $fake['chaos']);
+    }
+
+    #[DataProvider('invalidChaosPercents')]
+    public function test_a_chaos_percent_outside_0_to_100_means_off(string $value): void
+    {
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_CHAOS_PERCENT' => $value]);
+
+        $this->assertSame(['overloaded_percent' => 0, 'internal_error_percent' => 0, 'duplicate_percent' => 0], $fake['chaos']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidChaosPercents(): array
+    {
+        return [
+            'above 100' => ['101'],
+            'negative' => ['-1'],
+            'a fraction' => ['2.5'],
+            'a word' => ['abc'],
         ];
     }
 

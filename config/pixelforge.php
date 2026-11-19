@@ -8,6 +8,8 @@ declare(strict_types=1);
  * is submitted until a key is set (PE-015). An empty value means the default,
  * because `.env.example` lists the names empty.
  */
+$fakeChaosPercent = filter_var(env('PIXELFORGE_FAKE_CHAOS_PERCENT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100, 'default' => 0]]);
+
 return [
     /**
      * Which PixelforgeClient the container builds: `http` for the real API,
@@ -84,5 +86,17 @@ return [
          * expiry without touching the images of tests running beside it.
          */
         'expire_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
+
+        /**
+         * Unprompted chaos, as the real API has it: the percent of creates
+         * answered 503, of generations that fail with `internal_error`, and
+         * of generations whose webhooks all arrive twice. Off by default; one
+         * setting feeds all three, and tests set them one by one.
+         */
+        'chaos' => [
+            'overloaded_percent' => $fakeChaosPercent,
+            'internal_error_percent' => $fakeChaosPercent,
+            'duplicate_percent' => $fakeChaosPercent,
+        ],
     ],
 ];

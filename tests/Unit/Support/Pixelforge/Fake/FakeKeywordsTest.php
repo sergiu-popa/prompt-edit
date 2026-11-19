@@ -19,6 +19,7 @@ final class FakeKeywordsTest extends TestCase
         'blocked' => '[blocked]',
         'overloaded' => '[overloaded]',
         'fail' => '[fail]',
+        'succeed' => '[succeed]',
         'slow' => '[slow]',
         'duplicate' => '[duplicate]',
         'expire' => '[expire]',
@@ -103,7 +104,7 @@ final class FakeKeywordsTest extends TestCase
     }
 
     #[DataProvider('outcomes')]
-    public function test_fail_decides_the_outcome(string $prompt, ?FakeGenerationOutcome $expected): void
+    public function test_fail_then_succeed_decides_the_outcome(string $prompt, ?FakeGenerationOutcome $expected): void
     {
         $this->assertSame($expected, FakeKeywords::fromPrompt($prompt)->outcome());
     }
@@ -116,6 +117,8 @@ final class FakeKeywordsTest extends TestCase
         return [
             'fail' => ['a [fail] lighthouse', FakeGenerationOutcome::GenerationFailed],
             'fail in upper case' => ['a [FAIL] lighthouse', FakeGenerationOutcome::GenerationFailed],
+            'succeed' => ['a [succeed] lighthouse', FakeGenerationOutcome::Succeeded],
+            'fail before succeed' => ['a [succeed][fail] lighthouse', FakeGenerationOutcome::GenerationFailed],
             'none' => ['a lighthouse', null],
             'a rejection alone decides no outcome' => ['a [blocked] lighthouse', null],
             'a modifier decides no outcome' => ['a [slow] [duplicate] [expire] lighthouse', null],
