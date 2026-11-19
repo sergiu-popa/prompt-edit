@@ -50,7 +50,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
 
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
-        if ($this->apiKey === null || $this->apiKey === '') {
+        if (! $this->isConfigured()) {
             throw PixelforgeNotConfiguredException::missingApiKey();
         }
 
@@ -85,6 +85,16 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     /**
      * @throws AmbiguousPixelforgeOutcomeException
      */
+    /**
+     * Configured once it has a key to send.
+     *
+     * @phpstan-assert-if-true non-empty-string $this->apiKey
+     */
+    public function isConfigured(): bool
+    {
+        return $this->apiKey !== null && $this->apiKey !== '';
+    }
+
     private function generationFrom(Response $response): GenerationSnapshot
     {
         try {

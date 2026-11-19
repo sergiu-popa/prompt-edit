@@ -13,8 +13,8 @@ import type { PricingTable } from '@/types/pricing';
 
 const LIMITS = { max_prompt_characters: 4_000, max_reference_images: 4 };
 
-function mountPage(pricing: PricingTable = fixturePricing): VueWrapper {
-    return mount(Create, { props: { pricing, limits: LIMITS } });
+function mountPage(pricing: PricingTable = fixturePricing, canSubmit = true): VueWrapper {
+    return mount(Create, { props: { pricing, limits: LIMITS, can_submit: canSubmit } });
 }
 
 function radio(wrapper: VueWrapper, legend: string, label: string) {
@@ -251,6 +251,25 @@ describe('Generate page', () => {
             expect(post).not.toHaveBeenCalled();
         });
 
+        it('keeps Generate closed, with a notice, until Pixelforge is configured, while still estimating', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage(fixturePricing, false);
+
+            await fillLighthouse(wrapper);
+            await submit(wrapper);
+
+            expect(visibleText(wrapper.get('[data-submit-area]'))).toContain(
+                'Image generation opens soon. You can already see what an image would cost.',
+            );
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+            expect(headline(wrapper)).toBe('$0.3478 – $0.4572 typically $0.4025');
+            expect(post).not.toHaveBeenCalled();
+        });
+
+        it('shows no notice once Pixelforge is configured', () => {
+            expect(visibleText(mountPage().get('[data-submit-area]'))).not.toContain('opens soon');
+        });
+
         it('shows a busy, disabled Generate and sends one request however often it is submitted', async () => {
             const post = givenVisitsStayPending();
             const wrapper = mountPage();
@@ -270,7 +289,10 @@ describe('Generate page', () => {
     describe('server errors', () => {
         async function submitLighthouseRejectedWith(errors: Record<string, string>, referenceRows = ['https://example.com/style.png']) {
             givenVisitsFailWith(errors);
-            const wrapper = mount(Create, { props: { pricing: fixturePricing, limits: LIMITS }, attachTo: document.body });
+            const wrapper = mount(Create, {
+                props: { pricing: fixturePricing, limits: LIMITS, can_submit: true },
+                attachTo: document.body,
+            });
 
             await wrapper.get('textarea').setValue('A lighthouse on a cliff at dawn, oil painting');
             for (const row of referenceRows) {

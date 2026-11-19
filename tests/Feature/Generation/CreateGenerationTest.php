@@ -172,4 +172,18 @@ final class CreateGenerationTest extends TestCase
 
         $this->assertNothingWasCreated();
     }
+
+    /**
+     * A generation accepted now could never be submitted, so nothing is written (D-40).
+     */
+    public function test_a_submission_is_refused_while_pixelforge_is_not_configured(): void
+    {
+        config(['pixelforge.api_key' => null]);
+
+        $this->submitGeneration()
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors(['submission' => "Image generation isn't available yet."]);
+
+        $this->assertNothingWasCreated();
+    }
 }

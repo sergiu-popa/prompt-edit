@@ -79,7 +79,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
-        if ($this->webhookSecret === null || $this->webhookSecret === '') {
+        if (! $this->isConfigured()) {
             throw PixelforgeNotConfiguredException::missingWebhookSecret();
         }
 
@@ -132,6 +132,14 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
     /**
      * The docs-shaped error for a refused create.
      */
+    /**
+     * Configured once it has a secret to sign its webhooks with.
+     */
+    public function isConfigured(): bool
+    {
+        return $this->webhookSecret !== null && $this->webhookSecret !== '';
+    }
+
     private function refusal(PixelforgeErrorCode $code): PixelforgeApiException
     {
         return match ($code) {

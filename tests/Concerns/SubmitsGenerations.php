@@ -14,12 +14,15 @@ use Tests\TestCase;
 
 /**
  * The Generate form's POST, as the page sends it. The submit job is faked, because
- * the test `sync` queue would otherwise run it inline after the commit (PE-009).
+ * the test `sync` queue would otherwise run it inline after the commit (PE-009), and
+ * the sentinel key makes Pixelforge configured, so Generate is open.
  *
  * @phpstan-require-extends TestCase
  */
 trait SubmitsGenerations
 {
+    use InteractsWithPixelforgeApi;
+
     /**
      * Called by Laravel's test lifecycle for every test that uses the trait.
      */

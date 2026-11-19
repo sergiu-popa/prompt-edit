@@ -21,6 +21,9 @@ import type { PricingTable } from '@/types/pricing';
 const props = defineProps<{
     pricing: PricingTable;
     limits: GenerationInputLimits;
+    /** False until Pixelforge is configured (D-40): the page estimates, but Generate stays closed. */
+    // eslint-disable-next-line vue/prop-name-casing -- named as the server sends it; Vue camelizes kebab-case only
+    can_submit: boolean;
 }>();
 
 /** No remember key: going Back to Generate starts a new form, with a new token. */
@@ -37,7 +40,7 @@ const focusFirstInvalidField = useFocusFirstInvalidField('formElement');
 
 const { estimate, referenceImageCount, perReferenceNanodollars } = useEstimate(() => props.pricing, form);
 
-const canSubmit = computed(() => canSubmitGeneration(form, props.limits, estimate.value !== null));
+const isSubmittable = computed(() => props.can_submit && canSubmitGeneration(form, props.limits, estimate.value !== null));
 
 /** Where each submitted reference came from, so `reference_images.N` errors land on their rows. */
 const submittedRows = ref<number[]>([]);
@@ -73,7 +76,7 @@ watch(
 
 function submit(): void {
     // The disabled button stops clicks and Enter in a field; this stops a second submit before it re-renders.
-    if (!canSubmit.value || form.processing) {
+    if (!isSubmittable.value || form.processing) {
         return;
     }
 
@@ -131,9 +134,10 @@ function submit(): void {
                 <SubmitGenerationArea
                     class="lg:col-start-1 lg:row-start-2"
                     :form-id="formId"
-                    :disabled="!canSubmit"
+                    :disabled="!isSubmittable"
                     :busy="form.processing"
                     :error="formError"
+                    :unavailable="!can_submit"
                 />
             </div>
         </div>

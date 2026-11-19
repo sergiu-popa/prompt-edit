@@ -9,9 +9,12 @@ use App\Domain\Generation\Rules\StorableTextRule;
 use App\Domain\Generation\ValueObjects\GenerationInputLimits;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use App\Support\Pixelforge\Contracts\PixelforgeClient;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * The Generate form's submission. The server is the authority: the prompt is counted
@@ -93,6 +96,23 @@ final class CreateGenerationRequest extends FormRequest
             'reference_images.*.url' => $enterAUrl,
             'submission_token.required' => $reload,
             'submission_token.uuid' => $reload,
+        ];
+    }
+
+    /**
+     * Generate stays closed until Pixelforge is configured (D-40), so nothing is written
+     * that could never be submitted. The error belongs to the form, not a field.
+     *
+     * @return list<Closure(Validator): void>
+     */
+    public function after(PixelforgeClient $pixelforge): array
+    {
+        return [
+            function (Validator $validator) use ($pixelforge): void {
+                if (! $pixelforge->isConfigured()) {
+                    $validator->errors()->add('submission', "Image generation isn't available yet.");
+                }
+            },
         ];
     }
 

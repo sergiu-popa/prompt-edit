@@ -7,11 +7,13 @@ namespace Tests\Feature\Generation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Concerns\InteractsWithPixelforgeApi;
 use Tests\Concerns\InteractsWithPricing;
 use Tests\TestCase;
 
 final class GenerationFormPageTest extends TestCase
 {
+    use InteractsWithPixelforgeApi;
     use InteractsWithPricing;
     use RefreshDatabase;
 
@@ -48,13 +50,32 @@ final class GenerationFormPageTest extends TestCase
             ));
     }
 
-    public function test_the_page_gets_only_the_shared_props_pricing_and_limits(): void
+    public function test_the_page_gets_only_the_shared_props_pricing_limits_and_can_submit(): void
     {
         $this->actingAs(User::factory()->create())
             ->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $this->assertEqualsCanonicalizing(
-                ['auth', 'errors', 'pricing', 'limits'],
+                ['auth', 'errors', 'pricing', 'limits', 'can_submit'],
                 array_keys($page->toArray()['props']),
             ));
+    }
+
+    public function test_generate_is_open_once_pixelforge_is_configured(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('can_submit', true));
+    }
+
+    /**
+     * Until PE-015 sets a key, the page still estimates, but Generate stays closed (D-40).
+     */
+    public function test_generate_is_closed_until_pixelforge_is_configured(): void
+    {
+        config(['pixelforge.api_key' => null]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('can_submit', false)->has('pricing'));
     }
 }
