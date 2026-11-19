@@ -44,4 +44,24 @@ trait InteractsWithPricing
         /** @var array<string, string> $rates */
         return $rates;
     }
+
+    /**
+     * The estimate fixture both the PHP and the TypeScript suites run against.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function estimatesFixture(): array
+    {
+        $fixture = json_decode(
+            (string) file_get_contents(dirname(__DIR__) . '/fixtures/estimates.json'),
+            associative: true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        if (! is_array($fixture)) {
+            throw new RuntimeException('tests/fixtures/estimates.json must decode to an object.');
+        }
+
+        return $fixture;
+    }
 }

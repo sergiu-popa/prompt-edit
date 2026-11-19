@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Billing\ValueObjects;
 
+use App\Domain\Billing\Enums\TokenType;
 use App\Domain\Billing\Exceptions\InvalidPricingException;
 use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Shared\Enums\ImageQuality;
@@ -19,6 +20,8 @@ use App\Domain\Shared\Enums\ImageSize;
 final readonly class PricingTable
 {
     private const string RATES = 'rates';
+
+    private const string NANODOLLARS_PER_TOKEN = 'nanodollars_per_token';
 
     private const string TOKENS = 'tokens';
 
@@ -78,6 +81,45 @@ final readonly class PricingTable
     public function reasoningTokens(ImageQuality $quality): TokenBounds
     {
         return $this->reasoningTokens[$quality->value];
+    }
+
+    /**
+     * The table as integers only: the shared estimate fixture's `pricing` block
+     * and the Generate page's pricing prop. Rates are n$ per token, so the
+     * TypeScript mirror never parses a decimal string.
+     *
+     * @return array{
+     *     nanodollars_per_token: array<string, int>,
+     *     tokens: array{
+     *         characters_per_text_token: int,
+     *         text_token_variance_percent: int,
+     *         per_reference_image: int,
+     *         output: array<string, array<string, int>>,
+     *         reasoning: array<string, array{min: int, max: int}>,
+     *     },
+     * }
+     */
+    public function toArray(): array
+    {
+        $ratesByType = [];
+
+        foreach (TokenType::cases() as $type) {
+            $ratesByType[$type->value] = $this->rates->forType($type)->amount;
+        }
+
+        return [
+            self::NANODOLLARS_PER_TOKEN => $ratesByType,
+            self::TOKENS => [
+                self::CHARACTERS_PER_TEXT_TOKEN => $this->charactersPerTextToken,
+                self::TEXT_TOKEN_VARIANCE_PERCENT => $this->textTokenVariancePercent,
+                self::PER_REFERENCE_IMAGE => $this->tokensPerReferenceImage,
+                self::OUTPUT => $this->outputTokens,
+                self::REASONING => array_map(
+                    fn (TokenBounds $range): array => [self::MIN => $range->min, self::MAX => $range->max],
+                    $this->reasoningTokens,
+                ),
+            ],
+        ];
     }
 
     /**

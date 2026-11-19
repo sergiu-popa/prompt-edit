@@ -65,6 +65,16 @@ final readonly class TokenRates
         );
     }
 
+    public function forType(TokenType $type): Nanodollars
+    {
+        return match ($type) {
+            TokenType::InputText => $this->inputTextToken,
+            TokenType::InputImage => $this->inputImageToken,
+            TokenType::Output => $this->outputToken,
+            TokenType::Reasoning => $this->reasoningToken,
+        };
+    }
+
     /**
      * @throws InvalidRateException
      */

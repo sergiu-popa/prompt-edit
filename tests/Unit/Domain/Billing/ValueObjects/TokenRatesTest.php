@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Billing\ValueObjects;
 
+use App\Domain\Billing\Enums\TokenType;
 use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Billing\ValueObjects\TokenRates;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -22,6 +23,16 @@ final class TokenRatesTest extends TestCase
         $this->assertSame(10_000, $rates->inputImageToken->amount);
         $this->assertSame(40_000, $rates->outputToken->amount);
         $this->assertSame(12_500, $rates->reasoningToken->amount);
+    }
+
+    public function test_each_token_types_rate_can_be_looked_up_by_type(): void
+    {
+        $rates = TokenRates::from(self::publishedRates());
+
+        $this->assertSame(
+            [5_000, 10_000, 40_000, 12_500],
+            array_map(fn (TokenType $type): int => $rates->forType($type)->amount, TokenType::cases()),
+        );
     }
 
     /**
