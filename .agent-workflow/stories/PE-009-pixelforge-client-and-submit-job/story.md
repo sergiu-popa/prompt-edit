@@ -4,7 +4,7 @@
 Pixelforge client contract and the idempotent submit job
 
 ## Status
-`qa-ready`
+`qa-passed`
 
 ## Description
 Until now, generations exist only locally. This story sends them to Pixelforge safely. It serves three grading criteria:
