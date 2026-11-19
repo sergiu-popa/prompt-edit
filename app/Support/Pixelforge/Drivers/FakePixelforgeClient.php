@@ -14,6 +14,7 @@ use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Fake\AdvanceFakeGenerationJob;
 use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
 use App\Support\Pixelforge\Fake\FakeKeywords;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
@@ -51,6 +52,8 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         private ?string $webhookSecret,
         #[Config('pricing.rates')]
         private array $rates,
+        #[Config('pixelforge.fake.queue_seconds')]
+        private int $queueSeconds,
         #[Config('pixelforge.fake.processing_seconds')]
         private int $processingSeconds,
         #[Config('pixelforge.fake.image_ttl_seconds')]
@@ -58,8 +61,9 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
     ) {}
 
     /**
-     * A key it has seen with the same body replays the generation as it is
-     * now, and starts nothing. The same key with another body is refused,
+     * A new generation starts its lifecycle, delayed by the queue time. A key
+     * it has seen with the same body replays the generation as it is now,
+     * and starts nothing. The same key with another body is refused,
      * as Pixelforge refuses it.
      *
      * @throws PixelforgeNotConfiguredException when there is no secret to sign webhooks with
@@ -95,7 +99,11 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         ]);
 
         if ($generation->wasRecentlyCreated) {
-            return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), false);
+            // Taken first: the `sync` queue runs the whole lifecycle inside the dispatch.
+            $created = GenerationSnapshot::from($generation->snapshot);
+            AdvanceFakeGenerationJob::dispatch($generation->id)->delay($this->queueSeconds);
+
+            return new CreatedGenerationData($created, false);
         }
 
         if (! hash_equals($generation->request_hash, $requestHash)) {

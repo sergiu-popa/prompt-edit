@@ -60,6 +60,11 @@ return [
         'webhook_base_url' => env('PIXELFORGE_FAKE_WEBHOOK_URL') ?: 'http://app:8080',
 
         /**
+         * How long an accepted generation stays `queued`.
+         */
+        'queue_seconds' => filter_var(env('PIXELFORGE_FAKE_QUEUE_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 1]]),
+
+        /**
          * How long an accepted generation stays `processing`.
          */
         'processing_seconds' => filter_var(env('PIXELFORGE_FAKE_PROCESSING_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 3]]),

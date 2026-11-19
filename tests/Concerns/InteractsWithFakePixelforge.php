@@ -9,12 +9,15 @@ use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
+use App\Support\Pixelforge\Fake\AdvanceFakeGenerationJob;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
 use Closure;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 use Tests\TestCase;
 
 /**
@@ -38,6 +41,8 @@ trait InteractsWithFakePixelforge
      * @var ?Closure(Request): PromiseInterface
      */
     private ?Closure $fakeWebhookResponder = null;
+
+    private int $fakeLifecycleJobsRun = 0;
 
     /**
      * Called by Laravel's test lifecycle for every test that uses the trait.
@@ -99,10 +104,72 @@ trait InteractsWithFakePixelforge
 
     /**
      * One create through a freshly resolved fake, as the submit job calls it.
+     * The fake's lifecycle job is held back, because the test's `sync` queue
+     * would otherwise run the whole lifecycle inside the create;
+     * runFakeLifecycle() then plays it out step by step.
      */
     protected function createThroughFake(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
+        if (! Queue::getFacadeRoot() instanceof QueueFake) {
+            Queue::fake([AdvanceFakeGenerationJob::class]);
+        }
+
         return $this->app->make(FakePixelforgeClient::class)->createGeneration($payload);
+    }
+
+    /**
+     * Runs every held-back lifecycle job, including the ones they push, in
+     * push order until none is left.
+     */
+    protected function runFakeLifecycle(): void
+    {
+        while ($this->runNextFakeLifecycleJob()) {
+            //
+        }
+    }
+
+    /**
+     * Travels by the next held-back job's delay, as the worker waits, then
+     * runs it through the container.
+     *
+     * @return bool false when no job was left
+     */
+    protected function runNextFakeLifecycleJob(): bool
+    {
+        $job = $this->pushedFakeLifecycleJobs()[$this->fakeLifecycleJobsRun] ?? null;
+
+        if ($job === null) {
+            return false;
+        }
+
+        $this->fakeLifecycleJobsRun++;
+        $this->travel(self::delaySecondsOf($job))->seconds();
+        $this->app->call([$job, 'handle']);
+
+        return true;
+    }
+
+    /**
+     * The held-back lifecycle jobs, in push order.
+     *
+     * @return list<AdvanceFakeGenerationJob>
+     */
+    protected function pushedFakeLifecycleJobs(): array
+    {
+        $queue = Queue::getFacadeRoot();
+        $this->assertInstanceOf(QueueFake::class, $queue, 'createThroughFake() holds the lifecycle jobs back.');
+
+        return array_values(array_filter(
+            $queue->pushed(AdvanceFakeGenerationJob::class)->all(),
+            fn (mixed $job): bool => $job instanceof AdvanceFakeGenerationJob,
+        ));
+    }
+
+    protected static function delaySecondsOf(AdvanceFakeGenerationJob $job): int
+    {
+        self::assertIsInt($job->delay, 'The fake delays its jobs by whole seconds.');
+
+        return $job->delay;
     }
 
     protected function fakeGenerationRow(string $providerId): FakePixelforgeGeneration
