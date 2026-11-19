@@ -22,8 +22,9 @@ final readonly class TokenRates
 
     /**
      * Digits with an optional fraction, as Pixelforge sends them; `\z` rejects a trailing newline.
+     * Public so the Pixelforge boundary refuses exactly what settlement would.
      */
-    private const string RATE_PATTERN = '/^[0-9]+(?:\.[0-9]+)?\z/';
+    public const string RATE_PATTERN = '/^[0-9]+(?:\.[0-9]+)?\z/';
 
     private function __construct(
         public Nanodollars $inputTextToken,

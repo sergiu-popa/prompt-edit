@@ -280,6 +280,32 @@ final class GenerationSnapshotTest extends TestCase
         GenerationSnapshot::from(self::succeededWith(['rates' => $rates]));
     }
 
+    /**
+     * Strings PE-001's TokenRates would refuse at settlement are refused here,
+     * so a succeeded webhook is never stored in a state that can never settle.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function malformedRates(): array
+    {
+        return [
+            'letters' => ['abc'],
+            'an empty string' => [''],
+            'a trailing newline' => ["5.00\n"],
+            'a negative rate' => ['-5.00'],
+            'a bare decimal point' => ['5.'],
+        ];
+    }
+
+    #[DataProvider('malformedRates')]
+    public function test_a_rate_that_is_not_a_decimal_string_is_rejected(string $rate): void
+    {
+        $this->expectException(InvalidGenerationSnapshotException::class);
+        $this->expectExceptionMessageMatches('/(?<![\w.])rates\.output_tokens(?!\w)/');
+
+        GenerationSnapshot::from(self::succeededWith(['rates' => [...self::docsRates(), 'output_tokens' => $rate]]));
+    }
+
     public function test_rate_strings_are_kept_verbatim_and_priced_only_at_settlement(): void
     {
         $rates = [...self::docsRates(), 'input_text_tokens' => '5.0001'];

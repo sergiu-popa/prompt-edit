@@ -6,6 +6,7 @@ namespace App\Support\Pixelforge\DataTransferObjects;
 
 use App\Domain\Billing\Enums\TokenType;
 use App\Domain\Billing\Exceptions\InvalidTokenUsageException;
+use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
@@ -258,8 +259,9 @@ final readonly class GenerationSnapshot
     }
 
     /**
-     * Exactly the priced token types, so none is silently dropped. The strings
-     * are kept as received: conversion to n$ happens at settlement.
+     * Exactly the priced token types, so none is silently dropped, each a
+     * decimal string as PE-001 reads it. The strings are kept as received:
+     * conversion to n$ (and its whole-n$ check) happens at settlement.
      *
      * @param  array<array-key, mixed>  $generation
      * @return ?array<string, string>
@@ -293,7 +295,7 @@ final readonly class GenerationSnapshot
         $strings = [];
 
         foreach ($rates as $key => $rate) {
-            if (! is_string($rate)) {
+            if (! is_string($rate) || preg_match(TokenRates::RATE_PATTERN, $rate) !== 1) {
                 throw InvalidGenerationSnapshotException::invalidField('rates.' . $key, 'a decimal string', $rate);
             }
 
