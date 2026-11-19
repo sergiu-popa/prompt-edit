@@ -3,11 +3,14 @@
  * sent (765 input image tokens) and never downloads it, so only the URL's shape is
  * checked; an unreachable URL is not an error (requirements §6).
  *
- * PE-011's server rule must accept exactly the shapes `isHttpImageUrl` accepts:
- * after trimming, a URL the WHATWG parser accepts whose scheme is http or https.
+ * The server is the authority: CreateGenerationRequest applies `url:http,https` and a
+ * 2,048-character bound to each trimmed URL. `isHttpImageUrl` is the same check for the
+ * button: after trimming, a URL the WHATWG parser accepts whose scheme is http or https.
+ * A URL only the parser accepts (a raw space in its path) gets that row's server error,
+ * never a different price.
  */
 
-/** The non-blank rows, trimmed and in order: what is estimated and what PE-011 submits. */
+/** The non-blank rows, trimmed and in order: what is estimated and what is submitted. */
 export function countedReferenceImages(rows: readonly string[]): string[] {
     return rows.map((row) => row.trim()).filter((row) => row !== '');
 }
