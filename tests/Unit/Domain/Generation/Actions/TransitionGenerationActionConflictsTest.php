@@ -35,9 +35,15 @@ final class TransitionGenerationActionConflictsTest extends TestCase
 
     private const string OTHER_PROVIDER_ID = 'another provider id';
 
+    private const string MISSING_GENERATION_ID_AND_OTHER_PROVIDER_ID = 'missing generation id and another provider id';
+
     private const string FOREIGN_PROVIDER_ID = 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K';
 
     /**
+     * Without our ULID, only a stored provider id can identify the snapshot
+     * (D-27), so a missing generation id is a conflict on the pending row
+     * alone, and on the others only when the provider id differs too.
+     *
      * @return array<string, array{GenerationStatus, string}>
      */
     public static function identityConflicts(): array
@@ -45,11 +51,11 @@ final class TransitionGenerationActionConflictsTest extends TestCase
         $conflicts = [];
 
         foreach (GenerationStatus::cases() as $status) {
-            foreach ([self::MISSING_GENERATION_ID, self::OTHER_GENERATION_ID, self::OTHER_PROVIDER_ID] as $cause) {
-                if ($status === GenerationStatus::Pending && $cause === self::OTHER_PROVIDER_ID) {
-                    continue;
-                }
+            $causes = $status === GenerationStatus::Pending
+                ? [self::MISSING_GENERATION_ID, self::OTHER_GENERATION_ID]
+                : [self::OTHER_GENERATION_ID, self::OTHER_PROVIDER_ID, self::MISSING_GENERATION_ID_AND_OTHER_PROVIDER_ID];
 
+            foreach ($causes as $cause) {
                 $conflicts[sprintf('%s row, %s', $status->value, $cause)] = [$status, $cause];
             }
         }
@@ -65,6 +71,7 @@ final class TransitionGenerationActionConflictsTest extends TestCase
         $snapshot = self::snapshotFor($generation, $incomingStatus, match ($cause) {
             self::MISSING_GENERATION_ID => ['metadata' => ['order_id' => '1042']],
             self::OTHER_GENERATION_ID => ['metadata' => ['generation_id' => Generation::factory()->create()->id]],
+            self::MISSING_GENERATION_ID_AND_OTHER_PROVIDER_ID => ['metadata' => ['order_id' => '1042'], 'id' => self::FOREIGN_PROVIDER_ID],
             default => ['id' => self::FOREIGN_PROVIDER_ID],
         });
         $before = $this->rawGenerationRow($generation);
@@ -89,6 +96,52 @@ final class TransitionGenerationActionConflictsTest extends TestCase
                 'outcome' => 'refused_conflict',
             ],
         );
+    }
+
+    /**
+     * @return array<string, array{GenerationStatus, GenerationTransitionOutcome}>
+     */
+    public static function rowsWithAProviderId(): array
+    {
+        return [
+            'queued row' => [GenerationStatus::Queued, GenerationTransitionOutcome::Applied],
+            'processing row' => [GenerationStatus::Processing, GenerationTransitionOutcome::Applied],
+            'succeeded row' => [GenerationStatus::Succeeded, GenerationTransitionOutcome::IgnoredTerminal],
+            'failed row' => [GenerationStatus::Failed, GenerationTransitionOutcome::IgnoredTerminal],
+        ];
+    }
+
+    /**
+     * D-27: the stored provider id was itself written from a ULID-matched
+     * snapshot, so it identifies a snapshot that lost our metadata just as
+     * well. The fallback is logged for the operator.
+     */
+    #[DataProvider('rowsWithAProviderId')]
+    public function test_a_snapshot_without_our_generation_id_is_identified_by_the_stored_provider_id(GenerationStatus $rowStatus, GenerationTransitionOutcome $expected): void
+    {
+        $generation = $this->givenAGenerationIn($rowStatus);
+        $incomingStatus = $rowStatus->isTerminal() ? GenerationStatus::Processing : GenerationStatus::Succeeded;
+        $snapshot = self::snapshotFor($generation, $incomingStatus, ['metadata' => ['order_id' => '1042']]);
+        $this->assertNull($snapshot->generationId);
+
+        $outcome = $this->transitionGeneration($generation, $snapshot);
+
+        $this->assertSame($expected, $outcome);
+        $row = $this->reloadedGeneration($generation);
+        $this->assertSame($expected === GenerationTransitionOutcome::Applied ? GenerationStatus::Succeeded : $rowStatus, $row->status);
+
+        if ($rowStatus === GenerationStatus::Queued) {
+            $this->assertSame(
+                [['hold', -123_387_500], ['release', 123_387_500], ['charge', -109_312_500]],
+                $this->ledgerEntriesFor($generation),
+            );
+        }
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('warning', $logged[0]->level);
+        $this->assertSame('Identified a Pixelforge snapshot without our generation id by its stored provider id.', $logged[0]->message);
+        $this->assertSame(['generation_id' => $generation->id, 'provider_id' => $generation->provider_id], $logged[0]->context);
     }
 
     /**

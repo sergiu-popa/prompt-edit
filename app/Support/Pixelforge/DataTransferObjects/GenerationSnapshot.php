@@ -220,7 +220,8 @@ final readonly class GenerationSnapshot
     }
 
     /**
-     * Absent becomes null, which the transition refuses as a conflict.
+     * Absent becomes null. The transition then identifies the snapshot by
+     * the stored provider id alone, and refuses it while none is stored (D-27).
      *
      * @param  array<array-key, mixed>  $metadata
      *
