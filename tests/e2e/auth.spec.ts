@@ -1,15 +1,6 @@
-import type { Page } from '@playwright/test';
-
 import { expect, test } from './fixtures';
-import { DEMO_USER, uniqueEmail } from './support/auth';
+import { DEMO_USER, signIn, uniqueEmail } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
-
-async function signIn(page: Page, email: string, password: string): Promise<void> {
-    await page.goto('/login');
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill(password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-}
 
 test('signs up, lands on the signed-in home and signs out', async ({ page }, testInfo) => {
     // One unbroken 60-character word: the header must truncate it, not scroll.
@@ -27,7 +18,7 @@ test('signs up, lands on the signed-in home and signs out', async ({ page }, tes
 
     await expect(page).toHaveURL('/dashboard');
     await expect(page.getByRole('banner')).toContainText(name);
-    await expect(page.getByRole('heading', { level: 1, name: "You're signed in." })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'New image' })).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     await page.getByRole('button', { name: 'Sign out' }).click();
@@ -67,9 +58,11 @@ test('signs the demo user in and out with the keyboard alone', async ({ page }) 
     await expect(page).toHaveURL('/dashboard');
     await expect(page.getByRole('banner')).toContainText(DEMO_USER.name);
 
-    // Tab from the brand link, the header's first stop, proves Sign out is in the tab order.
+    // Tab from the brand link, the header's first stop, past Generate proves Sign out is in the tab order.
     const signOut = page.getByRole('button', { name: 'Sign out' });
     await page.getByRole('link', { name: 'PromptEdit' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Generate' })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(signOut).toBeFocused();
     await page.keyboard.press('Enter');

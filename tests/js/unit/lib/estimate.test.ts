@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import estimatesJson from '../../../fixtures/estimates.json';
 
-import { estimateGenerationCost } from '@/lib/estimate';
+import { estimateGenerationCost, MARKUP_PERCENT } from '@/lib/estimate';
 import type { EstimateInput, GenerationCostEstimate } from '@/types/estimate';
 import type { PricingTable, TokenRange } from '@/types/pricing';
 
@@ -86,6 +86,20 @@ describe('estimateGenerationCost against the shared fixture', () => {
 
         expect(numbers.length).toBeGreaterThan(0);
         expect(numbers.filter((value) => !Number.isSafeInteger(value))).toStrictEqual([]);
+    });
+});
+
+describe('MARKUP_PERCENT', () => {
+    /** ceil(provider × (100 + markup) / 100), in bigint. */
+    function marked(provider: number): number {
+        const percent = 100n + BigInt(MARKUP_PERCENT);
+
+        return Number((BigInt(provider) * percent + 99n) / 100n);
+    }
+
+    it.each(fixture.cases)('is the markup the fixture charges: $name', ({ expected }) => {
+        expect(marked(expected.provider_nanodollars.min)).toBe(expected.user_nanodollars.min);
+        expect(marked(expected.provider_nanodollars.max)).toBe(expected.user_nanodollars.max);
     });
 });
 

@@ -32,7 +32,7 @@ final class SignInTest extends TestCase
         $this->assertAuthenticatedAs($user);
         $this->get(route('dashboard'))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Dashboard'));
+            ->assertInertia(fn (Assert $page) => $page->component('Generations/Create'));
     }
 
     public function test_a_guest_lands_on_the_page_they_asked_for_after_signing_in(): void

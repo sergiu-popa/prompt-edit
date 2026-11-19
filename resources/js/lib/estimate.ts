@@ -1,3 +1,4 @@
+import { countCodePoints } from '@/lib/counting';
 import type { EstimateBounds, EstimateInput, EstimateLine, GenerationCostEstimate } from '@/types/estimate';
 import type { PricingTable, TokenType } from '@/types/pricing';
 
@@ -20,6 +21,9 @@ const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 /** User price = ceil(provider × 125 / 100), applied once to each total (D-04). */
 const MARKUP_NUMERATOR = 125n;
 const MARKUP_DENOMINATOR = 100n;
+
+/** The same markup as a whole percentage (25), for copy that names it. */
+export const MARKUP_PERCENT = Number(((MARKUP_NUMERATOR - MARKUP_DENOMINATOR) * PERCENT) / MARKUP_DENOMINATOR);
 
 const TOKEN_TYPES: readonly TokenType[] = ['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'];
 
@@ -136,7 +140,7 @@ export function estimateGenerationCost(pricing: PricingTable, input: EstimateInp
         throw new Error(`prompt must be a string, got ${typeName(input.prompt)}.`);
     }
 
-    const promptCharacters = [...input.prompt].length;
+    const promptCharacters = countCodePoints(input.prompt);
     const rates = objectAt(pricing.nanodollars_per_token, 'nanodollars_per_token');
     const tokenRules = objectAt(pricing.tokens, 'tokens');
     const outputTable = objectAt(tokenRules.output, 'tokens.output');

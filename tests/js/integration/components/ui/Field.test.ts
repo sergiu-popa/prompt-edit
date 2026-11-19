@@ -73,4 +73,18 @@ describe('Field', () => {
         expect(wrapper.get('input').attributes('aria-describedby')).toBe('password-hint password-error');
         expect(wrapper.get('input').attributes('aria-invalid')).toBe('true');
     });
+
+    it('renders its aside on the label row and describes the input with it first', () => {
+        const wrapper = mount(Field, {
+            props: { label: 'Prompt', id: 'prompt', hint: 'Plain words.' },
+            slots: {
+                default: (slot: FieldSlotProps) => h('textarea', { id: slot.id, 'aria-describedby': slot.describedBy }),
+                aside: () => '40 / 4,000',
+            },
+        });
+
+        expect(wrapper.get('#prompt-aside').text()).toBe('40 / 4,000');
+        expect(wrapper.get('#prompt-aside').element.parentElement).toBe(wrapper.get('label').element.parentElement);
+        expect(wrapper.get('textarea').attributes('aria-describedby')).toBe('prompt-aside prompt-hint');
+    });
 });

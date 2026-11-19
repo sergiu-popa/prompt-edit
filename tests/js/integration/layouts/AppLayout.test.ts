@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 
-import { givenSignedInAs, givenVisitsStayPending } from '../support/inertia';
+import { givenSignedInAs, givenThePageIsAt, givenVisitsStayPending } from '../support/inertia';
 
 describe('AppLayout', () => {
     beforeEach(() => {
@@ -59,11 +59,25 @@ describe('AppLayout', () => {
         expect(wrapper.get('main').text()).toBe('Page content');
     });
 
-    it('renders the nav slot inside <nav>, and no <nav> without it', () => {
-        expect(mount(AppLayout).find('nav').exists()).toBe(false);
+    it('links to Generate in the header nav, marked current on the Generate page', () => {
+        givenThePageIsAt('/dashboard');
 
-        const wrapper = mount(AppLayout, { slots: { nav: '<a href="/history">History</a>' } });
+        const generate = mount(AppLayout).get('header nav a');
 
-        expect(wrapper.get('header nav').text()).toBe('History');
+        expect(generate.text()).toBe('Generate');
+        expect(generate.attributes('href')).toBe('/dashboard');
+        expect(generate.attributes('aria-current')).toBe('page');
+    });
+
+    it('marks Generate current whatever the query string', () => {
+        givenThePageIsAt('/dashboard?from=test');
+
+        expect(mount(AppLayout).get('header nav a').attributes('aria-current')).toBe('page');
+    });
+
+    it('does not mark Generate current on another page', () => {
+        givenThePageIsAt('/history');
+
+        expect(mount(AppLayout).get('header nav a').attributes('aria-current')).toBeUndefined();
     });
 });
