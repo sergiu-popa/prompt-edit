@@ -9,6 +9,7 @@ use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The single path that changes a generation's status (D-06), for create and
@@ -26,7 +27,24 @@ final class TransitionGenerationAction
         return DB::transaction(function () use ($generation, $change): GenerationTransitionOutcome {
             $locked = Generation::query()->whereKey($generation->getKey())->lockForUpdate()->firstOrFail();
 
+            $identityConflict = $this->identityConflict($locked, $change);
+
+            if ($identityConflict !== null) {
+                $this->logConflict($identityConflict, $locked, $change, GenerationTransitionOutcome::RefusedConflict);
+
+                return GenerationTransitionOutcome::RefusedConflict;
+            }
+
             $outcome = $this->classify($locked->status, $change->status);
+
+            if ($outcome === GenerationTransitionOutcome::IgnoredConflict) {
+                $this->logConflict(
+                    'Ignored a Pixelforge snapshot whose terminal status contradicts the generation\'s.',
+                    $locked,
+                    $change,
+                    $outcome,
+                );
+            }
 
             if ($outcome === GenerationTransitionOutcome::Applied) {
                 $this->apply($locked, $change);
@@ -34,6 +52,43 @@ final class TransitionGenerationAction
 
             return $outcome;
         });
+    }
+
+    /**
+     * Checked before any rank, so a snapshot of another generation never
+     * touches this one, whatever its status.
+     */
+    private function identityConflict(Generation $locked, GenerationSnapshot $snapshot): ?string
+    {
+        if ($snapshot->generationId === null) {
+            return 'Refused a Pixelforge snapshot without our generation id.';
+        }
+
+        if ($snapshot->generationId !== $locked->id) {
+            return 'Refused a Pixelforge snapshot of another generation.';
+        }
+
+        if ($locked->provider_id !== null && $snapshot->id !== $locked->provider_id) {
+            return 'Refused a Pixelforge snapshot whose id differs from the stored provider id.';
+        }
+
+        return null;
+    }
+
+    private function logConflict(
+        string $message,
+        Generation $locked,
+        GenerationSnapshot $snapshot,
+        GenerationTransitionOutcome $outcome,
+    ): void {
+        Log::error($message, [
+            'generation_id' => $locked->id,
+            'status' => $locked->status->value,
+            'provider_id' => $locked->provider_id,
+            'incoming_status' => $snapshot->status->value,
+            'incoming_provider_id' => $snapshot->id,
+            'outcome' => $outcome->value,
+        ]);
     }
 
     private function classify(GenerationStatus $current, GenerationStatus $incoming): GenerationTransitionOutcome
