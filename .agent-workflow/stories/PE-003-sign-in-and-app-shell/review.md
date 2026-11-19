@@ -4,7 +4,7 @@
 
 **Verdict: APPROVE**
 
-Scope reviewed: the `[PE-003]` commits `6accb7d..b1b9a7c` on `pe-003-sign-in-and-app-shell` (`git diff origin/main...HEAD`), against `story.md` and `plan.md`.
+Scope reviewed: the `[PE-003]` commits `6accb7d..e8baa20` on `pe-003-sign-in-and-app-shell` (`git diff origin/main...HEAD`), against `story.md` and `plan.md`.
 
 Checks run on HEAD:
 - `make check`: Pint passes on 76 files, Larastan reports no errors, and PHPUnit runs 362 tests with 1,331 assertions, all passing.
@@ -54,19 +54,20 @@ The implementation matches the plan file for file. Where it differs from the sto
 ### Commit hygiene
 
 The history reads cleanly overall:
-- one bookkeeping commit for the plan (`6accb7d`) and one for the checkboxes and status (`b1b9a7c`);
+- one bookkeeping commit for the plan (`6accb7d`) and one for the checkboxes and status (`e8baa20`);
 - one code commit per plan task, each with its tests;
 - subjects in `[PE-003] Imperative …` form, at most 72 characters, and every commit carries the trailer.
 
 Three other points:
 - The D-17 and D-18 rows in `requirements.md` ride with the code commits that introduce them (`cf630e9`, `8d70465`), as the plan specified and as PE-002 did. They document the code change rather than pipeline bookkeeping, so that is fine.
-- `d9fd0a7` moves the Login test's label helpers into `support/form.ts` while building Register. The body says why, and the move exists because Register is the second consumer, so it belongs to that change.
+- `dce2d1a` moves the Login test's label helpers into `support/form.ts` while building Register. The body says why, and the move exists because Register is the second consumer, so it belongs to that change.
 - `composer require --no-scripts` left `CLAUDE.md` and `AGENTS.md` untouched, as the plan intended. Running `boost:update` to add any Fortify guidelines is the user's call.
 
 ### Warnings
 
 - [x] **`11c0568 [PE-003] Pin sign-out behaviour` does not pass `make stan`. The next commit, `037b4fa [PE-003] Drop a redundant string assertion from the sign-out test`, is a fix-up for it.** The project rule is that each commit passes the suite (`.agent-workflow/CLAUDE.md` § Git hygiene). `037b4fa` removes one line, `$this->assertIsString($tokenAfterSignOut)` in `tests/Feature/Auth/SignOutTest.php`, which Larastan flags as always true. So `11c0568` fails static analysis on its own, and the reviewer reads two commits for one change.
   - Fix: squash `037b4fa` into `11c0568` (`git rebase -i` with `fixup`) before the PR is opened.
+  - **Resolved before the PR was opened:** the orchestrator squashed `037b4fa` into `11c0568`, which is now `9792f53 [PE-003] Pin sign-out behaviour`. It passes `make stan` on its own. Later commits got new SHAs, and the SHAs in these notes have been updated to match.
 
   — acknowledged: no engineering action in this pipeline can fix it, because agents may not rewrite history. HEAD passes `make check`. **The user decides whether to squash before merge.**
 - [x] **PR size breaks the project rule.** `.agent-workflow/CLAUDE.md` § Git hygiene sets about 400 changed lines per PR. This branch has about 2,240 changed lines, excluding `composer.lock`:
@@ -74,9 +75,9 @@ Three other points:
   - `tests/`: about 1,550;
   - `.agent-workflow`: about 30.
 
-  The plan foresaw this and named a cut after `c3d5821`. That gives PR A, the backend with stub pages (about 1,150 lines), and PR B, the UI and E2E (about 1,080 lines). Each commit is reviewable alone: the largest, `d9fd0a7`, is 263 lines.
+  The plan foresaw this and named a cut after `38cd7e6`. That gives PR A, the backend with stub pages (about 1,150 lines), and PR B, the UI and E2E (about 1,080 lines). Each commit is reviewable alone: the largest, `dce2d1a`, is 263 lines.
 
-  — acknowledged: splitting now means rewriting history, which no engineering action in this pipeline can do. **The user must decide this before the PR is opened.** The options are one PR of 18 commits, or sequential (not stacked) PRs split at `c3d5821`. The PR description must state the size and the choice, and mention the new `laravel/fortify` dependency (D-02).
+  — acknowledged: splitting now means rewriting history, which no engineering action in this pipeline can do. **The user must decide this before the PR is opened.** The options are one PR of 18 commits, or sequential (not stacked) PRs split at `38cd7e6`. The PR description must state the size and the choice, and mention the new `laravel/fortify` dependency (D-02).
 
 ### Suggestions
 

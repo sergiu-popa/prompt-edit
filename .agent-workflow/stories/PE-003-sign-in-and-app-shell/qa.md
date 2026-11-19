@@ -2,7 +2,7 @@
 
 **Verdict: QA PASSED**
 
-Run on branch `pe-003-sign-in-and-app-shell` at `9599f8d`. Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1).
+Run on branch `pe-003-sign-in-and-app-shell` at `ace0ea4`. Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1).
 
 ## Tests
 
@@ -104,4 +104,4 @@ None. The existing `welcome.spec.ts` passes in both projects, and the `make chec
 - Stale errors during a busy request: on the login page, the throttle message from a previous email stays visible while a new attempt is in flight (1440 and 375 `login-busy` shots). On the register page, the previous field errors stay visible while the request is in flight (768 `register-busy`). AC16 is met (label, disabled, one request). The UI could clear server errors when a submit starts. This is a suggestion, not a failure.
 - Register password errors: when a password is both too short and mismatched, only the first message shows ("at least 8 characters"). The mismatch message appears on its own when the length is valid (`register-mismatch-*`). This matches Laravel's first-error behaviour and is acceptable under AC8.
 - Inertia's progress bar shows as a thin dark bar at the top edge during requests. Cosmetic, seen in the busy shots only.
-- Carried over from review round 1, for the user: commit `11c0568` fails Larastan on its own (fixed by `037b4fa`), and the branch is about 2,240 changed lines against the ~400-line budget. Both need a decision before the PR is opened. This does not block QA.
+- Carried over from review round 1, for the user: commit `11c0568` failed Larastan on its own (fixed by `037b4fa`; both were squashed into `9792f53` before the PR was opened), and the branch is about 2,240 changed lines against the ~400-line budget. This does not block QA.
