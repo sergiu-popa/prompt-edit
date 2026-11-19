@@ -11,7 +11,8 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  * brackets, anywhere in the prompt, ignoring ASCII case.
  *
  * Precedence: a rejection comes first and stores nothing, `[blocked]` before
- * `[overloaded]`. An accepted create then ends as `[fail]` decides.
+ * `[overloaded]`. An accepted create then ends as `[fail]` decides. The
+ * modifier `[slow]` combines with any accepted outcome.
  */
 final readonly class FakeKeywords
 {
@@ -19,6 +20,7 @@ final readonly class FakeKeywords
         public bool $blocked,
         public bool $overloaded,
         public bool $fail,
+        public bool $slow,
     ) {}
 
     public static function fromPrompt(string $prompt): self
@@ -27,6 +29,7 @@ final readonly class FakeKeywords
             self::has($prompt, '[blocked]'),
             self::has($prompt, '[overloaded]'),
             self::has($prompt, '[fail]'),
+            self::has($prompt, '[slow]'),
         );
     }
 

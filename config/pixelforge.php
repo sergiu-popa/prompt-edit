@@ -70,6 +70,11 @@ return [
         'processing_seconds' => filter_var(env('PIXELFORGE_FAKE_PROCESSING_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 3]]),
 
         /**
+         * How long a `[slow]` generation stays `processing`, longer than normal.
+         */
+        'slow_processing_seconds' => filter_var(env('PIXELFORGE_FAKE_SLOW_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 10]]),
+
+        /**
          * How long a succeeded generation's image URL works: 24 h, as the docs give it.
          */
         'image_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_IMAGE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),

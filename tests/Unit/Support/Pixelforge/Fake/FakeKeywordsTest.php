@@ -19,6 +19,7 @@ final class FakeKeywordsTest extends TestCase
         'blocked' => '[blocked]',
         'overloaded' => '[overloaded]',
         'fail' => '[fail]',
+        'slow' => '[slow]',
     ];
 
     #[DataProvider('placements')]
@@ -70,7 +71,7 @@ final class FakeKeywordsTest extends TestCase
         return [
             'spaces inside the brackets' => ['a [ blocked ] [ fail ] lighthouse'],
             'no brackets' => ['a blocked, overloaded, fail lighthouse'],
-            'a longer word' => ['a [blockedx] [failure] lighthouse'],
+            'a longer word' => ['a [blockedx] [failure] [slower] lighthouse'],
             'fullwidth brackets' => ['a ［blocked］ ［fail］ lighthouse'],
             'an emoji prompt' => ['🎨 a lighthouse 🎨'],
             'empty' => [''],
@@ -115,6 +116,7 @@ final class FakeKeywordsTest extends TestCase
             'fail in upper case' => ['a [FAIL] lighthouse', FakeGenerationOutcome::GenerationFailed],
             'none' => ['a lighthouse', null],
             'a rejection alone decides no outcome' => ['a [blocked] lighthouse', null],
+            'a modifier decides no outcome' => ['a [slow] lighthouse', null],
         ];
     }
 }

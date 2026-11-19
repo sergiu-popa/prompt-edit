@@ -184,6 +184,26 @@ final class FakePixelforgeLifecycleTest extends TestCase
         $this->assertSame($this->fakeGenerationRow($created->snapshot->id)->snapshot, $failed);
     }
 
+    public function test_a_slow_generation_stays_processing_for_the_slow_duration(): void
+    {
+        $created = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [slow]'));
+
+        $this->runNextFakeLifecycleJob();
+
+        $jobs = $this->pushedFakeLifecycleJobs();
+        $this->assertCount(2, $jobs);
+        $this->assertSame(10, self::delaySecondsOf($jobs[1]));
+        $this->travel(9)->seconds();
+        $this->assertSame(GenerationStatus::Processing, $this->fakeGenerationRow($created->snapshot->id)->status());
+        $this->travelTo(CarbonImmutable::parse(self::FROZEN_NOW)->addSecond());
+
+        $this->runFakeLifecycle();
+
+        $row = $this->fakeGenerationRow($created->snapshot->id);
+        $this->assertSame(GenerationStatus::Succeeded, $row->status());
+        $this->assertSame('2026-11-19T12:00:11Z', $row->snapshot['completed_at']);
+    }
+
     public function test_a_job_for_a_terminal_or_missing_generation_does_nothing(): void
     {
         $created = $this->createThroughFake(self::lighthousePayload());
