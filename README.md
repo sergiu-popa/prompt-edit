@@ -179,6 +179,17 @@ visudo -cf /etc/sudoers.d/prompt-edit-worker
 # 7. The scheduler, through Hestia (it overwrites a hand-edited crontab). No backup cron:
 #    the scheduler runs app:backup-database at 04:30 UTC.
 v-add-cron-job admin '*' '*' '*' '*' '*' 'cd /home/admin/web/prompt.sergiupopa.dev/current 2>/dev/null && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1'
+
+# 8. Server-wide, once per droplet: make nginx overwrite a client's X-Forwarded-Host and
+#    X-Forwarded-Proto. Hestia's mod_rpaf has RPAFsethostname On and nginx used to pass the
+#    client's own X-Forwarded-Host through, so every site on the droplet accepted a spoofed host
+#    (found by the PE-004 audit, fixed 2026-11-19). The app's trustHosts() is the second guard.
+#    Re-check after Hestia upgrades:
+#      curl -sI -H 'X-Forwarded-Host: attacker.example' https://prompt.sergiupopa.dev/dashboard
+#    must redirect to prompt.sergiupopa.dev, not attacker.example.
+cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak-$(date +%F)
+sed -i 's/^\(\s*\)proxy_set_header\s\+X-Real-IP\s\+\$remote_addr;/&\n\1proxy_set_header                X-Forwarded-Host $host;\n\1proxy_set_header                X-Forwarded-Proto $scheme;/' /etc/nginx/nginx.conf
+nginx -t && systemctl reload nginx
 ```
 
 The worker's flags keep each job's timeout (60 s by default) under the database queue's `retry_after` (90 s), and `--max-time` recycles the process hourly.
