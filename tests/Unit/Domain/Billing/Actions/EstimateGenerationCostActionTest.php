@@ -14,6 +14,7 @@ use App\Domain\Billing\ValueObjects\PricingTable;
 use App\Domain\Billing\ValueObjects\TokenBounds;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use Brick\Math\BigDecimal;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Concerns\InteractsWithPricing;
@@ -29,12 +30,22 @@ use Tests\Concerns\InteractsWithPricing;
  *     quality: string,
  *     size: string,
  *     reference_image_count: int,
+ *     pricing_overrides?: PricingOverrides,
  *     expected: array<string, mixed>,
+ * }
+ * @phpstan-type PricingOverrides array{
+ *     nanodollars_per_token?: array<string, int>,
+ *     tokens?: array<string, mixed>,
  * }
  */
 final class EstimateGenerationCostActionTest extends TestCase
 {
     use InteractsWithPricing;
+
+    /**
+     * n$ per token ÷ 10³ = USD per 1M tokens.
+     */
+    private const int RATE_STRING_SCALE = 3;
 
     /**
      * @return array<string, array{EstimateCase}>
@@ -56,7 +67,16 @@ final class EstimateGenerationCostActionTest extends TestCase
     #[DataProvider('fixtureCases')]
     public function test_the_estimate_matches_the_shared_fixture(array $case): void
     {
-        $estimate = self::action(PricingTable::fromSnapshot(self::pinnedPricingSnapshot()))->execute(
+        $overrides = $case['pricing_overrides'] ?? [];
+        $pricing = PricingTable::fromSnapshot(self::snapshotWith($overrides));
+
+        $this->assertSame(
+            array_replace_recursive(self::fixturePricing(), $overrides),
+            $pricing->toArray(),
+            'The case must price the same table the TypeScript suite builds from the fixture.',
+        );
+
+        $estimate = self::action($pricing)->execute(
             str_repeat($case['prompt'], $case['prompt_repeat'] ?? 1),
             ImageQuality::from($case['quality']),
             ImageSize::from($case['size']),
@@ -83,6 +103,36 @@ final class EstimateGenerationCostActionTest extends TestCase
         $cases = self::estimatesFixture()['cases'];
 
         return $cases;
+    }
+
+    /**
+     * The pinned snapshot with a case's overrides applied, so every case runs
+     * through the production fromSnapshot(). Overridden n$-per-token rates
+     * become USD-per-1M rate strings again (1 → "0.001").
+     *
+     * @param  PricingOverrides  $overrides
+     * @return array<string, mixed>
+     */
+    private static function snapshotWith(array $overrides): array
+    {
+        $snapshotOverrides = ['tokens' => $overrides['tokens'] ?? []];
+
+        foreach ($overrides['nanodollars_per_token'] ?? [] as $type => $nanodollarsPerToken) {
+            $snapshotOverrides['rates'][$type] = (string) BigDecimal::ofUnscaledValue($nanodollarsPerToken, self::RATE_STRING_SCALE);
+        }
+
+        return array_replace_recursive(self::pinnedPricingSnapshot(), $snapshotOverrides);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function fixturePricing(): array
+    {
+        /** @var array<string, mixed> $pricing */
+        $pricing = self::estimatesFixture()['pricing'];
+
+        return $pricing;
     }
 
     private static function action(PricingTable $pricing): EstimateGenerationCostAction

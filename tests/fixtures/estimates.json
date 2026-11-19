@@ -312,6 +312,44 @@
                 "provider_nanodollars": { "min": 11200000, "typical": 14330000, "max": 17460000 },
                 "user_nanodollars": { "min": 14000000, "typical": 17912500, "max": 21825000 }
             }
+        },
+        {
+            "name": "markup round-up: every rate 1 n$ per token",
+            "prompt": "abcde",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "pricing_overrides": { "nanodollars_per_token": { "input_text_tokens": 1, "input_image_tokens": 1, "output_tokens": 1, "reasoning_tokens": 1 } },
+            "expected": {
+                "prompt_characters": 5,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 1, "typical": 2, "max": 3 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 280, "typical": 280, "max": 280 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 250, "max": 500 } }
+                },
+                "provider_nanodollars": { "min": 281, "typical": 532, "max": 783 },
+                "user_nanodollars": { "min": 352, "typical": 665, "max": 979 }
+            }
+        },
+        {
+            "name": "markup round-up: every rate 1 n$ per token, odd low reasoning range 0-499",
+            "prompt": "abcde",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "pricing_overrides": { "nanodollars_per_token": { "input_text_tokens": 1, "input_image_tokens": 1, "output_tokens": 1, "reasoning_tokens": 1 }, "tokens": { "reasoning": { "low": { "max": 499 } } } },
+            "expected": {
+                "prompt_characters": 5,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 1, "typical": 2, "max": 3 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 280, "typical": 280, "max": 280 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 499 }, "provider_nanodollars": { "min": 0, "typical": 250, "max": 499 } }
+                },
+                "provider_nanodollars": { "min": 281, "typical": 532, "max": 782 },
+                "user_nanodollars": { "min": 352, "typical": 665, "max": 978 }
+            }
         }
     ]
 }
