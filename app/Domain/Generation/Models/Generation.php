@@ -24,6 +24,9 @@ use Illuminate\Database\Eloquent\Model;
  * Every date is written with its UTC offset, so the database session's
  * timezone never shifts a Pixelforge instant (D-10).
  *
+ * The provider cost and the user charge stay null until the generation is
+ * terminal, and only the transition action writes them, under its row lock.
+ *
  * @property string $id
  * @property int $user_id
  * @property GenerationStatus $status
@@ -40,6 +43,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?int $output_tokens
  * @property ?int $reasoning_tokens
  * @property ?array<string, string> $rates
+ * @property ?int $provider_cost_nanodollars
+ * @property ?int $user_charge_nanodollars
  * @property ?string $error_code
  * @property ?string $error_message
  * @property ?string $error_param
@@ -69,6 +74,8 @@ use Illuminate\Database\Eloquent\Model;
     'output_tokens',
     'reasoning_tokens',
     'rates',
+    'provider_cost_nanodollars',
+    'user_charge_nanodollars',
     'error_code',
     'error_message',
     'error_param',
@@ -103,6 +110,8 @@ final class Generation extends Model
             'output_tokens' => 'integer',
             'reasoning_tokens' => 'integer',
             'rates' => 'array',
+            'provider_cost_nanodollars' => 'integer',
+            'user_charge_nanodollars' => 'integer',
             'local_failure_reason' => LocalFailureReason::class,
             'image_url_expires_at' => 'immutable_datetime',
             'provider_created_at' => 'immutable_datetime',

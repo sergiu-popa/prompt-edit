@@ -14,6 +14,7 @@ use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Pixelforge's generation object as it is now, from an API response or a
@@ -51,7 +52,10 @@ final readonly class GenerationSnapshot
     /**
      * Unknown top-level fields are ignored; anything else that cannot be read
      * exactly throws. A succeeded snapshot must carry its whole result, while a
-     * failed one may have a null error (shown as a generic failure).
+     * failed one may have a null error (shown as a generic failure). A
+     * succeeded snapshot without its result is also logged with our
+     * generation id, because it means Pixelforge billed a generation we
+     * cannot price.
      *
      * @param  array<array-key, mixed>  $generation
      *
@@ -74,10 +78,20 @@ final readonly class GenerationSnapshot
         [$errorCode, $errorMessage] = self::error($generation);
         $status = self::status(self::required($generation, 'status'));
 
+        $generationId = self::generationId($metadata);
+
         if ($status === GenerationStatus::Succeeded) {
             foreach (['usage', 'rates', 'image_url', 'completed_at'] as $field) {
                 if (($generation[$field] ?? null) === null) {
-                    throw InvalidGenerationSnapshotException::incompleteSuccess($field);
+                    $exception = InvalidGenerationSnapshotException::incompleteSuccess($field);
+
+                    Log::error('Refused a succeeded Pixelforge snapshot that does not carry its whole result.', [
+                        'generation_id' => $generationId,
+                        'provider_id' => $id,
+                        'error' => $exception->getMessage(),
+                    ]);
+
+                    throw $exception;
                 }
             }
         }
@@ -87,7 +101,7 @@ final readonly class GenerationSnapshot
             $status,
             self::enum(ImageSize::class, $generation, 'size'),
             self::enum(ImageQuality::class, $generation, 'quality'),
-            self::generationId($metadata),
+            $generationId,
             $errorCode,
             $errorMessage,
             self::usage($generation),

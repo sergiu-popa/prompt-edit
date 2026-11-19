@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace App\Domain\Generation\Actions;
 
+use App\Domain\Billing\Actions\CalculateProviderCostAction;
+use App\Domain\Billing\Actions\CalculateUserChargeAction;
+use App\Domain\Billing\Actions\SettleGenerationCreditsAction;
+use App\Domain\Billing\Exceptions\InvalidRateException;
+use App\Domain\Billing\Exceptions\NanodollarOverflowException;
+use App\Domain\Billing\ValueObjects\Nanodollars;
+use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -17,15 +25,38 @@ use Illuminate\Support\Facades\Log;
  * The single path that changes a generation's status (D-06): create and replay
  * responses, webhooks and the poller bring a Pixelforge snapshot, and submit
  * failures bring a local failure. Status only moves to a higher rank, terminal
- * statuses never change, and only an `Applied` outcome writes.
+ * statuses never change, and only an `Applied` outcome changes the status.
+ * The one write on another outcome is D-09's provider cost after a local
+ * failure.
+ *
+ * Money moves with the status, in the same transaction: a succeeded snapshot
+ * is priced from its own usage and rates before anything is written, then the
+ * hold is settled against the actual charge. A failure is free and only
+ * releases the hold.
  */
 final class TransitionGenerationAction
 {
+    /**
+     * A failed generation costs nothing, from Pixelforge or from us.
+     */
+    private const array FREE = [
+        'provider_cost_nanodollars' => 0,
+        'user_charge_nanodollars' => 0,
+    ];
+
+    public function __construct(
+        private readonly CalculateProviderCostAction $calculateProviderCost,
+        private readonly CalculateUserChargeAction $calculateUserCharge,
+        private readonly SettleGenerationCreditsAction $settleGenerationCredits,
+    ) {}
+
     /**
      * The given model is used only for its key and is never mutated; callers
      * refresh it.
      *
      * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException when a succeeded snapshot's rate is not a whole n$ per token
+     * @throws NanodollarOverflowException
      */
     public function execute(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
     {
@@ -42,6 +73,10 @@ final class TransitionGenerationAction
 
             if ($outcome === GenerationTransitionOutcome::Applied) {
                 $this->apply($locked, $change);
+            }
+
+            if ($change instanceof GenerationSnapshot && $this->isUnrecordedSuccessAfterLocalFailure($locked, $change, $outcome)) {
+                $this->recordProviderCostOnly($locked, $change);
             }
 
             return $outcome;
@@ -125,19 +160,143 @@ final class TransitionGenerationAction
     }
 
     /**
+     * A succeeded snapshot is priced first, so a snapshot that cannot be priced
+     * exactly writes nothing.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
+    {
+        if ($change instanceof LocalGenerationFailureData) {
+            $this->write($locked, [...$this->localFailureAttributes($change), ...self::FREE]);
+            $this->settleGenerationCredits->execute($locked->id, null);
+
+            return;
+        }
+
+        match ($change->status) {
+            GenerationStatus::Succeeded => $this->applySuccess($locked, $change),
+            GenerationStatus::Failed => $this->applyProviderFailure($locked, $change),
+            default => $this->write($locked, $this->snapshotAttributes($change)),
+        };
+    }
+
+    /**
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function applySuccess(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        [$providerCost, $userCharge] = $this->price($locked, $snapshot);
+
+        $this->write($locked, [
+            ...$this->snapshotAttributes($snapshot),
+            'provider_cost_nanodollars' => $providerCost->amount,
+            'user_charge_nanodollars' => $userCharge->amount,
+        ]);
+        $this->settleGenerationCredits->execute($locked->id, $userCharge);
+    }
+
+    /**
+     * Pixelforge does not bill a failed generation, and neither do we.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     */
+    private function applyProviderFailure(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        $this->write($locked, [...$this->snapshotAttributes($snapshot), ...self::FREE]);
+        $this->settleGenerationCredits->execute($locked->id, null);
+    }
+
+    /**
+     * D-09: we failed the row locally (a 409 at submit), yet the generation
+     * Pixelforge already held under our key succeeded. The row's usage is
+     * still empty until it is recorded, so a replay writes nothing.
+     */
+    private function isUnrecordedSuccessAfterLocalFailure(Generation $locked, GenerationSnapshot $snapshot, GenerationTransitionOutcome $outcome): bool
+    {
+        return $outcome === GenerationTransitionOutcome::IgnoredConflict
+            && $snapshot->status === GenerationStatus::Succeeded
+            && $locked->local_failure_reason !== null
+            && $locked->output_tokens === null;
+    }
+
+    /**
+     * Pixelforge bills that generation on its `completed_at` day, so its cost,
+     * usage, rates and completion are kept for the operator report to match
+     * `/v1/usage`. The status stays failed, the user charge stays 0 and the
+     * ledger is untouched: the user is never charged for it. The conflict log
+     * already written is the anomaly log.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function recordProviderCostOnly(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        [$providerCost] = $this->price($locked, $snapshot);
+
+        $this->write($locked, [
+            'provider_cost_nanodollars' => $providerCost->amount,
+            'input_text_tokens' => $snapshot->usage?->inputTextTokens,
+            'input_image_tokens' => $snapshot->usage?->inputImageTokens,
+            'output_tokens' => $snapshot->usage?->outputTokens,
+            'reasoning_tokens' => $snapshot->usage?->reasoningTokens,
+            'rates' => $snapshot->rates,
+            'completed_at' => $snapshot->completedAt,
+        ]);
+    }
+
+    /**
+     * What Pixelforge bills for the generation, from the snapshot's own usage
+     * and rates (never the pinned table), and that cost with the markup. Bad
+     * provider data is never rounded or guessed: it is logged and rethrown,
+     * so the generation stays non-terminal with only its hold. The `usage` and
+     * `rates` throws only narrow the types: GenerationSnapshot::from() already
+     * refuses a succeeded object without them.
+     *
+     * @return array{Nanodollars, Nanodollars} the provider cost and the user charge
+     *
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function price(Generation $locked, GenerationSnapshot $snapshot): array
+    {
+        $usage = $snapshot->usage ?? throw InvalidGenerationSnapshotException::incompleteSuccess('usage');
+        $rates = $snapshot->rates ?? throw InvalidGenerationSnapshotException::incompleteSuccess('rates');
+
+        try {
+            $providerCost = $this->calculateProviderCost->execute($usage, TokenRates::from($rates));
+
+            return [$providerCost, $this->calculateUserCharge->execute($providerCost)];
+        } catch (InvalidRateException|NanodollarOverflowException $exception) {
+            Log::error('Refused a succeeded Pixelforge snapshot that cannot be priced exactly.', [
+                'generation_id' => $locked->id,
+                'provider_id' => $snapshot->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+    }
+
+    /**
      * The values are filled onto the locked model so the casts (and the
      * offset-carrying date format) apply. The UPDATE is conditional on the
      * status read under the lock, so even a missed lock cannot double-apply.
      *
+     * @param  array<string, mixed>  $attributes
+     *
      * @throws ConcurrentGenerationTransitionException when the row changed under the lock
      */
-    private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
+    private function write(Generation $locked, array $attributes): void
     {
         $readStatus = $locked->status;
 
-        $locked->fill($change instanceof GenerationSnapshot
-            ? $this->snapshotAttributes($change)
-            : $this->localFailureAttributes($change));
+        $locked->fill($attributes);
         $locked->updateTimestamps();
 
         $updated = Generation::query()

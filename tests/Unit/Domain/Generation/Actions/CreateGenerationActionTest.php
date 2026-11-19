@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\Actions;
 
 use App\Domain\Billing\Actions\EstimateGenerationCostAction;
-use App\Domain\Generation\Actions\CreateGenerationAction;
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
@@ -17,11 +17,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 final class CreateGenerationActionTest extends TestCase
 {
+    use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use RefreshDatabase;
 
@@ -34,6 +36,8 @@ final class CreateGenerationActionTest extends TestCase
         'output_tokens',
         'reasoning_tokens',
         'rates',
+        'provider_cost_nanodollars',
+        'user_charge_nanodollars',
         'error_code',
         'error_message',
         'error_param',
@@ -49,7 +53,7 @@ final class CreateGenerationActionTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $generation = $this->createGeneration($user, new NewGenerationData(
+        $generation = $this->createGenerationFor($user, new NewGenerationData(
             self::WORKED_EXAMPLE_PROMPT,
             ImageSize::Landscape,
             ImageQuality::Medium,
@@ -91,7 +95,7 @@ final class CreateGenerationActionTest extends TestCase
         });
 
         try {
-            $this->createGeneration($user, new NewGenerationData(
+            $this->createGenerationFor($user, new NewGenerationData(
                 self::WORKED_EXAMPLE_PROMPT,
                 ImageSize::Landscape,
                 ImageQuality::Medium,
@@ -103,6 +107,55 @@ final class CreateGenerationActionTest extends TestCase
         }
 
         $this->assertSame(0, DB::table('generations')->count());
+    }
+
+    public function test_the_lighthouse_generation_holds_its_stored_max_user_estimate(): void
+    {
+        $this->assertSame(45, mb_strlen(self::LIGHTHOUSE_PROMPT));
+
+        $generation = $this->givenTheLighthouseGeneration();
+
+        $this->assertSame(457_150_000, $this->reloadedGeneration($generation)->user_estimate_max_nanodollars);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
+        $this->assertSame(
+            [$generation->user_id],
+            DB::table('credit_ledger_entries')->where('generation_id', $generation->id)->pluck('user_id')->all(),
+        );
+    }
+
+    /**
+     * The docs' maximum case: a max provider cost of 373,875,000 n$.
+     */
+    public function test_the_docs_maximum_case_holds_its_max_user_estimate(): void
+    {
+        $prompt = str_repeat('a', 400);
+        $this->assertSame(400, mb_strlen($prompt));
+
+        $generation = $this->createGenerationFor(User::factory()->create(), new NewGenerationData(
+            $prompt,
+            ImageSize::Landscape,
+            ImageQuality::High,
+            ['https://example.com/one.png', 'https://example.com/two.png'],
+        ));
+
+        $this->assertSame([['hold', -467_343_750]], $this->ledgerEntriesFor($generation));
+    }
+
+    public function test_a_failing_hold_write_leaves_no_row_and_no_entry(): void
+    {
+        CreditLedgerEntry::created(function (): void {
+            throw new RuntimeException('The hold write failed.');
+        });
+
+        try {
+            $this->givenTheLighthouseGeneration();
+            $this->fail('The creation did not fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The hold write failed.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, DB::table('generations')->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
     }
 
     /**
@@ -122,7 +175,7 @@ final class CreateGenerationActionTest extends TestCase
     #[DataProvider('prompts')]
     public function test_the_prompt_reads_back_byte_identical(string $prompt): void
     {
-        $generation = $this->createGeneration(User::factory()->create(), new NewGenerationData(
+        $generation = $this->createGenerationFor(User::factory()->create(), new NewGenerationData(
             $prompt,
             ImageSize::Square,
             ImageQuality::Low,
@@ -155,7 +208,7 @@ final class CreateGenerationActionTest extends TestCase
         $user = User::factory()->create();
 
         try {
-            $this->createGeneration($user, new NewGenerationData($prompt, ImageSize::Square, ImageQuality::Low, []));
+            $this->createGenerationFor($user, new NewGenerationData($prompt, ImageSize::Square, ImageQuality::Low, []));
             $this->fail('The prompt with a NUL byte was accepted.');
         } catch (InvalidGenerationRequestException $exception) {
             $this->assertSame('The prompt contains a NUL byte, which cannot be stored.', $exception->getMessage());
@@ -189,7 +242,7 @@ final class CreateGenerationActionTest extends TestCase
         $user = User::factory()->create();
 
         try {
-            $this->createGeneration($user, new NewGenerationData('a cat', ImageSize::Square, ImageQuality::Low, $referenceImages));
+            $this->createGenerationFor($user, new NewGenerationData('a cat', ImageSize::Square, ImageQuality::Low, $referenceImages));
             $this->fail('The reference image with a NUL byte was accepted.');
         } catch (InvalidGenerationRequestException $exception) {
             $this->assertSame(
@@ -218,7 +271,7 @@ final class CreateGenerationActionTest extends TestCase
     #[DataProvider('referenceImages')]
     public function test_the_reference_images_read_back_in_order(array $referenceImages): void
     {
-        $generation = $this->createGeneration(User::factory()->create(), new NewGenerationData(
+        $generation = $this->createGenerationFor(User::factory()->create(), new NewGenerationData(
             'a cat',
             ImageSize::Portrait,
             ImageQuality::High,
@@ -230,10 +283,5 @@ final class CreateGenerationActionTest extends TestCase
         $this->assertSame($referenceImages, $reloaded->reference_images);
         $this->assertSame(ImageSize::Portrait, $reloaded->size);
         $this->assertSame(ImageQuality::High, $reloaded->quality);
-    }
-
-    private function createGeneration(User $user, NewGenerationData $data): Generation
-    {
-        return $this->app->make(CreateGenerationAction::class)->execute($user, $data);
     }
 }

@@ -11,13 +11,15 @@ use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 use Tests\Concerns\AssertsInstants;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
+use Tests\TestCase;
 
 final class GenerationSnapshotTest extends TestCase
 {
     use AssertsInstants;
+    use CapturesLogMessages;
     use InteractsWithGenerationSnapshots;
 
     private string $phpTimezone;
@@ -217,12 +219,48 @@ final class GenerationSnapshotTest extends TestCase
      * @param  array<string, mixed>  $generation
      */
     #[DataProvider('incompleteSuccesses')]
-    public function test_a_succeeded_snapshot_without_its_result_is_rejected(array $generation, string $path): void
+    public function test_a_succeeded_snapshot_without_its_result_is_rejected_and_logged(array $generation, string $path): void
     {
-        $this->expectException(InvalidGenerationSnapshotException::class);
-        $this->expectExceptionMessageMatches(sprintf('/succeeded.*(?<![\w.])%s(?!\w)/', preg_quote($path, '/')));
+        $generation['metadata'] = ['generation_id' => '01JCQZ8X4V6N2M7R5T9W3Y1B0D'];
 
-        GenerationSnapshot::from($generation);
+        try {
+            GenerationSnapshot::from($generation);
+            $this->fail('A succeeded snapshot without its result was parsed.');
+        } catch (InvalidGenerationSnapshotException $exception) {
+            $this->assertMatchesRegularExpression(sprintf('/succeeded.*(?<![\w.])%s(?!\w)/', preg_quote($path, '/')), $exception->getMessage());
+        }
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame('Refused a succeeded Pixelforge snapshot that does not carry its whole result.', $logged[0]->message);
+        $this->assertSame(
+            ['generation_id' => '01JCQZ8X4V6N2M7R5T9W3Y1B0D', 'provider_id' => $generation['id'], 'error' => $exception->getMessage()],
+            $logged[0]->context,
+        );
+    }
+
+    public function test_an_incomplete_succeeded_snapshot_without_our_generation_id_logs_a_null_id(): void
+    {
+        $generation = self::succeededWith(['usage' => null, 'metadata' => []]);
+
+        try {
+            GenerationSnapshot::from($generation);
+            $this->fail('A succeeded snapshot without usage was parsed.');
+        } catch (InvalidGenerationSnapshotException) {
+        }
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertNull($logged[0]->context['generation_id']);
+        $this->assertSame($generation['id'], $logged[0]->context['provider_id']);
+    }
+
+    public function test_a_valid_snapshot_logs_nothing(): void
+    {
+        GenerationSnapshot::from(self::succeededWith([]));
+
+        $this->assertSame([], $this->loggedMessages());
     }
 
     /**

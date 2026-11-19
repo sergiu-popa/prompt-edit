@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Billing\Actions\HoldGenerationCreditsAction;
+use App\Domain\Billing\Actions\SettleGenerationCreditsAction;
+use App\Domain\Billing\ValueObjects\Nanodollars;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
@@ -19,12 +22,35 @@ use LogicException;
 /**
  * The definition is a pending row: PE-006's AC1 worked example, before submit.
  * Each state builds on the one before it, as Pixelforge moves a generation on.
+ * Every created row holds its max user price, as CreateGenerationAction does,
+ * and a terminal row is settled as the transition action settles it, so its
+ * ledger always matches its status.
  *
  * @extends Factory<Generation>
  */
 final class GenerationFactory extends Factory
 {
     protected $model = Generation::class;
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Generation $generation): void {
+            app(HoldGenerationCreditsAction::class)->execute(
+                $generation->user_id,
+                $generation->id,
+                new Nanodollars($generation->user_estimate_max_nanodollars),
+            );
+
+            match ($generation->status) {
+                GenerationStatus::Succeeded => app(SettleGenerationCreditsAction::class)->execute(
+                    $generation->id,
+                    new Nanodollars($generation->user_charge_nanodollars ?? throw new LogicException('A succeeded generation has a user charge.')),
+                ),
+                GenerationStatus::Failed => app(SettleGenerationCreditsAction::class)->execute($generation->id, null),
+                default => null,
+            };
+        });
+    }
 
     /**
      * @return array<string, mixed>
@@ -66,7 +92,7 @@ final class GenerationFactory extends Factory
 
     /**
      * Usage inside the definition's estimate (its typical price, in fact),
-     * billed at the published rates.
+     * billed at the published rates: 87,450,000 n$, charged 109,312,500 n$.
      */
     public function succeeded(): static
     {
@@ -85,6 +111,8 @@ final class GenerationFactory extends Factory
                     'output_tokens' => '40.00',
                     'reasoning_tokens' => '12.50',
                 ],
+                'provider_cost_nanodollars' => 87_450_000,
+                'user_charge_nanodollars' => 109_312_500,
                 'image_url' => sprintf('https://pixelforge.promptedit.dev/images/%s.png?expires=1&signature=factory', $attributes['provider_id']),
                 'image_url_expires_at' => $completedAt->addDay(),
                 'completed_at' => $completedAt,
@@ -99,6 +127,8 @@ final class GenerationFactory extends Factory
             'error_code' => 'generation_failed',
             'error_message' => 'The model could not produce an image for this prompt.',
             'completed_at' => self::instant($attributes['started_at'])->addSeconds(16),
+            'provider_cost_nanodollars' => 0,
+            'user_charge_nanodollars' => 0,
         ]);
     }
 
@@ -114,6 +144,8 @@ final class GenerationFactory extends Factory
             'error_code' => 'content_policy_violation',
             'error_message' => 'The prompt was rejected by the content policy.',
             'error_param' => 'prompt',
+            'provider_cost_nanodollars' => 0,
+            'user_charge_nanodollars' => 0,
         ]);
     }
 

@@ -11,12 +11,18 @@ use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
+use Closure;
+use Database\Factories\GenerationFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 final class GenerationFactoryTest extends TestCase
 {
+    use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use RefreshDatabase;
 
@@ -82,6 +88,7 @@ final class GenerationFactoryTest extends TestCase
             $this->app->make(CalculateProviderCostAction::class)->execute($usage, TokenRates::from((array) $generation->rates)),
         );
 
+        $this->assertSame($charge->amount, $generation->user_charge_nanodollars);
         $this->assertLessThanOrEqual($generation->user_estimate_max_nanodollars, $charge->amount);
         $this->assertGreaterThanOrEqual($generation->user_estimate_min_nanodollars, $charge->amount);
     }
@@ -113,5 +120,53 @@ final class GenerationFactoryTest extends TestCase
         $this->assertNull($generation->completed_at);
         $this->assertNull($generation->rates);
         $this->assertNull($generation->image_url);
+    }
+
+    /**
+     * @return array<string, array{Closure(GenerationFactory): GenerationFactory, ?int, ?int, list<array{string, int}>}>
+     */
+    public static function statesWithTheirMoney(): array
+    {
+        $held = [['hold', -123_387_500]];
+        $released = [...$held, ['release', 123_387_500]];
+
+        return [
+            'pending' => [fn (GenerationFactory $factory): GenerationFactory => $factory, null, null, $held],
+            'queued' => [fn (GenerationFactory $factory): GenerationFactory => $factory->queued(), null, null, $held],
+            'processing' => [fn (GenerationFactory $factory): GenerationFactory => $factory->processing(), null, null, $held],
+            'succeeded' => [
+                fn (GenerationFactory $factory): GenerationFactory => $factory->succeeded(),
+                87_450_000,
+                109_312_500,
+                [...$released, ['charge', -109_312_500]],
+            ],
+            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed(), 0, 0, $released],
+            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally(), 0, 0, $released],
+        ];
+    }
+
+    /**
+     * @param  Closure(GenerationFactory): GenerationFactory  $state
+     * @param  list<array{string, int}>  $ledger
+     */
+    #[DataProvider('statesWithTheirMoney')]
+    public function test_every_state_has_costs_and_a_ledger_consistent_with_its_status(
+        Closure $state,
+        ?int $providerCost,
+        ?int $userCharge,
+        array $ledger,
+    ): void {
+        $generation = $this->reloadedGeneration($state(Generation::factory())->createOne());
+
+        $this->assertSame($providerCost, $generation->provider_cost_nanodollars);
+        $this->assertSame($userCharge, $generation->user_charge_nanodollars);
+        $this->assertSame($ledger, $this->ledgerEntriesFor($generation));
+    }
+
+    public function test_a_made_row_writes_no_entry(): void
+    {
+        Generation::factory()->make();
+
+        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
     }
 }
