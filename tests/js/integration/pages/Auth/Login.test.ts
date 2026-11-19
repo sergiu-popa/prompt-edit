@@ -4,28 +4,13 @@ import { describe, expect, it } from 'vitest';
 
 import Login from '@/pages/Auth/Login.vue';
 
+import { descriptionOf, fillIn, inputLabelled } from '../../support/form';
 import { givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
 
-function input(wrapper: VueWrapper, label: string): HTMLInputElement {
-    const id = wrapper
-        .findAll('label')
-        .find((candidate) => candidate.text() === label)
-        ?.attributes('for');
-
-    return wrapper.get<HTMLInputElement>(`input[id="${id}"]`).element;
-}
-
 async function signIn(wrapper: VueWrapper, email: string, password: string): Promise<void> {
-    await wrapper.get(`input[id="${input(wrapper, 'Email').id}"]`).setValue(email);
-    await wrapper.get(`input[id="${input(wrapper, 'Password').id}"]`).setValue(password);
+    await fillIn(wrapper, 'Email', email);
+    await fillIn(wrapper, 'Password', password);
     await wrapper.get('form').trigger('submit');
-}
-
-function describedBy(wrapper: VueWrapper, field: HTMLInputElement): string {
-    return (field.getAttribute('aria-describedby') ?? '')
-        .split(' ')
-        .map((id) => wrapper.find(`[id="${id}"]`).text())
-        .join(' ');
 }
 
 describe('Login page', () => {
@@ -39,10 +24,10 @@ describe('Login page', () => {
     it('labels both inputs for sign-in and leaves validation to the server', () => {
         const wrapper = mount(Login);
 
-        expect(input(wrapper, 'Email').type).toBe('email');
-        expect(input(wrapper, 'Email').autocomplete).toBe('username');
-        expect(input(wrapper, 'Password').type).toBe('password');
-        expect(input(wrapper, 'Password').autocomplete).toBe('current-password');
+        expect(inputLabelled(wrapper, 'Email').type).toBe('email');
+        expect(inputLabelled(wrapper, 'Email').autocomplete).toBe('username');
+        expect(inputLabelled(wrapper, 'Password').type).toBe('password');
+        expect(inputLabelled(wrapper, 'Password').autocomplete).toBe('current-password');
         expect(wrapper.get('form').attributes('novalidate')).toBeDefined();
     });
 
@@ -78,12 +63,12 @@ describe('Login page', () => {
 
             await signIn(wrapper, 'ada@example.com', 'wrong-password');
 
-            const email = input(wrapper, 'Email');
+            const email = inputLabelled(wrapper, 'Email');
             expect(email.getAttribute('aria-invalid')).toBe('true');
-            expect(describedBy(wrapper, email)).toBe(message);
+            expect(descriptionOf(wrapper, email)).toBe(message);
             expect(email.value).toBe('ada@example.com');
-            expect(input(wrapper, 'Password').value).toBe('');
-            expect(input(wrapper, 'Password').getAttribute('aria-invalid')).toBeNull();
+            expect(inputLabelled(wrapper, 'Password').value).toBe('');
+            expect(inputLabelled(wrapper, 'Password').getAttribute('aria-invalid')).toBeNull();
             expect(wrapper.get('button[type="submit"]').text()).toBe('Sign in');
         },
     );
@@ -94,8 +79,8 @@ describe('Login page', () => {
 
         await signIn(wrapper, '', '');
 
-        expect(describedBy(wrapper, input(wrapper, 'Email'))).toBe('The email field is required.');
-        expect(describedBy(wrapper, input(wrapper, 'Password'))).toBe('The password field is required.');
+        expect(descriptionOf(wrapper, inputLabelled(wrapper, 'Email'))).toBe('The email field is required.');
+        expect(descriptionOf(wrapper, inputLabelled(wrapper, 'Password'))).toBe('The password field is required.');
     });
 
     it('links to account creation', () => {
