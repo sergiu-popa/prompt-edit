@@ -149,7 +149,7 @@ Boundary rows to add beyond the ACs:
   - The lock-holding transaction must end in `finally`, or the children hang until their timeout.
   - The children inherit the environment. There is no `bootstrap/cache/config.php`, so env DB settings apply; pass them explicitly anyway.
   - The children run the transition only, so the `.env` Pixelforge key is never used.
-- **Prompt bytes Postgres rejects.** A NUL byte or invalid UTF-8 makes the insert throw and roll back, which satisfies AC2. Rejecting them politely is PE-011's validation.
+- **Prompt bytes Postgres cannot store.** Invalid UTF-8 makes the insert throw and roll back, which satisfies AC2. A NUL byte does not throw: pdo_pgsql silently cuts the text at it. `CreateGenerationAction` therefore refuses a prompt or reference image URL containing NUL with `InvalidGenerationRequestException` before the insert (QA round 1). Rejecting both politely with a field error is PE-011's validation.
 - **Hooks for later stories.**
   - PE-007 writes money inside this action's transaction on a terminal `Applied`, and on an `IgnoredConflict` over a row with `local_failure_reason`.
   - PE-014 stamps its last-provider-update column on `Applied` only.

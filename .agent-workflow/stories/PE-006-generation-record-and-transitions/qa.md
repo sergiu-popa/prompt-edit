@@ -46,7 +46,10 @@ Not probed: the 4,000-code-point limit and TrimStrings, which belong to PE-011.
 
 ## Failures
 
-1. **AC3: a NUL byte silently truncates the stored prompt.** Repro: `CreateGenerationAction::execute($user, new NewGenerationData("a\0b", ImageSize::Square, ImageQuality::Low, []))` returns a row with no error, and `generations.prompt` is `a`. Expected: either the prompt is stored byte-identical, or the action refuses the prompt before the insert and writes no row. The plan's Risks section says the insert throws and rolls back, and that assumption is wrong for NUL (invalid UTF-8 does throw). Fix: reject a prompt containing `\0` in `CreateGenerationAction` before the insert, with a test row in the AC3 or refusal test. Then correct the Risks line in `plan.md`.
+1. [x] **AC3: a NUL byte silently truncates the stored prompt.** Repro: `CreateGenerationAction::execute($user, new NewGenerationData("a\0b", ImageSize::Square, ImageQuality::Low, []))` returns a row with no error, and `generations.prompt` is `a`. Expected: either the prompt is stored byte-identical, or the action refuses the prompt before the insert and writes no row. The plan's Risks section says the insert throws and rolls back, and that assumption is wrong for NUL (invalid UTF-8 does throw). Fix: reject a prompt containing `\0` in `CreateGenerationAction` before the insert, with a test row in the AC3 or refusal test. Then correct the Risks line in `plan.md`.
+   - **Resolved** in `5867da4` and `c421ce6`. `CreateGenerationAction` now throws `InvalidGenerationRequestException` before pricing or the insert when the prompt contains `\0` (test rows: start, middle, end), and no row is written.
+   - Reference image URLs checked: a NUL in a URL is not truncated (the `json` column keeps it as the `\u0000` escape and it round-trips), but no URL holds a NUL, so it is refused the same way and the message names the one-based position (test rows: start, middle, end, second of two).
+   - The plan's Risks line is corrected: only invalid UTF-8 throws on insert; NUL is refused by the action.
 
 ## Visual verification
 
@@ -57,3 +60,4 @@ No fixture rows were written to a shared database. All probes ran in the isolate
 ## Notes (non-blocking)
 
 - The PR size is still unresolved from review round 1. The user must choose between one PR and a split at `d9498b2` before the PR is opened. The PR description must state the size and the choice.
+- **For PE-011:** the submit endpoint's server validation must reject a prompt or reference image URL containing a NUL byte with a field error, before `CreateGenerationAction` is reached. The action's `InvalidGenerationRequestException` is the domain's last line, not the user-facing message.
