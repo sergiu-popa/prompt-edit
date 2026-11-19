@@ -188,6 +188,27 @@ final class PixelforgeWebhookTransportTest extends TestCase
     }
 
     /**
+     * The header is unsigned and no rate limiter applies, so anyone could
+     * otherwise write header-sized values into the log. A real event id fits.
+     */
+    public function test_a_rejection_logs_at_most_255_characters_of_the_event_id_header(): void
+    {
+        $this->deliverPixelforgeWebhook('{}', ['Pixelforge-Signature' => null, 'Pixelforge-Event-Id' => str_repeat('e', 4000)])->assertStatus(400);
+
+        $this->assertRejectionLogged('missing', str_repeat('e', 255));
+    }
+
+    public function test_the_unconfigured_secret_log_carries_at_most_255_characters_of_the_event_id_header(): void
+    {
+        config(['pixelforge.webhook_secret' => null]);
+
+        $this->deliverPixelforgeWebhook('{}', ['Pixelforge-Event-Id' => str_repeat('e', 4000)])->assertStatus(500);
+
+        $this->assertCount(1, $this->loggedMessages());
+        $this->assertSame(['event_id' => str_repeat('e', 255)], $this->loggedMessages()[0]->context);
+    }
+
+    /**
      * @param  Closure(string, int): ?string  $sign
      */
     #[DataProvider('unconfiguredSecrets')]

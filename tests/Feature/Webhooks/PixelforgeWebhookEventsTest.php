@@ -174,6 +174,16 @@ final class PixelforgeWebhookEventsTest extends TestCase
         $this->assertSame(['field' => 'type', 'header' => 'generation.succeeded', 'body' => 'ping'], $warnings[0]->context);
     }
 
+    public function test_a_disagreeing_header_is_logged_with_at_most_255_characters(): void
+    {
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('ping', null, 'evt_body'), ['Pixelforge-Event-Id' => str_repeat('h', 4000)])->assertOk();
+
+        $this->assertSame(
+            [['field' => 'id', 'header' => str_repeat('h', 255), 'body' => 'evt_body']],
+            array_map(fn (MessageLogged $message): array => $message->context, $this->messagesAt('warning')),
+        );
+    }
+
     #[DataProvider('unusableAttempts')]
     public function test_an_unusable_delivery_attempt_header_is_stored_as_null(?string $attempt): void
     {

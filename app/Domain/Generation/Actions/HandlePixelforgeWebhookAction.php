@@ -125,6 +125,11 @@ final readonly class HandlePixelforgeWebhookAction
         ]]) === 1;
     }
 
+    /**
+     * Every disagreeing delivery is logged, duplicates included, because a
+     * replay with rewritten headers is what an operator wants to see. The
+     * unsigned value is cut to the length a real one can have.
+     */
     private function logHeaderMismatches(WebhookDeliveryData $delivery): void
     {
         $pairs = [
@@ -136,7 +141,7 @@ final readonly class HandlePixelforgeWebhookAction
             if ($header !== null && $header !== $body) {
                 Log::warning('A Pixelforge webhook header disagrees with its signed body; the body wins.', [
                     'field' => $field,
-                    'header' => $header,
+                    'header' => mb_substr($header, 0, WebhookDeliveryData::MAX_FIELD_LENGTH),
                     'body' => $body,
                 ]);
             }

@@ -31,9 +31,10 @@ final readonly class WebhookDeliveryData
     private const int MAX_DELIVERY_ATTEMPT = 2_147_483_647;
 
     /**
-     * The `string` columns the id and type are stored in.
+     * The `string` columns the id and type are stored in, so also the most of
+     * an unsigned header value worth logging.
      */
-    private const int MAX_FIELD_LENGTH = 255;
+    public const int MAX_FIELD_LENGTH = 255;
 
     private function __construct(
         public string $eventId,
