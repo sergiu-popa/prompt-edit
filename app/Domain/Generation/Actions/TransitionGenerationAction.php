@@ -85,21 +85,32 @@ final class TransitionGenerationAction
 
     /**
      * Identity is checked before any rank, so a snapshot of another generation
-     * never touches this one, whatever its status.
+     * never touches this one, whatever its status. A present generation id
+     * must be ours, and a stored provider id must match. Our ULID is required
+     * only while no provider id is stored: a stored one was itself written
+     * from a ULID-matched snapshot, so it identifies a snapshot without our
+     * metadata just as well (D-27), and that fallback is logged.
      *
      * @return array{GenerationTransitionOutcome, ?string} the outcome, and the log message of a conflict
      */
     private function classifySnapshot(Generation $locked, GenerationSnapshot $snapshot): array
     {
         $identityConflict = match (true) {
-            $snapshot->generationId === null => 'Refused a Pixelforge snapshot without our generation id.',
-            $snapshot->generationId !== $locked->id => 'Refused a Pixelforge snapshot of another generation.',
+            $snapshot->generationId !== null && $snapshot->generationId !== $locked->id => 'Refused a Pixelforge snapshot of another generation.',
             $locked->provider_id !== null && $snapshot->id !== $locked->provider_id => 'Refused a Pixelforge snapshot whose id differs from the stored provider id.',
+            $snapshot->generationId === null && $locked->provider_id === null => 'Refused a Pixelforge snapshot without our generation id.',
             default => null,
         };
 
         if ($identityConflict !== null) {
             return [GenerationTransitionOutcome::RefusedConflict, $identityConflict];
+        }
+
+        if ($snapshot->generationId === null) {
+            Log::warning('Identified a Pixelforge snapshot without our generation id by its stored provider id.', [
+                'generation_id' => $locked->id,
+                'provider_id' => $locked->provider_id,
+            ]);
         }
 
         $current = $locked->status;

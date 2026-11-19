@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * Production has no `PIXELFORGE_*` variables until PE-015, so every page and `/up` must
- * answer without them (AC14).
+ * answer without them (AC14), and the webhook refuses every delivery with a 500.
  *
  * The developer's `.env` and the process env may hold them, so the app is booted with every
  * `PIXELFORGE_*` name removed after `.env` is read and before config is built. Whatever was
@@ -81,6 +81,18 @@ final class BootsWithoutPixelforgeTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->get('/dashboard')
             ->assertOk();
+    }
+
+    /**
+     * Without a webhook secret nothing can be verified, so Pixelforge is told
+     * to retry (PE-008 AC6) while every page still answers.
+     */
+    public function test_a_pixelforge_webhook_answers_500_without_a_secret(): void
+    {
+        $this->assertNull(config('pixelforge.webhook_secret'));
+
+        $this->call('POST', '/webhooks/pixelforge', content: '{"id":"evt_1","object":"event","type":"ping","data":{}}')
+            ->assertStatus(500);
     }
 
     private function removePixelforgeVariables(): void

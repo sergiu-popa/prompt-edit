@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
+use Tests\Concerns\WaitsForDatabaseLocks;
 use Tests\TestCase;
 
 /**
@@ -24,10 +25,7 @@ final class TransitionGenerationActionConcurrencyTest extends TestCase
     use DatabaseTruncation;
     use InteractsWithCreditLedger;
     use InteractsWithGenerationSnapshots;
-
-    private const int LOCK_WAIT_DEADLINE_SECONDS = 15;
-
-    private const int CHILD_TIMEOUT_SECONDS = 30;
+    use WaitsForDatabaseLocks;
 
     protected function setUp(): void
     {
@@ -127,60 +125,9 @@ final class TransitionGenerationActionConcurrencyTest extends TestCase
 
     private function startChild(string $generationId, string $object): InvokedProcess
     {
-        /** @var array{host: string, port: int|string, database: string, username: string, password: string} $database */
-        $database = config('database.connections.pgsql');
-
         return Process::path(base_path())
             ->timeout(self::CHILD_TIMEOUT_SECONDS)
-            ->env([
-                'APP_ENV' => 'testing',
-                'DB_CONNECTION' => 'pgsql',
-                'DB_HOST' => $database['host'],
-                'DB_PORT' => (string) $database['port'],
-                'DB_DATABASE' => $database['database'],
-                'DB_USERNAME' => $database['username'],
-                'DB_PASSWORD' => $database['password'],
-            ])
+            ->env($this->childDatabaseEnvironment())
             ->start([PHP_BINARY, 'tests/scripts/transition-generation.php', $generationId, $object]);
-    }
-
-    /**
-     * Runs inside the lock-holding transaction, where Postgres keeps one
-     * snapshot of pg_stat_activity from its first read, so each poll clears it.
-     */
-    private function waitUntilBackendsWaitOnALock(int $backends): bool
-    {
-        $deadline = microtime(true) + self::LOCK_WAIT_DEADLINE_SECONDS;
-
-        while (microtime(true) < $deadline) {
-            DB::statement('select pg_stat_clear_snapshot()');
-            $waiting = (int) DB::scalar(
-                "select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and pid <> pg_backend_pid()",
-            );
-
-            if ($waiting >= $backends) {
-                return true;
-            }
-
-            usleep(50_000);
-        }
-
-        return false;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resultOf(InvokedProcess $child): array
-    {
-        $result = $child->wait();
-
-        $this->assertTrue($result->successful(), sprintf('A child failed: %s', $result->errorOutput()));
-
-        $output = json_decode($result->output(), associative: true, flags: JSON_THROW_ON_ERROR);
-        $this->assertIsArray($output);
-
-        /** @var array<string, mixed> $output */
-        return $output;
     }
 }

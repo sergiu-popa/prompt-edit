@@ -84,10 +84,23 @@ These credentials are local-only: the seeder refuses to run in production.
 
 - Create **one API key per environment**: local, production. Each key has its own webhook URL, signing secret and `/v1/usage` report, so the deployed app reconciles with its own key.
 - Put the key and its webhook signing secret in `.env` as `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, and never commit them. `PIXELFORGE_DRIVER` switches between the real API and the in-app fake (PE-010), which also drives E2E.
-- To receive real webhooks locally, expose the app through a tunnel and set `https://<tunnel>/webhooks/pixelforge` as the key's webhook URL in the Pixelforge dashboard. For example:
-  - `cloudflared tunnel --url http://localhost:80 --http-host-header prompt-edit.localhost`
-  - `ngrok http 80 --host-header=prompt-edit.localhost`
 - Prompt keywords force behaviour for testing: `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`, `[succeed]`.
+
+#### Real webhooks locally
+
+The fake driver (PE-010) stays the default and needs none of this. To receive real Pixelforge webhooks on your machine:
+
+1. Expose the app through a tunnel, for example:
+   - Cloudflare Tunnel: `cloudflared tunnel --url http://localhost:80 --http-host-header prompt-edit.localhost`
+   - ngrok: `ngrok http 80 --host-header=prompt-edit.localhost`
+   - Expose: `expose share http://prompt-edit.localhost`
+2. In the Pixelforge dashboard, set your **dev** API key's webhook URL to `https://<tunnel>/webhooks/pixelforge`.
+3. Copy that key's `whsec_…` signing secret into `.env` as `PIXELFORGE_WEBHOOK_SECRET`. `.env` is never committed.
+4. Press **Send test event** in the dashboard. The `ping` must get a 2xx. `storage/logs/laravel.log` shows why a delivery was refused:
+   - `missing`, `malformed`, `mismatch` or `stale` is a signature problem, answered 400. Usually the secret belongs to another key, or the clock is off by more than 5 minutes.
+   - A critical "no webhook secret is configured" line, answered 500, means `PIXELFORGE_WEBHOOK_SECRET` is empty.
+
+The endpoint sits outside the session, CSRF and auth middleware, and verifies the HMAC over the exact raw body. Each event id is recorded once, in the same transaction as the change it causes, so duplicates and resends are no-ops.
 
 ## Production
 
@@ -252,7 +265,7 @@ make smoke-production
 
 ### Pixelforge on production
 
-Production needs its **own** Pixelforge key, because the webhook URL, the signing secret and `/v1/usage` are all per key. PE-015 sets it up. Until then `shared/.env` has no `PIXELFORGE_*` variables, and every page and `/up` work without them.
+Production needs its **own** Pixelforge key, because the webhook URL, the signing secret and `/v1/usage` are all per key. PE-015 sets it up. Until then `shared/.env` has no `PIXELFORGE_*` variables, and every page and `/up` work without them. `POST /webhooks/pixelforge` answers 500 and logs a critical line until the secret is set.
 
 **Don't submit generations on production before PE-015.**
 
