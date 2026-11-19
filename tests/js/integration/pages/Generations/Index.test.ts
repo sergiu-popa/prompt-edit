@@ -2,7 +2,7 @@ import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { givenSignedInAs, givenThePageIsAt } from '../../support/inertia';
+import { givenFlash, givenSignedInAs, givenThePageIsAt } from '../../support/inertia';
 import { visibleText } from '../../support/text';
 
 import Index from '@/pages/Generations/Index.vue';
@@ -130,5 +130,22 @@ describe('History page', () => {
         const wrapper = mountPage(pageOf([generation('a', 'A lighthouse')]));
 
         expect(wrapper.find('nav[aria-label="Pagination"]').exists()).toBe(false);
+    });
+
+    it('highlights only the generation the server flashed after a submit', () => {
+        givenFlash({ highlighted_generation_id: 'b' });
+
+        const wrapper = mountPage(pageOf([generation('c', 'Newest'), generation('b', 'Just made'), generation('a', 'Oldest')]));
+
+        const highlighted = wrapper.findAll('[data-highlighted="true"]');
+        expect(highlighted.map((item) => item.get('[data-prompt]').text())).toStrictEqual(['Just made']);
+        expect(wrapper.findAll('main ul > li').filter((item) => item.text().includes('Just submitted'))).toHaveLength(1);
+    });
+
+    it('highlights nothing without a flash, as after a reload', () => {
+        const wrapper = mountPage(pageOf([generation('b', 'Just made'), generation('a', 'Oldest')]));
+
+        expect(wrapper.findAll('[data-highlighted="true"]')).toHaveLength(0);
+        expect(wrapper.text()).not.toContain('Just submitted');
     });
 });

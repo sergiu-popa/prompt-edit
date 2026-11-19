@@ -20,8 +20,8 @@ const LIGHTHOUSE: Generation = {
     created_at: '2026-11-19T11:57:00Z',
 };
 
-function mountItem(changes: Partial<Generation> = {}): VueWrapper {
-    return mount(HistoryItem, { props: { generation: { ...LIGHTHOUSE, ...changes } } });
+function mountItem(changes: Partial<Generation> = {}, highlighted = false): VueWrapper {
+    return mount(HistoryItem, { props: { generation: { ...LIGHTHOUSE, ...changes }, highlighted } });
 }
 
 function prompt(wrapper: VueWrapper) {
@@ -136,5 +136,19 @@ describe('HistoryItem', () => {
 
     it('reads a generation created this minute as just now', () => {
         expect(mountItem({ created_at: '2026-11-19T11:59:30Z' }).get('time').text()).toBe('just now');
+    });
+
+    it('tags the just-submitted generation in words, not by colour alone', () => {
+        const wrapper = mountItem({}, true);
+
+        expect(wrapper.attributes('data-highlighted')).toBe('true');
+        expect(visibleText(wrapper)).toContain('Just submitted');
+    });
+
+    it('tags no other generation', () => {
+        const wrapper = mountItem();
+
+        expect(wrapper.attributes('data-highlighted')).toBeUndefined();
+        expect(wrapper.text()).not.toContain('Just submitted');
     });
 });

@@ -1,4 +1,4 @@
-import type { ActiveVisit, PendingVisit, VisitOptions } from '@inertiajs/core';
+import type { ActiveVisit, FlashData, PendingVisit, VisitOptions } from '@inertiajs/core';
 import { router } from '@inertiajs/core';
 import { vi } from 'vitest';
 import { reactive } from 'vue';
@@ -10,10 +10,20 @@ import type { AuthProps, AuthUser } from '@/types/auth';
  * same object pages reach through `@inertiajs/vue3` and `useForm`, so spying on it here
  * sees every visit.
  */
-export const page = reactive<{ url: string; props: { auth: AuthProps; errors: Record<string, string> } }>({
+export const page = reactive<{ url: string; props: { auth: AuthProps; errors: Record<string, string> }; flash: FlashData }>({
     url: '/',
     props: { auth: { user: null }, errors: {} },
+    flash: {},
 });
+
+/** The flash data the server sent with this page, as after a redirect. */
+export function givenFlash(flash: FlashData): void {
+    page.flash = flash;
+}
+
+export function givenNoFlash(): void {
+    page.flash = {};
+}
 
 /** The URL Inertia reports for the current page, path and query as the server sent them. */
 export function givenThePageIsAt(url: string): void {

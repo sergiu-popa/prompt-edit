@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 import HistoryItem from '@/components/history/HistoryItem.vue';
 import HistoryPagination from '@/components/history/HistoryPagination.vue';
@@ -13,6 +14,10 @@ import type { Paginated } from '@/types/pagination';
 defineProps<{
     generations: Paginated<Generation>;
 }>();
+
+/** Flashed by the submit's redirect only, so a reload or Back never highlights it again. */
+const page = usePage();
+const highlightedId = computed(() => page.flash.highlighted_generation_id);
 </script>
 
 <template>
@@ -27,8 +32,8 @@ defineProps<{
             </PageHeader>
 
             <ul v-if="generations.data.length > 0" class="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white shadow-xs">
-                <li v-for="generation in generations.data" :key="generation.id" class="px-4 py-4 sm:px-5">
-                    <HistoryItem :generation="generation" />
+                <li v-for="generation in generations.data" :key="generation.id" class="group">
+                    <HistoryItem :generation="generation" :highlighted="generation.id === highlightedId" />
                 </li>
             </ul>
 
