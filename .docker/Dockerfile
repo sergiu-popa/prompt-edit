@@ -145,6 +145,7 @@ RUN mkdir -p storage/framework/cache
 
 RUN composer run-script post-autoload-dump
 RUN php artisan key:generate
+RUN php artisan app:generate-local-webhook-secret
 
 
 FROM base AS production

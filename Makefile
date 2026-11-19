@@ -8,7 +8,7 @@ down:
 
 restart: down up
 
-setup: env up composer key migrate npm-build
+setup: env up composer key webhook-secret migrate npm-build restart-worker
 	@echo "Setup complete. Visit http://prompt-edit.localhost"
 
 env:
@@ -19,6 +19,14 @@ composer:
 
 key:
 	docker exec prompt-edit-app php artisan key:generate
+
+# A random local secret for the fake Pixelforge's webhooks; an existing value is kept.
+webhook-secret:
+	docker exec prompt-edit-app php artisan app:generate-local-webhook-secret
+
+# The worker reads .env once, so a new key, secret or driver needs a restart.
+restart-worker:
+	docker restart prompt-edit-worker
 
 migrate:
 	docker exec prompt-edit-app php artisan migrate
