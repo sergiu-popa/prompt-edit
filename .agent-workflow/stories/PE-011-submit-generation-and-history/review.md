@@ -57,3 +57,49 @@ Optional; none blocks QA.
 - **S1.** `resources/js/components/generation/SubmitGenerationArea.vue:7-12`: the docblock was extended in place, and line 9 runs to about 130 characters while the rest wrap at about 90. Rewrap it when W1's commit is made, or leave it. Done in `4f8fc55` `[PE-011] Rewrap the submit area's docblock`.
 - **S2.** `resources/js/components/history/HistoryItem.vue:64`: `group-first:rounded-t-[11px]` / `group-last:rounded-b-[11px]` hard-code "the list's `rounded-xl` minus its 1 px border". `rounded-t-[calc(var(--radius-xl)-1px)]` would say that and follow a theme change. Alternatively, `overflow-hidden` on the `<ul>` in `Index.vue` would make the item's rounding unnecessary.
 - **S3.** `resources/js/pages/Generations/Create.vue:53`: the form-level alert (throttle or closed) stays until the next submit, even after the user edits a field, while field errors clear on change. That is reasonable, because the wait still applies. Clearing `submission` only when the throttle's seconds have passed would need a timer, and isn't worth it now. It is recorded here so QA doesn't file it as a bug.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole story again, all 27 `[PE-011]` commits `f847487..a0657e5` (`origin/main..HEAD`), with a close look at the three commits since round 1:
+- `1d940a7` `[PE-011] Keep the drivers' docblocks on their own methods`
+- `4f8fc55` `[PE-011] Rewrap the submit area's docblock`
+- `a0657e5` `[PE-011] Resolve review round 1 findings` (bookkeeping only)
+
+Checks run on HEAD (`a0657e5`):
+- `make check` exits 0. Pint (226 files) and Larastan are clean. PHPUnit runs 1,182 tests (34,185 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 417 tests in 27 files, all passing.
+- `make e2e` exits 0, with 24 passed and 2 skipped. The skips are the existing touch-only and mouse-only rows of `generate.spec.ts`, one per project, as designed.
+
+### Round 1 findings
+
+- **W1 is resolved.**
+  - `app/Support/Pixelforge/Drivers/FakePixelforgeClient.php:132-142`: `isConfigured()` and its docblock now come straight after `createGeneration()`, and `refusal()` has its own doc again.
+  - `app/Support/Pixelforge/Drivers/HttpPixelforgeClient.php:85-97`: the same fix. `generationFrom()` again declares `@throws AmbiguousPixelforgeOutcomeException`.
+  - The commit is doc-only and changes no behaviour.
+- **S1 is done.** `resources/js/components/generation/SubmitGenerationArea.vue:7-13` now wraps at the file's width.
+- **S2 and S3 stay optional**, as recorded in round 1. Neither blocks QA.
+
+### Second pass over the story diff
+
+I re-read the backend, the frontend and the tests and found nothing new that must change. These points were checked specifically:
+
+- **Whitespace set parity (D-37).** `CreateGenerationRequest::BLANK_PROMPT_PATTERN` (`app/Http/Requests/Generation/CreateGenerationRequest.php:36`) and JS `String.prototype.trim()` strip the same set. Both cover TAB, LF, VT, FF, CR, the `Z` categories (which include U+2028 and U+2029) and U+FEFF, and neither strips U+0085. So `canSubmitGeneration` (`resources/js/lib/generationForm.ts:23`) and the server agree on what counts as blank.
+- **Rule order.** `bail` with `StorableTextRule` ahead of `not_regex` and `max` means a `/u` regex or `mb_strlen` never sees invalid UTF-8. That case gets a field error, never a 500 or a PCRE failure.
+- **Clearing reference errors.** `ReferenceImagesField` replaces the array on every edit (`updateRow`, `addRow` and `removeRow` at :103-125). The shallow `watch` in `Create.vue:68-75` therefore fires, and the row errors clear as the plan says.
+- **The throttle sits inside `auth`** (`routes/web.php:12-17`), so `->by()` always has a user id. The response carries the seconds from `Retry-After`, and `CreateGenerationThrottleTest` pins them.
+- **Status tones.** `GenerationStatus` has exactly the five cases that `STATUS_TONES` maps (`HistoryItem.vue:30-36`), so no badge can render without a tone.
+- **Isolation.** The concurrency test truncates its committed rows in `beforeApplicationDestroyed`, so nothing leaks into later `RefreshDatabase` tests. `tests/scripts/create-generation.php` fakes the queue, so the child never calls Pixelforge.
+
+The security notes and the constant-field check from round 1 still hold, because nothing has changed since then outside docblocks.
+
+### Commit hygiene
+
+- All 27 commits start with `[PE-011]`, are imperative, are at most 72 characters and end with the trailer.
+- Bookkeeping is kept apart from code:
+  - the prompt log is in `f847487`
+  - the plan and story are in `7384180`
+  - the decisions are in `a3bab5d`
+  - the checkboxes are in `f0a393b`
+  - the two review records are in `d8f4bb5` and `a0657e5`
+- No code commit touches `.agent-workflow/`. Each round 1 fix is its own commit, with a subject that names it.
