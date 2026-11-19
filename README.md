@@ -10,7 +10,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 | --- | --- |
 | Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs, to merge in order: #3 → #2 → #4 → #5 → #6 |
 | Product features | Planned as 18 stories (below); each is delivered as one reviewable PR |
-| Deployment | Own server at prompt.sergiupopa.dev (Deployer): walking skeleton in PE-004, real Pixelforge in PE-015 |
+| Deployment | Live at https://prompt.sergiupopa.dev (Deployer, see [Production](#production)) since PE-004; real Pixelforge in PE-015 |
 
 ### Required scope
 
@@ -89,6 +89,188 @@ These credentials are local-only: the seeder refuses to run in production.
   - `ngrok http 80 --host-header=prompt-edit.localhost`
 - Prompt keywords force behaviour for testing: `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`, `[succeed]`.
 
+## Production
+
+Live at **https://prompt.sergiupopa.dev**, deployed with [Deployer](https://deployer.org) (`deploy.php`, D-19) on the HestiaCP droplet `164.90.236.77`, user `admin`, in `/home/admin/web/prompt.sergiupopa.dev`.
+
+- **Web:** Hestia's nginx (Let's Encrypt, forced HTTPS) → Apache with the `deployer` template (DocumentRoot `current/public`) → PHP 8.4-FPM running as `admin` (backend `Symfony-PHP-8_4`, whose `open_basedir` is the whole domain folder). Apache sees `HTTPS=on` and mod_remoteip gives PHP the visitor's IP, so Laravel trusts no proxy (D-21).
+- **Queue worker:** the systemd unit `prompt-edit-worker` (`queue:work database`, `WorkingDirectory` = `current`).
+- **Scheduler:** a Hestia cron job for `admin` runs `schedule:run` every minute. It also runs the nightly backup.
+- **Database:** PostgreSQL 17 (PGDG) on localhost:5432, database and role `prompt_edit`. Queue, cache and sessions use it too; there is no Redis (D-20).
+- The droplet is shared with yum and azsemaus. Their domains, PHP pools, MariaDB and Redis are untouched.
+
+### One-time provisioning (root)
+
+Run once, as root on the droplet, in **one shell session** (step 4 reuses `$PE_DB_PASSWORD`). DNS: an `A` record `prompt.sergiupopa.dev` → `164.90.236.77`, and the Hestia web domain `prompt.sergiupopa.dev` for user `admin`.
+
+```bash
+D=/home/admin/web/prompt.sergiupopa.dev
+
+# 1. Hestia: Deployer layout on PHP 8.4, Let's Encrypt with forced HTTPS
+v-change-web-domain-tpl admin prompt.sergiupopa.dev deployer yes
+v-change-web-domain-backend-tpl admin prompt.sergiupopa.dev Symfony-PHP-8_4 yes
+v-add-letsencrypt-domain admin prompt.sergiupopa.dev
+v-add-web-domain-ssl-force admin prompt.sergiupopa.dev
+chmod u+w "$D"                                       # or Deployer can't create releases/
+install -d -m 750 -o admin -g admin "$D/shared"
+install -d -m 700 -o admin -g admin "$D/private/backups"
+sudo -u admin git ls-remote git@github.com:sergiu-popa/prompt-edit.git HEAD   # admin can read the repo
+
+# 2. PostgreSQL 17 from the PGDG apt repository
+apt-get install -y postgresql-common
+/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+apt-get install -y postgresql-17
+cat > /etc/postgresql/17/main/conf.d/prompt-edit.conf <<'CONF'
+# prompt.sergiupopa.dev on a shared 2 GB droplet
+listen_addresses = 'localhost'
+max_connections = 30
+shared_buffers = 128MB
+effective_cache_size = 384MB
+work_mem = 4MB
+maintenance_work_mem = 32MB
+CONF
+systemctl restart postgresql
+ss -ltn | grep 5432                                  # 127.0.0.1:5432 (and [::1]) only
+
+# 3. The role and the database. The password is generated, never echoed; psql -c can't
+#    interpolate :'pw', so the SQL comes on stdin.
+PE_DB_PASSWORD="$(openssl rand -hex 24)"
+sudo -u postgres psql -q -v ON_ERROR_STOP=1 -v pw="$PE_DB_PASSWORD" <<'SQL'
+CREATE ROLE prompt_edit LOGIN PASSWORD :'pw';
+CREATE DATABASE prompt_edit OWNER prompt_edit ENCODING 'UTF8' TEMPLATE template0;
+SQL
+
+# 4. shared/.env from the committed template (copy it up first, from your checkout:
+#    scp .env.production.example root@164.90.236.77:/root/), secrets filled in place
+install -m 600 -o admin -g admin /root/.env.production.example "$D/shared/.env"
+APP_KEY="base64:$(openssl rand -base64 32)" DB_PASSWORD="$PE_DB_PASSWORD" \
+  perl -i -pe 's/^APP_KEY=$/APP_KEY=$ENV{APP_KEY}/; s/^DB_PASSWORD=$/DB_PASSWORD=$ENV{DB_PASSWORD}/' "$D/shared/.env"
+unset PE_DB_PASSWORD
+ls -l "$D/shared/.env"                               # -rw------- admin admin
+
+# 5. The queue worker: enabled now, started after the first deploy
+cat > /etc/systemd/system/prompt-edit-worker.service <<'UNIT'
+[Unit]
+Description=PromptEdit queue worker (prompt.sergiupopa.dev)
+After=network.target postgresql.service
+
+[Service]
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/web/prompt.sergiupopa.dev/current
+ExecStart=/usr/bin/php8.4 artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --memory=128 --no-interaction
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable prompt-edit-worker
+
+# 6. sudo for admin, scoped to the exact commands. The FPM reload line already exists (yum):
+#    admin ALL=(root) NOPASSWD: /usr/bin/systemctl reload php8.4-fpm
+cat > /etc/sudoers.d/prompt-edit-worker <<'SUDO'
+admin ALL=(root) NOPASSWD: /usr/bin/systemctl start prompt-edit-worker, /usr/bin/systemctl stop prompt-edit-worker, /usr/bin/systemctl restart prompt-edit-worker
+SUDO
+chmod 440 /etc/sudoers.d/prompt-edit-worker
+visudo -cf /etc/sudoers.d/prompt-edit-worker
+
+# 7. The scheduler, through Hestia (it overwrites a hand-edited crontab). No backup cron:
+#    the scheduler runs app:backup-database at 04:30 UTC.
+v-add-cron-job admin '*' '*' '*' '*' '*' 'cd /home/admin/web/prompt.sergiupopa.dev/current 2>/dev/null && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1'
+```
+
+The worker's flags keep each job's timeout (60 s by default) under the database queue's `retry_after` (90 s), and `--max-time` recycles the process hourly.
+
+### Reviewer account
+
+`app:upsert-user` creates or updates a user by email. The password is read from the first line of stdin, never from an argument, so it isn't visible in `ps` on the shared droplet or saved in the server's shell history (D-23). From your machine:
+
+```bash
+read -rs E2E_REVIEWER_PASSWORD; export E2E_REVIEWER_PASSWORD   # not echoed, not in history
+export E2E_REVIEWER_EMAIL=reviewer@example.com                   # the reviewer's address
+printf '%s\n' "$E2E_REVIEWER_PASSWORD" | ssh admin@164.90.236.77 \
+  "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:upsert-user '$E2E_REVIEWER_EMAIL' Reviewer"
+```
+
+The password follows the registration rules (at least 8 characters). It lives only in your shell session and your password manager, never in a remote command line, the server's history or the app log, which records only the email and user id. To rotate it, run the same command with a new password. Existing sessions stay valid until they expire (120 minutes).
+
+### First deploy
+
+```bash
+dep deploy --branch=pe-004-walking-skeleton-own-server   # the CI gate needs green CI on that branch's head
+ssh admin@164.90.236.77 sudo systemctl start prompt-edit-worker
+```
+
+Then create the reviewer account (above), run `make smoke-production` (below), and check, as `admin` in `current/`:
+
+```bash
+php8.4 artisan migrate:status                # every migration Ran
+php8.4 artisan about                         # production, debug off, database cache/queue/session
+php8.4 artisan schedule:list                 # app:backup-database at 30 4 * * *
+php8.4 artisan tinker --execute 'Artisan::queue("inspire");'
+php8.4 artisan tinker --execute 'echo DB::table("jobs")->count();'   # 0 once the worker took it
+systemctl status prompt-edit-worker          # active, started on the new release
+```
+
+`journalctl -u prompt-edit-worker` (as root) shows the processed `inspire` job.
+
+**Client IP:** sign in once with a wrong password and a throwaway email, then look for the throttle key:
+
+```bash
+php8.4 artisan tinker --execute 'echo DB::table("cache")->where("key", "like", "%throwaway%")->pluck("key");'
+```
+
+The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.0.1` or `164.90.236.77`. Never fix a wrong IP with `trustProxies(at: '*')`, which would let any visitor choose their throttle bucket.
+
+### Deploy runbook
+
+1. Merge to `main` and wait for CI to pass. `dep deploy` refuses to deploy unless the latest CI run on `origin/main`'s head succeeded, and it deploys exactly that commit. The gate runs locally and needs an authenticated `gh`.
+2. `dep deploy`. It installs Composer and npm dependencies, builds the assets (through nvm, then removes `node_modules`), runs `migrate --force` and the caches, flips `current`, reloads PHP-FPM (otherwise OPcache keeps serving the old release) and restarts the queue worker (`artisan reload`).
+3. `make smoke-production`.
+
+**Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.
+
+The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, the http → https redirect, a plain 404, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
+
+```bash
+export E2E_BASE_URL=https://prompt.sergiupopa.dev   # plus E2E_REVIEWER_EMAIL and E2E_REVIEWER_PASSWORD, as above
+make smoke-production
+```
+
+### Pixelforge on production
+
+Production needs its **own** Pixelforge key, because the webhook URL, the signing secret and `/v1/usage` are all per key. PE-015 sets it up. Until then `shared/.env` has no `PIXELFORGE_*` variables, and every page and `/up` work without them.
+
+**Don't submit generations on production before PE-015.**
+
+### Logs
+
+- Laravel: `shared/storage/logs/laravel-YYYY-MM-DD.log`, one file per day, kept 14 days, at level `info`.
+  ```bash
+  tail -f /home/admin/web/prompt.sergiupopa.dev/shared/storage/logs/laravel-$(date +%F).log
+  ```
+- Apache and nginx: `/var/log/apache2/domains/prompt.sergiupopa.dev.*` and `/var/log/nginx/domains/`.
+- Queue worker: `journalctl -u prompt-edit-worker` (as root).
+
+### Backups and restore
+
+At 04:30 UTC the scheduler runs `app:backup-database`, a `pg_dump --format=custom` into `private/backups/prompt_edit-<weekday>.dump`, so seven daily files rotate (D-22). A failed dump never replaces last week's file. Hestia's nightly backup of `admin` (05:10) carries the folder into `/backup/admin.<date>.tar`. That is one copy on the same disk; off-droplet backups are out of scope, as in yum.
+
+To restore, as `admin`:
+
+```bash
+cd /home/admin/web/prompt.sergiupopa.dev
+sudo systemctl stop prompt-edit-worker
+PGPASSWORD="$(grep '^DB_PASSWORD=' shared/.env | cut -d= -f2-)" \
+  pg_restore --clean --if-exists --no-owner --single-transaction \
+  -h 127.0.0.1 -U prompt_edit -d prompt_edit private/backups/prompt_edit-<weekday>.dump
+sudo systemctl start prompt-edit-worker
+```
+
+For an older copy, list Hestia's archives with `v-list-user-backups admin` (as root) and extract the dump from `/backup/admin.<date>.tar`.
+
 ## How this is built
 
 - **Requirements first.** [`requirements.md`](.agent-workflow/requirements.md) distils the brief and the Pixelforge docs, checked against the live API, into facts, a money model, a robustness matrix and a decisions log.
@@ -125,6 +307,7 @@ All commands run inside the `prompt-edit-app` container.
 - `make js-test` — Vitest unit + integration projects
 - `make e2e` — production build, then Playwright (desktop + mobile) in the `playwright` Docker service; `make e2e filter="name"` to grep
 - `make check` — lint + stan + test + js-check + js-test
+- `make smoke-production` — opt-in Playwright smoke against production (needs `E2E_BASE_URL`, `E2E_REVIEWER_EMAIL`, `E2E_REVIEWER_PASSWORD`); never part of `make e2e` or CI
 
 ## Testing
 
@@ -134,6 +317,7 @@ All commands run inside the `prompt-edit-app` container.
 | JS unit — pure `resources/js/lib` functions and composables | Vitest (`unit` project, node) | `tests/js/unit` | `make js-test` |
 | JS integration — mounted components and pages, Inertia mocked | Vitest + Vue Test Utils (`integration` project, jsdom) | `tests/js/integration` | `make js-test` |
 | End-to-end — critical user flows in a real browser | Playwright (`playwright` Compose service) | `tests/e2e` | `make e2e` |
+| Production smoke — opt-in, never in CI | Playwright (`playwright.production.config.ts`) | `tests/smoke` | `make smoke-production` |
 
 Every Playwright test also fails if the browser logs a console or page error (`tests/e2e/fixtures.ts`).
 
