@@ -8,6 +8,7 @@ use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use Carbon\CarbonImmutable;
 use Database\Factories\GenerationFactory;
 use Illuminate\Database\Eloquent\Attributes\DateFormat;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -22,6 +23,34 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Every date is written with its UTC offset, so the database session's
  * timezone never shifts a Pixelforge instant (D-10).
+ *
+ * @property string $id
+ * @property int $user_id
+ * @property GenerationStatus $status
+ * @property string $prompt
+ * @property ImageSize $size
+ * @property ImageQuality $quality
+ * @property list<string> $reference_images
+ * @property int $user_estimate_min_nanodollars
+ * @property int $user_estimate_typical_nanodollars
+ * @property int $user_estimate_max_nanodollars
+ * @property ?string $provider_id
+ * @property ?int $input_text_tokens
+ * @property ?int $input_image_tokens
+ * @property ?int $output_tokens
+ * @property ?int $reasoning_tokens
+ * @property ?array<string, string> $rates
+ * @property ?string $error_code
+ * @property ?string $error_message
+ * @property ?string $error_param
+ * @property ?LocalFailureReason $local_failure_reason
+ * @property ?string $image_url
+ * @property ?CarbonImmutable $image_url_expires_at
+ * @property ?CarbonImmutable $provider_created_at
+ * @property ?CarbonImmutable $started_at
+ * @property ?CarbonImmutable $completed_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
  */
 #[DateFormat('Y-m-d H:i:sP')]
 #[Fillable([
