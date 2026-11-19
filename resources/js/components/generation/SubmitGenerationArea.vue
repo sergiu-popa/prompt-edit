@@ -6,9 +6,10 @@ import FieldError from '@/components/ui/FieldError.vue';
 
 /**
  * Generate's submit button, the form-level error beside it (the throttle, or a stale
- * form), announced as an alert, and the notice while generation is not open yet. It sits outside the form in the DOM, after the
- * estimate, so a phone user reads the price before reaching it; `form` ties it to the
- * form. Full width on a phone, right-aligned from `sm`.
+ * form), announced as an alert, and the notice while generation is not open yet. It
+ * sits outside the form in the DOM, after the estimate, so a phone user reads the price
+ * before reaching it; `form` ties it to the form. Full width on a phone, right-aligned
+ * from `sm`.
  */
 defineProps<{
     /** The id of the form the button submits. */
