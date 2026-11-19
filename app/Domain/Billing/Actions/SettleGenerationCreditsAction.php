@@ -65,14 +65,26 @@ final class SettleGenerationCreditsAction
     /**
      * The entry belongs to the hold's owner, so a settlement can never move
      * another user's credit.
+     *
+     * `ON CONFLICT DO NOTHING` (D-25): a unique violation would abort the
+     * whole Postgres transaction and roll the status change back with it. The
+     * status guard makes a duplicate impossible in normal operation, so an
+     * ignored insert means a guard was bypassed and is logged for the operator.
      */
     private function write(CreditLedgerEntry $hold, CreditLedgerEntryType $type, Nanodollars $amount): void
     {
-        CreditLedgerEntry::query()->create([
+        $inserted = CreditLedgerEntry::query()->fillAndInsertOrIgnore([[
             'user_id' => $hold->user_id,
             'generation_id' => $hold->generation_id,
             'type' => $type,
             'amount_nanodollars' => $amount->amount,
-        ]);
+        ]]);
+
+        if ($inserted === 0) {
+            Log::error('Ignored a duplicate credit ledger entry: its generation already has one of this type.', [
+                'generation_id' => $hold->generation_id,
+                'type' => $type->value,
+            ]);
+        }
     }
 }

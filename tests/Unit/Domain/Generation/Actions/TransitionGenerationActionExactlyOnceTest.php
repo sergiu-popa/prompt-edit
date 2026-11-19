@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Actions;
 
+use App\Domain\Billing\Enums\CreditLedgerEntryType;
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
@@ -15,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
@@ -27,6 +30,7 @@ use Tests\TestCase;
  */
 final class TransitionGenerationActionExactlyOnceTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
@@ -142,6 +146,43 @@ final class TransitionGenerationActionExactlyOnceTest extends TestCase
         $this->assertNull($before['provider_cost_nanodollars']);
         $this->assertNull($before['user_charge_nanodollars']);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
+    }
+
+    /**
+     * AC15, the backstop for a bypassed status guard: the unique index ignores
+     * the duplicates without aborting the transaction, and each one is logged.
+     */
+    public function test_duplicates_left_by_a_bypassed_status_guard_are_ignored_and_logged(): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+
+        foreach ([[CreditLedgerEntryType::Release, 457_150_000], [CreditLedgerEntryType::Charge, -381_887_500]] as [$type, $amount]) {
+            CreditLedgerEntry::query()->create([
+                'user_id' => $generation->user_id,
+                'generation_id' => $generation->id,
+                'type' => $type,
+                'amount_nanodollars' => $amount,
+            ]);
+        }
+
+        $outcome = $this->transitionGeneration($generation, self::lighthouseSucceededSnapshotFor($generation));
+
+        $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
+        $this->assertSame(1, DB::scalar('select 1'));
+        $this->assertSame(GenerationStatus::Succeeded, $this->reloadedGeneration($generation)->status);
+        $this->assertSame(
+            [['hold', -457_150_000], ['release', 457_150_000], ['charge', -381_887_500]],
+            $this->ledgerEntriesFor($generation),
+        );
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(2, $logged);
+
+        foreach (['release', 'charge'] as $index => $type) {
+            $this->assertSame('error', $logged[$index]->level);
+            $this->assertSame('Ignored a duplicate credit ledger entry: its generation already has one of this type.', $logged[$index]->message);
+            $this->assertSame(['generation_id' => $generation->id, 'type' => $type], $logged[$index]->context);
+        }
     }
 
     /**
