@@ -226,6 +226,7 @@ Short, interview-ready rationale. Add rows as stories make new decisions.
 | D-14 | Upfront hold = **max** estimate; settle actual on success, release on failure | Users can never overspend; actual ≤ max by construction. |
 | D-15 | Estimates read a pinned `/v1/pricing` snapshot (`config/pricing.php`, checked 2026-11-18), never fetched at runtime. Live `text_token_variance: 0.15` is held as the integer `text_token_variance_percent: 15` | Keeps PHP, TS and the shared fixture deterministic. Only the estimate depends on it: settlement uses each generation's own `rates`, so a stale snapshot cannot mis-charge. PE-015's live smoke detects drift. A deliberate deviation from the docs' advice to read `/v1/pricing`. |
 | D-16 | An estimate's typical count per token type is the midpoint of its min and max, rounded **up** to a whole token; typical is priced like the bounds, with the markup applied once to each total | One integer rule both languages share. With today's tables every midpoint is whole, and the text midpoint is always exactly `e`. |
+| D-17 | Login throttling is Fortify's pipeline step `EnsureLoginIsNotThrottled` (5 failures per minute per email + IP, cleared on success), not a route rate limiter | Successful sign-ins never count, so parallel E2E and real users can't lock themselves out. A lockout shows inline under Email instead of a 429 page. |
 
 ## 6. Open questions / known unknowns
 
