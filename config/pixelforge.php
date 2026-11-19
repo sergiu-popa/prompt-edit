@@ -45,4 +45,20 @@ return [
      * verification example.
      */
     'webhook_tolerance_seconds' => 300,
+
+    /**
+     * The in-app fake (PE-010), for local dev and E2E only. Anything but a
+     * valid whole number in range means the default.
+     */
+    'fake' => [
+        /**
+         * How long an accepted generation stays `processing`.
+         */
+        'processing_seconds' => filter_var(env('PIXELFORGE_FAKE_PROCESSING_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 3]]),
+
+        /**
+         * How long a succeeded generation's image URL works: 24 h, as the docs give it.
+         */
+        'image_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_IMAGE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),
+    ],
 ];

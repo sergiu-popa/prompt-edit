@@ -27,6 +27,14 @@ final class PixelforgeNotConfiguredException extends RuntimeException implements
         return new self('No Pixelforge API key is configured (PIXELFORGE_API_KEY).');
     }
 
+    /**
+     * The fake signs every webhook it sends, and never with an empty key.
+     */
+    public static function missingWebhookSecret(): self
+    {
+        return new self('The fake Pixelforge driver needs a webhook secret to sign its webhooks (PIXELFORGE_WEBHOOK_SECRET).');
+    }
+
     public static function unknownDriver(string $driver): self
     {
         return new self(sprintf('Unknown Pixelforge driver "%s" (PIXELFORGE_DRIVER).', $driver));

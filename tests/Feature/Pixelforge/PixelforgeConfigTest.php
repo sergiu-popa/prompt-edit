@@ -23,6 +23,11 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_REQUEST_TIMEOUT',
     ];
 
+    private const array FAKE_VARIABLES = [
+        'PIXELFORGE_FAKE_PROCESSING_SECONDS',
+        'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
+    ];
+
     /**
      * @var array{env: array<string, mixed>, server: array<string, mixed>, process: array<string, string|false>}
      */
@@ -32,7 +37,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         parent::setUp();
 
-        foreach (self::CLIENT_VARIABLES as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
             $this->savedVariables['env'][$name] = $_ENV[$name] ?? null;
             $this->savedVariables['server'][$name] = $_SERVER[$name] ?? null;
             $this->savedVariables['process'][$name] = getenv($name);
@@ -41,7 +46,7 @@ final class PixelforgeConfigTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (self::CLIENT_VARIABLES as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
             self::restore($_ENV, $name, $this->savedVariables['env'][$name]);
             self::restore($_SERVER, $name, $this->savedVariables['server'][$name]);
             $process = $this->savedVariables['process'][$name];
@@ -118,6 +123,67 @@ final class PixelforgeConfigTest extends TestCase
             'negative' => ['-5'],
             'a fraction' => ['2.5'],
         ];
+    }
+
+    public function test_empty_fake_values_mean_the_defaults(): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
+
+        $this->assertSame(3, $fake['processing_seconds']);
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+    }
+
+    public function test_set_fake_values_apply(): void
+    {
+        $fake = $this->fakeConfigWith([
+            'PIXELFORGE_FAKE_PROCESSING_SECONDS' => '0',
+            'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '60',
+        ]);
+
+        $this->assertSame(0, $fake['processing_seconds']);
+        $this->assertSame(60, $fake['image_ttl_seconds']);
+    }
+
+    /**
+     * A TTL of 0 would hand out image URLs that are already dead.
+     */
+    #[DataProvider('invalidFakeValues')]
+    public function test_an_invalid_fake_value_means_the_default(string $value): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, $value));
+
+        $this->assertSame(3, $fake['processing_seconds']);
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidFakeValues(): array
+    {
+        return [
+            'a word' => ['abc'],
+            'negative' => ['-1'],
+            'a fraction' => ['2.5'],
+        ];
+    }
+
+    public function test_a_zero_image_ttl_means_the_default(): void
+    {
+        $this->assertSame(86_400, $this->fakeConfigWith(['PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '0'])['image_ttl_seconds']);
+    }
+
+    /**
+     * @param  array<string, string>  $variables
+     * @return array<string, mixed>
+     */
+    private function fakeConfigWith(array $variables): array
+    {
+        $fake = $this->pixelforgeConfigWith($variables)['fake'];
+        $this->assertIsArray($fake);
+
+        /** @var array<string, mixed> $fake */
+        return $fake;
     }
 
     /**
