@@ -4,7 +4,7 @@
 Submit a generation and see it in history
 
 ## Status
-`qa-passed`
+`done`
 
 ## Description
 This story closes the submit step of the core journey. A signed-in user has written a prompt and seen its upfront estimate on the Generate page (PE-005). Now they press Generate.
