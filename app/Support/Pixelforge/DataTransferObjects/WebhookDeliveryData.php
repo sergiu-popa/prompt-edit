@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Pixelforge\DataTransferObjects;
 
 use App\Support\Pixelforge\Enums\WebhookEventType;
+use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use App\Support\Pixelforge\Exceptions\InvalidWebhookDeliveryException;
 use JsonException;
 
@@ -29,6 +30,7 @@ final readonly class WebhookDeliveryData
         public string $eventId,
         public string $type,
         public ?WebhookEventType $knownType,
+        public ?GenerationSnapshot $snapshot,
         public ?int $deliveryAttempt,
         public ?string $headerEventId,
         public ?string $headerEventType,
@@ -53,19 +55,11 @@ final readonly class WebhookDeliveryData
         $type = self::storableString($envelope, 'type', $eventId);
         $knownType = WebhookEventType::tryFrom($type);
 
-        if ($knownType !== null && $knownType !== WebhookEventType::Ping) {
-            $data = $envelope['data'] ?? null;
-            $object = is_array($data) ? ($data['object'] ?? null) : null;
-
-            if (! is_array($object)) {
-                throw InvalidWebhookDeliveryException::missingObject($eventId);
-            }
-        }
-
         return new self(
             $eventId,
             $type,
             $knownType,
+            $knownType?->generationStatus() === null ? null : self::snapshot($envelope, $eventId),
             self::deliveryAttempt($headerDeliveryAttempt),
             $headerEventId,
             $headerEventType,
@@ -93,6 +87,33 @@ final readonly class WebhookDeliveryData
         }
 
         return $value;
+    }
+
+    /**
+     * A generation event carries its generation as `data.object`. A ping or an
+     * unknown type is never read past its envelope.
+     *
+     * @param  array<array-key, mixed>  $envelope
+     *
+     * @throws InvalidWebhookDeliveryException
+     */
+    private static function snapshot(array $envelope, string $eventId): GenerationSnapshot
+    {
+        $data = $envelope['data'] ?? null;
+        $object = is_array($data) ? ($data['object'] ?? null) : null;
+
+        if (! is_array($object)) {
+            throw InvalidWebhookDeliveryException::missingObject($eventId);
+        }
+
+        try {
+            return GenerationSnapshot::from($object);
+        } catch (InvalidGenerationSnapshotException $exception) {
+            $metadata = $object['metadata'] ?? null;
+            $generationId = is_array($metadata) && is_string($metadata['generation_id'] ?? null) ? $metadata['generation_id'] : null;
+
+            throw InvalidWebhookDeliveryException::unreadableSnapshot($eventId, $generationId, $exception);
+        }
     }
 
     /**

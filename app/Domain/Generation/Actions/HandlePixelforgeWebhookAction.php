@@ -4,25 +4,45 @@ declare(strict_types=1);
 
 namespace App\Domain\Generation\Actions;
 
+use App\Domain\Billing\Exceptions\InvalidRateException;
+use App\Domain\Billing\Exceptions\NanodollarOverflowException;
+use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
+use App\Domain\Generation\Models\Generation;
 use App\Domain\Generation\Models\PixelforgeWebhookEvent;
+use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\DataTransferObjects\WebhookDeliveryData;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Applies one verified webhook delivery exactly once (D-07): its event row
- * is written in the same transaction as the state change, so the two commit
- * or roll back together. Dedupe and routing use the signed body's id and
+ * is written in the same transaction as the state change, and only a new row
+ * hands its snapshot to the single transition action (D-06), so the ledger
+ * settles or releases once. Dedupe and routing use the signed body's id and
  * type; the unsigned headers only inform.
  */
-final class HandlePixelforgeWebhookAction
+final readonly class HandlePixelforgeWebhookAction
 {
+    public function __construct(private TransitionGenerationAction $transitionGeneration) {}
+
+    /**
+     * Anything thrown rolls the event row back with the state change, so a
+     * redelivery is processed normally.
+     *
+     * @throws ConcurrentGenerationTransitionException
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
     public function execute(WebhookDeliveryData $delivery): void
     {
         $this->logHeaderMismatches($delivery);
 
         DB::transaction(function () use ($delivery): void {
-            if (! $this->record($delivery)) {
+            $snapshot = $delivery->snapshot;
+            $generation = $snapshot === null ? null : $this->lockedGenerationFor($snapshot);
+
+            if (! $this->record($delivery, $generation)) {
                 return;
             }
 
@@ -31,8 +51,34 @@ final class HandlePixelforgeWebhookAction
                     'event_id' => $delivery->eventId,
                     'type' => $delivery->type,
                 ]);
+
+                return;
             }
+
+            if ($snapshot === null || $generation === null) {
+                return;
+            }
+
+            $this->transitionGeneration->execute($generation, $snapshot);
         });
+    }
+
+    /**
+     * The row is locked before the event row is written: that row's foreign
+     * key takes a key-share lock on the generation, so two different events
+     * for one generation would otherwise deadlock on the transition's
+     * `FOR UPDATE`. A value that is not a ULID is never queried, because
+     * pdo_pgsql cuts a string at a NUL byte and `<ULID>\0x` would match.
+     */
+    private function lockedGenerationFor(GenerationSnapshot $snapshot): ?Generation
+    {
+        $generationId = $snapshot->generationId;
+
+        if ($generationId === null || ! Str::isUlid($generationId)) {
+            return null;
+        }
+
+        return Generation::query()->whereKey($generationId)->lockForUpdate()->first();
     }
 
     /**
@@ -43,13 +89,13 @@ final class HandlePixelforgeWebhookAction
      *
      * @return bool whether the event is new
      */
-    private function record(WebhookDeliveryData $delivery): bool
+    private function record(WebhookDeliveryData $delivery, ?Generation $generation): bool
     {
         return PixelforgeWebhookEvent::query()->fillAndInsertOrIgnore([[
             'event_id' => $delivery->eventId,
             'type' => $delivery->type,
             'delivery_attempt' => $delivery->deliveryAttempt,
-            'generation_id' => null,
+            'generation_id' => $generation?->id,
         ]]) === 1;
     }
 
