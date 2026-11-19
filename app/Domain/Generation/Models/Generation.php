@@ -6,12 +6,14 @@ namespace App\Domain\Generation\Models;
 
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\QueryBuilders\GenerationQueryBuilder;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Carbon\CarbonImmutable;
 use Database\Factories\GenerationFactory;
 use Illuminate\Database\Eloquent\Attributes\DateFormat;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UseEloquentBuilder;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -56,6 +58,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?CarbonImmutable $completed_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ *
+ * @method static GenerationQueryBuilder query()
  */
 #[DateFormat('Y-m-d H:i:sP')]
 #[Fillable([
@@ -86,6 +90,7 @@ use Illuminate\Database\Eloquent\Model;
     'started_at',
     'completed_at',
 ])]
+#[UseEloquentBuilder(GenerationQueryBuilder::class)]
 #[UseFactory(GenerationFactory::class)]
 final class Generation extends Model
 {

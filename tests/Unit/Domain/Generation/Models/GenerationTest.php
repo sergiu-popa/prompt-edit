@@ -52,6 +52,19 @@ final class GenerationTest extends TestCase
         $this->assertSame('users', $foreignKeys[0]['foreign_table']);
     }
 
+    /**
+     * Backs History's owner-scoped, newest-first list, and the user foreign key,
+     * which Postgres does not index on its own.
+     */
+    public function test_a_users_generations_are_indexed_newest_first(): void
+    {
+        $indexes = collect(Schema::getIndexes('generations'))->keyBy('name');
+
+        $this->assertTrue($indexes->has('generations_user_id_created_at_id_index'), 'No history index.');
+        $this->assertSame(['user_id', 'created_at', 'id'], $indexes['generations_user_id_created_at_id_index']['columns']);
+        $this->assertFalse($indexes['generations_user_id_created_at_id_index']['unique']);
+    }
+
     public function test_the_model_uses_a_lowercase_ulid_string_key(): void
     {
         $generation = Generation::factory()->create();
