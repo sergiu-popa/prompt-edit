@@ -42,13 +42,14 @@ final class SubmitGenerationJob implements ShouldQueueAfterCommit
     /**
      * Out of attempts, the generation is never failed here: Pixelforge may
      * still have it, and may bill it. It stays non-terminal with its hold
-     * until PE-013 bounds the retries and PE-014 re-dispatches this job.
+     * until PE-013 bounds the retries and PE-014 re-dispatches this job. The
+     * queue passes no exception when the job is failed by hand.
      */
-    public function failed(Throwable $exception): void
+    public function failed(?Throwable $exception): void
     {
         Log::error('Gave up submitting a generation; it stays non-terminal with its hold.', [
             'generation_id' => $this->generationId,
-            'exception' => $exception::class,
+            'exception' => $exception === null ? null : $exception::class,
             ...($exception instanceof ReportsPixelforgeContext ? $exception->context() : []),
         ]);
     }

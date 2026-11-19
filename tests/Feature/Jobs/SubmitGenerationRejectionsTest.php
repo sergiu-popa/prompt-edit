@@ -163,6 +163,25 @@ final class SubmitGenerationRejectionsTest extends TestCase
         $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
     }
 
+    /**
+     * The queue passes no exception when a job is failed by hand (`fail()`).
+     */
+    public function test_a_give_up_without_an_exception_is_still_logged_and_leaves_the_generation_waiting(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+
+        (new SubmitGenerationJob($lighthouse->id))->failed(null);
+
+        $errors = array_values(array_filter(
+            $this->loggedMessages(),
+            fn (MessageLogged $logged): bool => $logged->level === 'error',
+        ));
+        $this->assertCount(1, $errors);
+        $this->assertSame(['generation_id' => $lighthouse->id, 'exception' => null], $errors[0]->context);
+        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+    }
+
     private function fakePixelforgeAnswering(string $answer): void
     {
         if ($answer === 'no key') {
