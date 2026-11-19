@@ -11,6 +11,10 @@ import { formatUsd, formatUsdExact } from '@/lib/money';
  * Hover follows a mouse only: touch browsers fire hover events around a tap (Chromium
  * sends `mouseleave` right after it), so a tap or pen press toggles the tip instead, and
  * a press anywhere else, blur or Escape closes it.
+ *
+ * Hover covers the amount and the tip together, with no gap between them, so the mouse
+ * can move onto the exact value without losing it, and Escape closes an open tip wherever
+ * focus is (WCAG 1.4.13).
  */
 const props = withDefaults(
     defineProps<{
@@ -88,45 +92,52 @@ function concealOnPressElsewhere(event: PointerEvent): void {
     }
 }
 
+function concealOnEscape(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+        conceal();
+    }
+}
+
+function stopListening(): void {
+    document.removeEventListener('pointerdown', concealOnPressElsewhere);
+    document.removeEventListener('keydown', concealOnEscape);
+}
+
 watch(isRevealed, (revealed) => {
     if (revealed) {
         document.addEventListener('pointerdown', concealOnPressElsewhere);
+        document.addEventListener('keydown', concealOnEscape);
     } else {
-        document.removeEventListener('pointerdown', concealOnPressElsewhere);
+        stopListening();
     }
 });
 
-onBeforeUnmount(() => {
-    document.removeEventListener('pointerdown', concealOnPressElsewhere);
-});
+onBeforeUnmount(stopListening);
 </script>
 
 <template>
-    <span ref="root" class="relative inline-block">
+    <span ref="root" class="relative inline-block" @pointerenter="onPointerEnter" @pointerleave="onPointerLeave">
         <button
             type="button"
             :aria-describedby="tooltipId"
             class="cursor-help rounded-sm tabular-nums underline decoration-zinc-300 decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-            @pointerenter="onPointerEnter"
-            @pointerleave="onPointerLeave"
             @pointerdown="onPointerDown"
             @pointercancel="onPointerCancel"
             @focus="onFocus"
             @blur="onBlur"
             @click="onClick"
-            @keydown.escape="conceal"
         >
             {{ displayed }}
         </button>
+        <!-- The padding, not a margin, spaces the tip from the amount, so hover has no gap to cross. -->
         <span
             v-show="isRevealed"
             :id="tooltipId"
             role="tooltip"
-            :class="[
-                'absolute bottom-full z-10 mb-1.5 rounded-md bg-zinc-900 px-2 py-1 text-xs font-normal whitespace-nowrap text-white tabular-nums shadow-sm',
-                align === 'end' ? 'right-0' : 'left-0',
-            ]"
-            >{{ exact }}</span
+            :class="['absolute bottom-full z-10 pb-1.5', align === 'end' ? 'right-0' : 'left-0']"
+            ><span class="block rounded-md bg-zinc-900 px-2 py-1 text-xs font-normal whitespace-nowrap text-white tabular-nums shadow-sm">{{
+                exact
+            }}</span></span
         >
     </span>
 </template>

@@ -72,14 +72,22 @@ describe('MoneyAmount', () => {
         expect(tooltipOf(amount).isVisible()).toBe(false);
     });
 
-    it.each<[string, string, Record<string, string>]>([
-        ['a mouse hover', 'pointerenter', { pointerType: 'mouse' }],
-        ['keyboard focus', 'focus', {}],
-        ['a keyboard click', 'click', {}],
-    ])('reveals the exact value on %s', async (_label, event, options) => {
+    it('reveals the exact value on a mouse hover', async () => {
         const amount = mountAmount(457_137_500);
 
-        await amount.get('button').trigger(event, options);
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
+
+        expect(tooltipOf(amount).isVisible()).toBe(true);
+        expect(tooltipOf(amount).text()).toBe('$0.457137500');
+    });
+
+    it.each<[string, string]>([
+        ['keyboard focus', 'focus'],
+        ['a keyboard click', 'click'],
+    ])('reveals the exact value on %s', async (_label, event) => {
+        const amount = mountAmount(457_137_500);
+
+        await amount.get('button').trigger(event);
 
         expect(tooltipOf(amount).isVisible()).toBe(true);
         expect(tooltipOf(amount).text()).toBe('$0.457137500');
@@ -88,7 +96,6 @@ describe('MoneyAmount', () => {
     it.each<[string, string, Record<string, string>]>([
         ['Escape', 'keydown', { key: 'Escape' }],
         ['blur', 'blur', {}],
-        ['the mouse leaving', 'pointerleave', { pointerType: 'mouse' }],
     ])('hides the exact value again on %s', async (_label, event, options) => {
         const amount = mountAmount(457_137_500);
 
@@ -98,10 +105,49 @@ describe('MoneyAmount', () => {
         expect(tooltipOf(amount).isVisible()).toBe(false);
     });
 
+    it('hides the exact value again when the mouse leaves the amount and its tip', async () => {
+        const amount = mountAmount(457_137_500);
+
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
+        await amount.trigger('pointerleave', { pointerType: 'mouse' });
+
+        expect(tooltipOf(amount).isVisible()).toBe(false);
+    });
+
+    it('stays open while the mouse moves from the amount onto its exact value', async () => {
+        const amount = mountAmount(457_137_500);
+
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
+        await amount.get('button').trigger('pointerleave', { pointerType: 'mouse' });
+        await tooltipOf(amount).trigger('pointerenter', { pointerType: 'mouse' });
+
+        expect(tooltipOf(amount).isVisible()).toBe(true);
+    });
+
+    it('closes a hovered tip on Escape, wherever focus is', async () => {
+        const amount = mountAmount(457_137_500);
+
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await nextTick();
+
+        expect(tooltipOf(amount).isVisible()).toBe(false);
+    });
+
+    it('ignores other keys pressed while a tip is open', async () => {
+        const amount = mountAmount(457_137_500);
+
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        await nextTick();
+
+        expect(tooltipOf(amount).isVisible()).toBe(true);
+    });
+
     it('keeps the exact value open when a mouse clicks the amount it hovers', async () => {
         const amount = mountAmount(457_137_500);
 
-        await amount.get('button').trigger('pointerenter', { pointerType: 'mouse' });
+        await amount.trigger('pointerenter', { pointerType: 'mouse' });
         await mousePress(amount);
 
         expect(tooltipOf(amount).isVisible()).toBe(true);
@@ -111,12 +157,12 @@ describe('MoneyAmount', () => {
         it('ignores the hover events a browser fires around a tap', async () => {
             const amount = mountAmount(457_137_500);
 
-            await amount.get('button').trigger('pointerenter', { pointerType });
+            await amount.trigger('pointerenter', { pointerType });
             expect(tooltipOf(amount).isVisible()).toBe(false);
 
             await tap(amount, pointerType);
-            await amount.get('button').trigger('pointerleave', { pointerType });
-            await amount.get('button').trigger('mouseleave');
+            await amount.trigger('pointerleave', { pointerType });
+            await amount.trigger('mouseleave');
 
             expect(tooltipOf(amount).isVisible()).toBe(true);
         });
@@ -195,7 +241,7 @@ describe('MoneyAmount', () => {
         expect(descriptionOf(amount)).toBe('$0.457137500');
     });
 
-    it('stops listening for presses elsewhere once unmounted', async () => {
+    it('stops listening for presses and Escape elsewhere once unmounted', async () => {
         const amount = mountAmount(457_137_500);
         const removeListener = vi.spyOn(document, 'removeEventListener');
 
@@ -204,6 +250,7 @@ describe('MoneyAmount', () => {
         wrapper = undefined;
 
         expect(removeListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+        expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function));
     });
 
     it('shows a tiny non-zero amount as <$0.0001, with its exact value', () => {

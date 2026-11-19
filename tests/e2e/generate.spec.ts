@@ -134,3 +134,28 @@ test('a tap toggles the exact value, and a tap elsewhere closes it', async ({ pa
     await page.getByRole('heading', { level: 1, name: 'New image' }).tap();
     await expect(exactMax).toBeHidden();
 });
+
+test('a hovered exact value stays open while the mouse moves onto it, and Escape closes it', async ({ page, hasTouch }) => {
+    test.skip(hasTouch, 'mouse only: the desktop project has a hovering pointer');
+
+    await signIn(page, DEMO_USER.email, DEMO_USER.password);
+    await expect(page).toHaveURL('/dashboard');
+    await expectEstimate(page, '$0.0581 – $0.0863', '$0.0722');
+
+    const max = headline(page).getByRole('button', { name: '$0.0863' });
+    const exactMax = page.getByRole('tooltip', { name: '$0.086250000' });
+
+    await max.hover();
+    await expect(exactMax).toBeVisible();
+
+    // Straight up from the amount, across the space between it and the tip, to the tip's middle.
+    const amountBox = (await max.boundingBox())!;
+    const tipBox = (await exactMax.boundingBox())!;
+    const x = amountBox.x + Math.min(amountBox.width, tipBox.width) / 2;
+    await page.mouse.move(x, tipBox.y + tipBox.height / 2, { steps: 10 });
+    await expect(exactMax).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(exactMax).toBeHidden();
+    await expect(max).not.toBeFocused();
+});
