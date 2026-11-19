@@ -8,6 +8,7 @@ use App\Domain\Billing\Actions\EstimateGenerationCostAction;
 use App\Domain\Generation\Actions\CreateGenerationAction;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
@@ -130,6 +131,37 @@ final class CreateGenerationActionTest extends TestCase
 
         $this->assertSame($prompt, DB::table('generations')->where('id', $generation->getKey())->value('prompt'));
         $this->assertSame($prompt, $this->reloadedGeneration($generation)->prompt);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function promptsWithANulByte(): array
+    {
+        return [
+            'at the start' => ["\0ab"],
+            'in the middle' => ["a\0b"],
+            'at the end' => ["ab\0"],
+        ];
+    }
+
+    /**
+     * Postgres text cannot hold U+0000 and pdo_pgsql would store the prompt
+     * cut at it, so the stored prompt would disagree with its estimate.
+     */
+    #[DataProvider('promptsWithANulByte')]
+    public function test_a_prompt_with_a_nul_byte_is_refused_before_anything_is_written(string $prompt): void
+    {
+        $user = User::factory()->create();
+
+        try {
+            $this->createGeneration($user, new NewGenerationData($prompt, ImageSize::Square, ImageQuality::Low, []));
+            $this->fail('The prompt with a NUL byte was accepted.');
+        } catch (InvalidGenerationRequestException $exception) {
+            $this->assertSame('The prompt contains a NUL byte, which cannot be stored.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, DB::table('generations')->count());
     }
 
     /**

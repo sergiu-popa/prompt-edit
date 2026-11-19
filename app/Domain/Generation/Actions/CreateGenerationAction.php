@@ -8,6 +8,7 @@ use App\Domain\Billing\Actions\EstimateGenerationCostAction;
 use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
 use App\Domain\Generation\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -24,10 +25,13 @@ final class CreateGenerationAction
     ) {}
 
     /**
+     * @throws InvalidGenerationRequestException
      * @throws NanodollarOverflowException
      */
     public function execute(User $user, NewGenerationData $data): Generation
     {
+        $this->ensureStorableAsGiven($data);
+
         $userPrice = $this->estimateGenerationCost->execute(
             $data->prompt,
             $data->quality,
@@ -46,5 +50,18 @@ final class CreateGenerationAction
             'user_estimate_typical_nanodollars' => $userPrice->typical->amount,
             'user_estimate_max_nanodollars' => $userPrice->max->amount,
         ]));
+    }
+
+    /**
+     * Postgres text cannot hold U+0000, and pdo_pgsql silently cuts the
+     * value at it instead of failing the insert.
+     *
+     * @throws InvalidGenerationRequestException
+     */
+    private function ensureStorableAsGiven(NewGenerationData $data): void
+    {
+        if (str_contains($data->prompt, "\0")) {
+            throw InvalidGenerationRequestException::nulByteInPrompt();
+        }
     }
 }
