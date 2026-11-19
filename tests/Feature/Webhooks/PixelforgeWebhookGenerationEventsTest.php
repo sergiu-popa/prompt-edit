@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Webhooks;
 
+use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Models\Generation;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Http;
@@ -212,5 +216,82 @@ final class PixelforgeWebhookGenerationEventsTest extends TestCase
         $this->assertSame(GenerationStatus::Succeeded, $this->reloadedGeneration($lighthouse)->status);
         $this->assertSame(GenerationStatus::Queued, $this->reloadedGeneration($other)->status);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($other));
+    }
+
+    /**
+     * @param  Closure(Generation): array{string, array<string, mixed>}  $first  the type and object applied first
+     * @param  Closure(Generation): array{string, array<string, mixed>}  $late  the out-of-order event
+     */
+    #[DataProvider('outOfOrderEvents')]
+    public function test_an_out_of_order_event_is_recorded_and_changes_nothing(Closure $first, Closure $late): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent(...$first($lighthouse)))->assertOk();
+        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $this->travel(1)->minutes();
+        $event = self::pixelforgeEvent(...$late($lighthouse));
+
+        $this->deliverPixelforgeEvent($event)->assertOk();
+
+        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $events = $this->storedWebhookEvents();
+        $this->assertCount(2, $events);
+        $this->assertSame([$event['id'], $lighthouse->id], [$events[1]['event_id'], $events[1]['generation_id']]);
+    }
+
+    /**
+     * @return array<string, array{Closure(Generation): array{string, array<string, mixed>}, Closure(Generation): array{string, array<string, mixed>}}>
+     */
+    public static function outOfOrderEvents(): array
+    {
+        $succeeded = static fn (Generation $generation): array => ['generation.succeeded', self::lighthouseSucceededObjectFor($generation)];
+        $processing = static fn (Generation $generation): array => ['generation.processing', self::generationObjectFor($generation, GenerationStatus::Processing)];
+        $failed = static fn (Generation $generation): array => ['generation.failed', self::generationObjectFor($generation, GenerationStatus::Failed)];
+
+        return [
+            'processing after succeeded' => [$succeeded, $processing],
+            'failed after succeeded' => [$succeeded, $failed],
+            'succeeded after a provider failure' => [$failed, $succeeded],
+        ];
+    }
+
+    public function test_an_event_whose_id_contradicts_the_stored_provider_id_is_recorded_but_refused(): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $this->travel(1)->minutes();
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($lighthouse, ['id' => 'gen_OTHER'])))->assertOk();
+
+        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame('Refused a Pixelforge snapshot whose id differs from the stored provider id.', $logged[0]->message);
+        $this->assertSame(
+            [$lighthouse->id, 'gen_' . strtoupper($lighthouse->id), 'gen_OTHER'],
+            [$logged[0]->context['generation_id'], $logged[0]->context['provider_id'], $logged[0]->context['incoming_provider_id']],
+        );
+    }
+
+    /**
+     * D-09 (PE-007 AC20): Pixelforge bills a generation we failed locally, so
+     * its cost is kept for the operator report, but the user pays nothing.
+     */
+    public function test_a_succeeded_event_for_a_locally_failed_lighthouse_records_its_cost_and_charges_nothing(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        $this->transitionGeneration($lighthouse, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($lighthouse)))->assertOk();
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(305_510_000, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($lighthouse));
+        $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
     }
 }
