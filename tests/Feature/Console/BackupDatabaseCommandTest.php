@@ -193,7 +193,7 @@ final class BackupDatabaseCommandTest extends TestCase
 
     /**
      * `withoutOverlapping()` takes the database cache lock (D-20), the pattern later every-minute
-     * schedules copy.
+     * schedules copy. A lock left by a killed run must not outlive the next due run.
      */
     public function test_the_schedule_runs_it_at_0430_without_overlapping_only_where_a_backup_path_is_set(): void
     {
@@ -202,6 +202,7 @@ final class BackupDatabaseCommandTest extends TestCase
 
         $this->assertSame('30 4 * * *', $event->expression);
         $this->assertTrue($event->withoutOverlapping);
+        $this->assertSame(10, $event->expiresAt, 'The lock expires in minutes, just past the 300 s pg_dump timeout.');
 
         config(['database.backups.path' => null]);
         $this->assertFalse($event->filtersPass($this->app));
