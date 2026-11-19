@@ -283,13 +283,20 @@ jobs:
             --entrypoint php \
             ${{ env.DOCKER_BRANCH_IMAGE }} \
             artisan migrate --force
-      - name: Start the app
+      - name: Start the app, queue worker and scheduler
         run: |
           docker run -d --name app \
             -e LOG_CHANNEL=stderr \
             -e REDIS_HOST -e DB_CONNECTION -e DB_HOST -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
             --network $JOB_DOCKER_NETWORK \
             ${{ env.DOCKER_BRANCH_IMAGE }}
+          for mode in worker scheduler; do
+            docker run -d --name $mode \
+              -e LOG_CHANNEL=stderr \
+              -e REDIS_HOST -e DB_CONNECTION -e DB_HOST -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
+              --network $JOB_DOCKER_NETWORK \
+              ${{ env.DOCKER_BRANCH_IMAGE }} $mode
+          done
           for attempt in $(seq 1 30); do
             docker exec app php -r 'exit(@file_get_contents("http://127.0.0.1:8080/up") === false ? 1 : 0);' && exit 0
             sleep 2
@@ -313,9 +320,10 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
-      - name: App logs
+      - name: App, worker and scheduler logs
         if: failure()
-        run: docker logs app
+        run: |
+          for c in app worker scheduler; do echo "::group::$c"; docker logs $c; echo "::endgroup::"; done
 
   docker-push:
     name: Docker push
