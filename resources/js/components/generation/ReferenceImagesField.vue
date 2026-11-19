@@ -75,11 +75,16 @@ async function removeRow(index: number): Promise<void> {
 </script>
 
 <template>
-    <!-- The count sits outside the fieldset: inside one, `top-0` is measured below the legend. -->
+    <!--
+        The visible count sits outside the fieldset (inside one, `top-0` is measured below the
+        legend), so it is hidden from assistive technology and the legend names the count instead.
+    -->
     <div class="relative min-w-0">
-        <p class="absolute top-0 right-0 text-sm text-zinc-500 tabular-nums">{{ rows.length }} of {{ max }}</p>
+        <p aria-hidden="true" class="absolute top-0 right-0 text-sm text-zinc-500 tabular-nums">{{ rows.length }} of {{ max }}</p>
         <fieldset class="flex min-w-0 flex-col gap-3">
-            <legend class="mb-2 text-sm font-medium text-zinc-800">Reference images (optional)</legend>
+            <legend class="mb-2 text-sm font-medium text-zinc-800">
+                Reference images (optional)<span class="sr-only">, {{ rows.length }} of {{ max }}</span>
+            </legend>
 
             <ul v-if="rows.length > 0" ref="list" class="flex flex-col gap-3">
                 <li v-for="(row, index) in rows" :key="index" class="flex flex-col gap-1.5">

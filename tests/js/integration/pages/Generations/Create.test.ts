@@ -62,7 +62,7 @@ describe('Generate page', () => {
         const wrapper = mountPage();
 
         const legends = wrapper.findAll('legend').map((legend) => legend.text());
-        expect(legends).toStrictEqual(['Size', 'Quality', 'Reference images (optional)']);
+        expect(legends).toStrictEqual(['Size', 'Quality', 'Reference images (optional), 0 of 4']);
         for (const label of ['Square', 'Landscape', 'Portrait']) {
             expect(radio(wrapper, 'Size', label).attributes('type')).toBe('radio');
         }

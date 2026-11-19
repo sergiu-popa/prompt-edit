@@ -50,9 +50,21 @@ describe('ReferenceImagesField', () => {
     it('is an optional group with no rows to start with', () => {
         const field = mountField();
 
-        expect(field.get('legend').text()).toBe('Reference images (optional)');
+        expect(field.get('legend').text()).toBe('Reference images (optional), 0 of 4');
         expect(rowInputs(field)).toHaveLength(0);
         expect(visibleText(field)).toContain('0 of 4');
+    });
+
+    it('names the count in the legend, and hides the visible copy outside the group from assistive technology', async () => {
+        const field = mountField();
+
+        const visibleCount = field.findAll('p').find((paragraph) => paragraph.text() === '0 of 4');
+        expect(visibleCount?.attributes('aria-hidden')).toBe('true');
+        expect(visibleCount?.element.closest('fieldset')).toBeNull();
+
+        await button(field, 'Add reference image').trigger('click');
+
+        expect(field.get('legend').text()).toBe('Reference images (optional), 1 of 4');
     });
 
     it('adds a labelled row and focuses it', async () => {
