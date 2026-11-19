@@ -4,7 +4,7 @@
 
 **Verdict: APPROVE**
 
-Scope reviewed: the 19 `[PE-010]` commits `f5eeda3..a87b4da` on `pe-010-fake-pixelforge-driver` (`origin/main..HEAD`), against `story.md` and `plan.md`. That is the plan, 16 task commits, one Larastan fix-up and the bookkeeping.
+Scope reviewed: the 19 `[PE-010]` commits `f5eeda3..24f452d` on `pe-010-fake-pixelforge-driver` (`origin/main..HEAD`), against `story.md` and `plan.md`. That is the plan, 16 task commits, one Larastan fix-up and the bookkeeping.
 
 Checks run on HEAD (`chain-make.sh chain check`, exit 0):
 - Pint (206 files) and Larastan are clean.
@@ -50,7 +50,7 @@ No public API response is added, so the constant-field check does not apply. The
 
 ### Commit hygiene
 
-- Each task commit carries its code with its tests. The decisions (`1cf2fcc`) and the bookkeeping (`a87b4da`) have their own commits.
+- Each task commit carries its code with its tests. The decisions (`9191423`) and the bookkeeping (`24f452d`) have their own commits.
 - All subjects start with `[PE-010]` and are at most 72 characters. Every message ends with the trailer.
 - One exception: `5c7b3ca` is a fix-up for `520ca16`. That commit's test passes `preg_replace()`'s `?string` straight to `get()`, so `520ca16` on its own fails `make stan`. See S1.
 
@@ -58,7 +58,7 @@ No public API response is added, so the constant-field check does not apply. The
 
 Optional; none blocks QA.
 
-- **S1 (process, acknowledged).** `520ca16` does not pass `stan` on its own, and `5c7b3ca` repairs it (`tests/Feature/Pixelforge/Fake/FakePixelforgeImageTest.php:61`). That breaks "every commit passes its checks" and bisectability for one commit. No action now, because fixing it needs a history rewrite, which the pipeline forbids. In future, run the full `check` (including `stan`) before each commit, not only `test`.
+- **S1 (process, resolved).** Resolved before the PR was opened: the orchestrator squashed `5c7b3ca` into `520ca16`, which is now `839ece9` and passes `stan` on its own. The SHAs in these notes have been updated to the rewritten history. Original note: `520ca16` does not pass `stan` on its own, and `5c7b3ca` repairs it (`tests/Feature/Pixelforge/Fake/FakePixelforgeImageTest.php:61`). That breaks "every commit passes its checks" and bisectability for one commit. No action now, because fixing it needs a history rewrite, which the pipeline forbids. In future, run the full `check` (including `stan`) before each commit, not only `test`.
 - **S2.** `app/Support/Pixelforge/Drivers/FakePixelforgeClient.php:102-111` passes `firstOrCreate` an eager array. So every replay, and every reused-key request, still runs the estimator and rolls `failsGeneration()` and `duplicatesWebhooks()`, then throws the results away. The behaviour is right, but `FakeChaos.php:10-12` says those two rolls are made "once". Pass the values as a closure (`firstOrCreate([...], fn (): array => [...])`, which `Builder::firstOrCreate` accepts). The estimate and the rolls then run only when a row is really inserted, and the docblock becomes true.
 - **S3.** In `app/Support/Pixelforge/Fake/AdvanceFakeGenerationJob.php:46-50`, the next step is dispatched after `deliver()`. Anything `deliver()` throws therefore leaves the row in `processing` for good. Today that can only be `WebhookSecretNotConfiguredException`, if the secret is cleared while a generation is in flight. The local generation then keeps its hold until PE-014. Wrapping the send as `try { $sender->deliver(…); } finally { self::dispatch(…)->delay(…); }` keeps the webhook order on the `sync` queue and still advances the lifecycle. Alternatively, leave it and note it in the class docblock.
 - **S4.** The `app/Support/Pixelforge/Fake/FakeKeywords.php:14-16` docblock reads "ends as `[fail]`, else `[succeed]`, decides", which does not parse. Suggested: "An accepted create's outcome is decided by `[fail]`, else `[succeed]`; a chaos `internal_error` follows them, …".

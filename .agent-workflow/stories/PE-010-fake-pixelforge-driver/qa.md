@@ -4,7 +4,7 @@
 
 Every AC maps to a passing test, or to a probe run in this pass. Review round 1 is APPROVE with no Critical or Warning items, so nothing auto-fails. Status moves to `qa-passed`.
 
-Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1). Branch `pe-010-fake-pixelforge-driver` in the isolated worktree, clean at the start, HEAD `06250e1`. Checks ran only in the `prompt-edit-chain` container. The main stack was not touched.
+Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1). Branch `pe-010-fake-pixelforge-driver` in the isolated worktree, clean at the start, HEAD `c38982a`. Checks ran only in the `prompt-edit-chain` container. The main stack was not touched.
 
 Two items are deferred to the orchestrator, not failed here: the E2E run (`make e2e`, AC 24) and the browser load of the placeholder PNG (AC 20). See *Visual verification*.
 
@@ -76,7 +76,7 @@ No fixture rows were written to any shared database. Every test ran in the isola
 
 Optional, from review round 1. None is Critical, so none blocks QA.
 
-- **S1** (process): `520ca16` alone fails `stan`. Fixed by `5c7b3ca`. Acknowledged in review; no action.
+- **S1** (process): `520ca16` alone failed `stan`, fixed by `5c7b3ca`. Resolved before the PR was opened: the orchestrator squashed `5c7b3ca` into `520ca16`, which is now `839ece9` and passes `stan` on its own. The SHAs in these notes have been updated to the rewritten history.
 - **S2**: `FakePixelforgeClient` passes `firstOrCreate` an eager array, so the estimate and chaos rolls run on every replay. Behaviour is correct. Closure form would match the `FakeChaos` docblock.
 - **S3**: `AdvanceFakeGenerationJob` dispatches the next step after `deliver()`. A throw from `deliver()` (only `WebhookSecretNotConfiguredException`, if the secret is cleared mid-flight) would leave the row in `processing`.
 - **S4**: `FakeKeywords` docblock sentence does not parse.
