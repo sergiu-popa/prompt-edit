@@ -12,6 +12,7 @@ use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
 use App\Domain\Generation\Models\Generation;
+use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\DB;
  * webhook that beats our create call always finds it. The request is stored
  * exactly as given, so every retry rebuilds an identical payload. The row and
  * the hold of its max user price commit together (D-14).
+ *
+ * The submit job is dispatched inside the transaction but pushed only after
+ * the outermost commit (D-32): a caller's own transaction that rolls back
+ * (PE-011's controller, for example) submits nothing.
  */
 final class CreateGenerationAction
 {
@@ -61,6 +66,8 @@ final class CreateGenerationAction
                 $generation->id,
                 new Nanodollars($generation->user_estimate_max_nanodollars),
             );
+
+            SubmitGenerationJob::dispatch($generation->id);
 
             return $generation;
         });

@@ -13,9 +13,12 @@ use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 use Tests\TestCase;
 
 /**
@@ -33,8 +36,18 @@ trait InteractsWithGenerations
      */
     protected const string LIGHTHOUSE_PROMPT = 'A lighthouse on a cliff at dawn, oil painting';
 
+    /**
+     * The submit job is held back, so the row stays pending with its hold, as
+     * a test of anything after creation expects; on the test's `sync` queue
+     * it would otherwise run inline. Tests of the dispatch itself call
+     * CreateGenerationAction directly.
+     */
     protected function createGenerationFor(User $user, NewGenerationData $data): Generation
     {
+        if (! Queue::getFacadeRoot() instanceof QueueFake) {
+            Queue::fake([SubmitGenerationJob::class]);
+        }
+
         return $this->app->make(CreateGenerationAction::class)->execute($user, $data);
     }
 
