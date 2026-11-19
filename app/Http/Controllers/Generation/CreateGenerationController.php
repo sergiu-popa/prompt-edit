@@ -18,6 +18,9 @@ use Inertia\Inertia;
  */
 final class CreateGenerationController extends Controller
 {
+    /** The rate limiter the route throttles with, defined in AppServiceProvider (D-39). */
+    public const string RATE_LIMITER = 'generation-submissions';
+
     public function __invoke(CreateGenerationRequest $request, CreateGenerationAction $createGeneration): RedirectResponse
     {
         /** @var User $user */

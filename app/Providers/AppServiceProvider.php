@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\Billing\ValueObjects\PricingTable;
+use App\Http\Controllers\Generation\CreateGenerationController;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -63,6 +68,23 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->refuseFakeDriverInProduction();
+        $this->limitGenerationSubmissions();
+    }
+
+    /**
+     * Per user, a configurable number a minute (D-39). Over the limit, the user goes back
+     * to Generate with a form-level error, not a bare 429, which Inertia would show as an
+     * error modal.
+     */
+    private function limitGenerationSubmissions(): void
+    {
+        RateLimiter::for(CreateGenerationController::RATE_LIMITER, fn (Request $request): Limit => Limit::perMinute(
+            $this->app->make('config')->integer('generations.submissions_per_minute'),
+        )
+            ->by((string) $request->user()?->getAuthIdentifier())
+            ->response(fn (Request $request, array $headers): RedirectResponse => back()->withErrors([
+                'submission' => sprintf("You're submitting too quickly. Try again in %d s.", $headers['Retry-After'] ?? 60),
+            ])));
     }
 
     /**

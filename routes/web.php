@@ -12,5 +12,7 @@ Route::inertia('/', 'Welcome')->name('home');
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', ShowGenerationFormController::class)->name('dashboard');
     Route::get('/generations', ShowGenerationHistoryController::class)->name('generations.index');
-    Route::post('/generations', CreateGenerationController::class)->name('generations.store');
+    Route::post('/generations', CreateGenerationController::class)
+        ->middleware('throttle:' . CreateGenerationController::RATE_LIMITER)
+        ->name('generations.store');
 });
