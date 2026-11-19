@@ -89,7 +89,7 @@ The D-21, D-22 and D-23 rows in `requirements.md` ride with the code commits tha
 
 ### Warnings
 
-- [ ] **`README.md:137-141`: the runbook puts the Postgres password on a command line, which breaks AC19.**
+- [x] **`README.md:137-141`: the runbook puts the Postgres password on a command line, which breaks AC19.**
   - Step 3 runs `sudo -u postgres psql … -v pw="$PE_DB_PASSWORD"`, so the generated password becomes an argument of both `sudo` and `psql`.
   - `sudo` logs the full command line to syslog by default (`/var/log/auth.log`: `COMMAND=/usr/bin/psql -q -v ON_ERROR_STOP=1 -v pw=<password>`). The password would then persist on disk outside `shared/.env`, contrary to AC19: "the Postgres password live[s] only in `shared/.env` on the server or in the operator's shell".
   - While `psql` runs, the password is also visible to every local user through `ps` and `/proc/<pid>/cmdline`. That is the exposure D-23 cites for the account command on this shared droplet.
@@ -99,6 +99,8 @@ The D-21, D-22 and D-23 rows in `requirements.md` ride with the code commits tha
       | sudo -u postgres psql -q -v ON_ERROR_STOP=1
     ```
     Then update the comment above it. The current one says psql `-c` can't interpolate `:'pw'`, which no longer applies. Also add one line to the plan's "Reviewer account" / D-23 reasoning, or to the README, saying that secrets never go on a `sudo` command line because sudo logs it.
+
+  — fixed in `4d7f760`: step 3 builds the SQL with the `printf` builtin and pipes it to `sudo -u postgres psql`. The comment above it now says no secret goes on a command line, because sudo logs argv to `auth.log` and `ps` shows it to every local user.
 - [x] **The PR is far over the size rule.** `.agent-workflow/CLAUDE.md` sets about 400 changed lines per PR. This branch has 1,630 insertions:
   - code and config (`app/`, `config/`, `routes/`, `deploy.php`, `.env.production.example`, the Makefile, Playwright config, `package.json`, `tsconfig.json`): about 417;
   - tests: about 833;
@@ -113,6 +115,12 @@ The D-21, D-22 and D-23 rows in `requirements.md` ride with the code commits tha
 
 These are optional and don't block the verdict.
 
-- [ ] `app/Console/Commands/UpsertUserCommand.php:79`: run interactively, without a pipe, the command waits on `fgets(STDIN)` with no prompt and echoes the password as it is typed. Fix: when `stream_isatty(STDIN)` and no test stream is set, either read the password with `$this->secret('Password')` or fail with "Pipe the password on stdin (see README)". Add one test row for whichever is chosen.
-- [ ] `routes/console.php:16-18`: the story's Technical Notes ask scheduled tasks to use `withoutOverlapping()`, which uses the database cache lock. The backup can't overlap itself today, since it is due once a day and times out after 300 s. Adding `->withoutOverlapping()` now sets the pattern that PE-014's every-minute reconciler will copy, and it costs one line plus a `withoutOverlapping` assertion in the schedule test.
-- [ ] `deploy.php:55`: the gate hard-codes `--repo sergiu-popa/prompt-edit`, while the `repository` setting already holds the same slug. Fix: derive it once, for example with `preg_replace('~^git@github\.com:|\.git$~', '', $repository)`, or set it as a `github_repo` setting, so the two can't drift apart.
+- [x] `app/Console/Commands/UpsertUserCommand.php:79`: run interactively, without a pipe, the command waits on `fgets(STDIN)` with no prompt and echoes the password as it is typed. Fix: when `stream_isatty(STDIN)` and no test stream is set, either read the password with `$this->secret('Password')` or fail with "Pipe the password on stdin (see README)". Add one test row for whichever is chosen.
+
+  — fixed in `e878988`: the command now refuses when its password stream is a TTY, with "Pipe the password on stdin instead of typing it (README, "Reviewer account")", before it reads anything or writes a log line. `test_it_refuses_to_read_the_password_from_a_terminal` opens `/dev/ptmx` as a stand-in terminal. The README notes the refusal.
+- [x] `routes/console.php:16-18`: the story's Technical Notes ask scheduled tasks to use `withoutOverlapping()`, which uses the database cache lock. The backup can't overlap itself today, since it is due once a day and times out after 300 s. Adding `->withoutOverlapping()` now sets the pattern that PE-014's every-minute reconciler will copy, and it costs one line plus a `withoutOverlapping` assertion in the schedule test.
+
+  — fixed in `b011411`: the backup entry is `->withoutOverlapping()`, and the schedule test asserts it.
+- [x] `deploy.php:55`: the gate hard-codes `--repo sergiu-popa/prompt-edit`, while the `repository` setting already holds the same slug. Fix: derive it once, for example with `preg_replace('~^git@github\.com:|\.git$~', '', $repository)`, or set it as a `github_repo` setting, so the two can't drift apart.
+
+  — fixed in `15800be`: the gate derives `owner/name` from `repository` with that `preg_replace`. The resulting `gh run list --repo sergiu-popa/prompt-edit …` call was checked locally against `main`'s head.
