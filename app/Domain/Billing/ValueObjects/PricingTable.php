@@ -6,6 +6,8 @@ namespace App\Domain\Billing\ValueObjects;
 
 use App\Domain\Billing\Exceptions\InvalidPricingException;
 use App\Domain\Billing\Exceptions\InvalidRateException;
+use App\Domain\Shared\Enums\ImageQuality;
+use App\Domain\Shared\Enums\ImageSize;
 
 /**
  * The prices and token rules an estimate is computed from, built from a
@@ -26,11 +28,25 @@ final readonly class PricingTable
 
     private const string PER_REFERENCE_IMAGE = 'per_reference_image';
 
+    private const string OUTPUT = 'output';
+
+    private const string REASONING = 'reasoning';
+
+    private const string MIN = 'min';
+
+    private const string MAX = 'max';
+
+    /**
+     * @param  array<string, array<string, int>>  $outputTokens  quality → size → count
+     * @param  array<string, TokenBounds>  $reasoningTokens  quality → range
+     */
     private function __construct(
         public TokenRates $rates,
         public int $charactersPerTextToken,
         public int $textTokenVariancePercent,
         public int $tokensPerReferenceImage,
+        private array $outputTokens,
+        private array $reasoningTokens,
     ) {}
 
     /**
@@ -46,10 +62,74 @@ final readonly class PricingTable
 
         return new self(
             $rates,
-            self::integerAt($tokens, self::CHARACTERS_PER_TEXT_TOKEN, min: 1),
-            self::integerAt($tokens, self::TEXT_TOKEN_VARIANCE_PERCENT, min: 0, max: 100),
-            self::integerAt($tokens, self::PER_REFERENCE_IMAGE, min: 0),
+            self::integerAt($tokens, self::CHARACTERS_PER_TEXT_TOKEN, self::TOKENS, min: 1),
+            self::integerAt($tokens, self::TEXT_TOKEN_VARIANCE_PERCENT, self::TOKENS, min: 0, max: 100),
+            self::integerAt($tokens, self::PER_REFERENCE_IMAGE, self::TOKENS, min: 0),
+            self::outputTable($tokens),
+            self::reasoningTable($tokens),
         );
+    }
+
+    public function outputTokens(ImageQuality $quality, ImageSize $size): int
+    {
+        return $this->outputTokens[$quality->value][$size->value];
+    }
+
+    public function reasoningTokens(ImageQuality $quality): TokenBounds
+    {
+        return $this->reasoningTokens[$quality->value];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $tokens
+     * @return array<string, array<string, int>>
+     *
+     * @throws InvalidPricingException
+     */
+    private static function outputTable(array $tokens): array
+    {
+        $path = self::TOKENS . '.' . self::OUTPUT;
+        $output = self::arrayAt($tokens, self::OUTPUT, $path);
+        $table = [];
+
+        foreach (ImageQuality::cases() as $quality) {
+            $qualityPath = $path . '.' . $quality->value;
+            $sizes = self::arrayAt($output, $quality->value, $qualityPath);
+
+            foreach (ImageSize::cases() as $size) {
+                $table[$quality->value][$size->value] = self::integerAt($sizes, $size->value, $qualityPath, min: 0);
+            }
+        }
+
+        return $table;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $tokens
+     * @return array<string, TokenBounds>
+     *
+     * @throws InvalidPricingException
+     */
+    private static function reasoningTable(array $tokens): array
+    {
+        $path = self::TOKENS . '.' . self::REASONING;
+        $reasoning = self::arrayAt($tokens, self::REASONING, $path);
+        $table = [];
+
+        foreach (ImageQuality::cases() as $quality) {
+            $qualityPath = $path . '.' . $quality->value;
+            $range = self::arrayAt($reasoning, $quality->value, $qualityPath);
+            $min = self::integerAt($range, self::MIN, $qualityPath, min: 0);
+            $max = self::integerAt($range, self::MAX, $qualityPath, min: 0);
+
+            if ($min > $max) {
+                throw InvalidPricingException::outOfRange($qualityPath . '.' . self::MIN, $min, sprintf('at most its max of %d', $max));
+            }
+
+            $table[$quality->value] = TokenBounds::between($min, $max);
+        }
+
+        return $table;
     }
 
     /**
@@ -76,7 +156,7 @@ final readonly class PricingTable
      *
      * @throws InvalidPricingException
      */
-    private static function integerAt(array $block, string $key, int $min, ?int $max = null, string $parentPath = self::TOKENS): int
+    private static function integerAt(array $block, string $key, string $parentPath, int $min, ?int $max = null): int
     {
         $path = $parentPath . '.' . $key;
 
