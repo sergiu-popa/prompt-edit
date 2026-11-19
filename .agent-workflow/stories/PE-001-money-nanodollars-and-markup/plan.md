@@ -6,14 +6,14 @@ Add immutable Billing primitives: `Nanodollars`, `TokenRates` and `TokenUsage`, 
 ## Tasks
 Each task is one TDD commit (failing test first, then code, `make check` green before committing).
 
-- [ ] 1. Promote `brick/math` to a direct `require` at `^1.0` (the locked 1.0.0), using `composer require --no-update` then `composer update --lock` inside the container so the lock diff is only the content-hash. Commit: `[PE-001] Require brick/math directly for exact decimal maths`
-- [ ] 2. Add `Nanodollars` (constructor, `zero`, `fromBigInteger`, `plus`, `minus`, `multipliedBy`, `equals`, `compareTo`) and `NanodollarOverflowException`, test-first for AC13, the add/subtract/multiply part of AC14, and the AC17 `TypeError` rows. Commit: `[PE-001] Add Nanodollars with overflow-checked arithmetic`
-- [ ] 3. Add `Nanodollars::toUsdString()` / `Nanodollars::fromUsdString()` and `InvalidUsdAmountException`, test-first for AC15–16 and the parse boundary rows below. Commit: `[PE-001] Render and parse Nanodollars as 9-decimal USD strings`
-- [ ] 4. Add `BillingTypesDeclareNoFloatsTest`, a reflection scan of every class under `app/Domain/Billing` that fails on a `float`, `mixed` or missing type in any public method parameter or return, or on a public property declared by the class itself (AC17). It must also assert that it found at least one class. Commit: `[PE-001] Guard Billing signatures against float types`
-- [ ] 5. Add the `TokenType` enum, `TokenRates::from()` and `InvalidRateException`, test-first for AC1–4 and the rate boundary rows below. Commit: `[PE-001] Build TokenRates from Pixelforge rate strings`
-- [ ] 6. Add `TokenUsage` (guarded public constructor plus `from()`) and `InvalidTokenUsageException`, test-first for AC5, its `TypeError` row and the usage boundary rows below. Commit: `[PE-001] Build TokenUsage from Pixelforge usage counts`
-- [ ] 7. Add `CalculateProviderCostAction`, test-first for AC6–9 and the tokens × rate and sum overflow rows of AC14. Commit: `[PE-001] Calculate provider cost from a generation's usage and rates`
-- [ ] 8. Add `CalculateUserChargeAction`, test-first for AC10–12 and the markup overflow boundary of AC14. Commit: `[PE-001] Calculate the user charge as cost +25% rounded up`
+- [x] 1. Promote `brick/math` to a direct `require` at `^1.0` (the locked 1.0.0), using `composer require --no-update` then `composer update --lock` inside the container so the lock diff is only the content-hash. Commit: `[PE-001] Require brick/math directly for exact decimal maths`
+- [x] 2. Add `Nanodollars` (constructor, `zero`, `fromBigInteger`, `plus`, `minus`, `multipliedBy`, `equals`, `compareTo`) and `NanodollarOverflowException`, test-first for AC13, the add/subtract/multiply part of AC14, and the AC17 `TypeError` rows. Commit: `[PE-001] Add Nanodollars with overflow-checked arithmetic`
+- [x] 3. Add `Nanodollars::toUsdString()` / `Nanodollars::fromUsdString()` and `InvalidUsdAmountException`, test-first for AC15–16 and the parse boundary rows below. Commit: `[PE-001] Render and parse Nanodollars as 9-decimal USD strings`
+- [x] 4. Add `BillingTypesDeclareNoFloatsTest`, a reflection scan of every class under `app/Domain/Billing` that fails on a `float`, `mixed` or missing type in any public method parameter or return, or on a public property declared by the class itself (AC17). It must also assert that it found at least one class. Commit: `[PE-001] Guard Billing signatures against float types`
+- [x] 5. Add the `TokenType` enum, `TokenRates::from()` and `InvalidRateException`, test-first for AC1–4 and the rate boundary rows below. Commit: `[PE-001] Build TokenRates from Pixelforge rate strings`
+- [x] 6. Add `TokenUsage` (guarded public constructor plus `from()`) and `InvalidTokenUsageException`, test-first for AC5, its `TypeError` row and the usage boundary rows below. Commit: `[PE-001] Build TokenUsage from Pixelforge usage counts`
+- [x] 7. Add `CalculateProviderCostAction`, test-first for AC6–9 and the tokens × rate and sum overflow rows of AC14. Commit: `[PE-001] Calculate provider cost from a generation's usage and rates`
+- [x] 8. Add `CalculateUserChargeAction`, test-first for AC10–12 and the markup overflow boundary of AC14. Commit: `[PE-001] Calculate the user charge as cost +25% rounded up`
 
 ## Domain
 All classes are `final`. The value objects are `readonly`. Namespace root: `App\Domain\Billing`.
