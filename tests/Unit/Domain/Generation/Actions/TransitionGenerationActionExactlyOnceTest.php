@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Actions;
 
+use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
+use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
@@ -17,7 +22,8 @@ use Tests\TestCase;
 
 /**
  * A generation's money is written once: once it is terminal, no snapshot
- * changes its costs or its ledger.
+ * changes its costs or its ledger, and a settlement that fails part-way
+ * leaves nothing behind.
  */
 final class TransitionGenerationActionExactlyOnceTest extends TestCase
 {
@@ -94,6 +100,67 @@ final class TransitionGenerationActionExactlyOnceTest extends TestCase
 
         $this->assertSame($expected, $outcome);
         $this->assertSame($settled, $this->ledgerEntriesFor($generation));
+    }
+
+    /**
+     * AC17: each terminal change, with the ledger insert that fails under it.
+     *
+     * @return array<string, array{GenerationStatus|null, string}>
+     */
+    public static function failingSettlementWrites(): array
+    {
+        return [
+            'succeeded, the charge insert fails' => [GenerationStatus::Succeeded, 'charge'],
+            'succeeded, the release insert fails' => [GenerationStatus::Succeeded, 'release'],
+            'failed, the release insert fails' => [GenerationStatus::Failed, 'release'],
+            'a local failure, the release insert fails' => [null, 'release'],
+        ];
+    }
+
+    /**
+     * `null` stands for a local failure.
+     */
+    #[DataProvider('failingSettlementWrites')]
+    public function test_a_failing_settlement_write_rolls_the_whole_transition_back(?GenerationStatus $terminal, string $failingType): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+        $change = $terminal === null
+            ? new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null)
+            : $this->terminalSnapshotFor($generation, $terminal);
+        $before = $this->rawGenerationRow($generation);
+        $this->failTheLedgerInsertOf($failingType);
+
+        try {
+            $this->transitionGeneration($generation, $change);
+            $this->fail('The settlement write did not fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame(sprintf('The %s insert failed.', $failingType), $exception->getMessage());
+        }
+
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame('pending', $before['status']);
+        $this->assertNull($before['provider_cost_nanodollars']);
+        $this->assertNull($before['user_charge_nanodollars']);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
+    }
+
+    /**
+     * Throws once, right after the ledger insert of that type has run, so the
+     * row was already written inside the transaction.
+     */
+    private function failTheLedgerInsertOf(string $type): void
+    {
+        $failed = false;
+
+        DB::listen(function (QueryExecuted $query) use ($type, &$failed): void {
+            if ($failed || ! str_starts_with($query->sql, 'insert into "credit_ledger_entries"') || ! in_array($type, $query->bindings, true)) {
+                return;
+            }
+
+            $failed = true;
+
+            throw new RuntimeException(sprintf('The %s insert failed.', $type));
+        });
     }
 
     private function terminalSnapshotFor(Generation $generation, GenerationStatus $status): GenerationSnapshot
