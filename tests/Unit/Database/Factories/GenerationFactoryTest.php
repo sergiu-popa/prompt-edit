@@ -88,6 +88,7 @@ final class GenerationFactoryTest extends TestCase
             $this->app->make(CalculateProviderCostAction::class)->execute($usage, TokenRates::from((array) $generation->rates)),
         );
 
+        $this->assertSame($charge->amount, $generation->user_charge_nanodollars);
         $this->assertLessThanOrEqual($generation->user_estimate_max_nanodollars, $charge->amount);
         $this->assertGreaterThanOrEqual($generation->user_estimate_min_nanodollars, $charge->amount);
     }
@@ -122,29 +123,43 @@ final class GenerationFactoryTest extends TestCase
     }
 
     /**
-     * @return array<string, array{Closure(GenerationFactory): GenerationFactory}>
+     * @return array<string, array{Closure(GenerationFactory): GenerationFactory, ?int, ?int, list<array{string, int}>}>
      */
-    public static function states(): array
+    public static function statesWithTheirMoney(): array
     {
+        $held = [['hold', -123_387_500]];
+
         return [
-            'pending' => [fn (GenerationFactory $factory): GenerationFactory => $factory],
-            'queued' => [fn (GenerationFactory $factory): GenerationFactory => $factory->queued()],
-            'processing' => [fn (GenerationFactory $factory): GenerationFactory => $factory->processing()],
-            'succeeded' => [fn (GenerationFactory $factory): GenerationFactory => $factory->succeeded()],
-            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed()],
-            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally()],
+            'pending' => [fn (GenerationFactory $factory): GenerationFactory => $factory, null, null, $held],
+            'queued' => [fn (GenerationFactory $factory): GenerationFactory => $factory->queued(), null, null, $held],
+            'processing' => [fn (GenerationFactory $factory): GenerationFactory => $factory->processing(), null, null, $held],
+            'succeeded' => [
+                fn (GenerationFactory $factory): GenerationFactory => $factory->succeeded(),
+                87_450_000,
+                109_312_500,
+                [...$held, ['release', 123_387_500], ['charge', -109_312_500]],
+            ],
+            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed(), null, null, $held],
+            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally(), null, null, $held],
         ];
     }
 
     /**
      * @param  Closure(GenerationFactory): GenerationFactory  $state
+     * @param  list<array{string, int}>  $ledger
      */
-    #[DataProvider('states')]
-    public function test_every_state_holds_the_definitions_max_user_estimate(Closure $state): void
-    {
-        $generation = $state(Generation::factory())->createOne();
+    #[DataProvider('statesWithTheirMoney')]
+    public function test_every_state_has_costs_and_a_ledger_consistent_with_its_status(
+        Closure $state,
+        ?int $providerCost,
+        ?int $userCharge,
+        array $ledger,
+    ): void {
+        $generation = $this->reloadedGeneration($state(Generation::factory())->createOne());
 
-        $this->assertSame([['hold', -123_387_500]], $this->ledgerEntriesFor($generation));
+        $this->assertSame($providerCost, $generation->provider_cost_nanodollars);
+        $this->assertSame($userCharge, $generation->user_charge_nanodollars);
+        $this->assertSame($ledger, $this->ledgerEntriesFor($generation));
     }
 
     public function test_a_made_row_writes_no_entry(): void

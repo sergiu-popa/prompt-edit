@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace App\Domain\Generation\Actions;
 
+use App\Domain\Billing\Actions\CalculateProviderCostAction;
+use App\Domain\Billing\Actions\CalculateUserChargeAction;
+use App\Domain\Billing\Actions\SettleGenerationCreditsAction;
+use App\Domain\Billing\Exceptions\InvalidRateException;
+use App\Domain\Billing\Exceptions\NanodollarOverflowException;
+use App\Domain\Billing\ValueObjects\Nanodollars;
+use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -18,14 +26,26 @@ use Illuminate\Support\Facades\Log;
  * responses, webhooks and the poller bring a Pixelforge snapshot, and submit
  * failures bring a local failure. Status only moves to a higher rank, terminal
  * statuses never change, and only an `Applied` outcome writes.
+ *
+ * Money moves with the status, in the same transaction: a succeeded snapshot
+ * is priced from its own usage and rates before anything is written, then the
+ * hold is settled against the actual charge.
  */
 final class TransitionGenerationAction
 {
+    public function __construct(
+        private readonly CalculateProviderCostAction $calculateProviderCost,
+        private readonly CalculateUserChargeAction $calculateUserCharge,
+        private readonly SettleGenerationCreditsAction $settleGenerationCredits,
+    ) {}
+
     /**
      * The given model is used only for its key and is never mutated; callers
      * refresh it.
      *
      * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException when a succeeded snapshot's rate is not a whole n$ per token
+     * @throws NanodollarOverflowException
      */
     public function execute(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
     {
@@ -125,19 +145,70 @@ final class TransitionGenerationAction
     }
 
     /**
+     * A succeeded snapshot is priced first, so a snapshot that cannot be priced
+     * exactly writes nothing.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
+    {
+        if ($change instanceof LocalGenerationFailureData) {
+            $this->write($locked, $this->localFailureAttributes($change));
+
+            return;
+        }
+
+        if ($change->status !== GenerationStatus::Succeeded) {
+            $this->write($locked, $this->snapshotAttributes($change));
+
+            return;
+        }
+
+        [$providerCost, $userCharge] = $this->price($change);
+
+        $this->write($locked, [
+            ...$this->snapshotAttributes($change),
+            'provider_cost_nanodollars' => $providerCost->amount,
+            'user_charge_nanodollars' => $userCharge->amount,
+        ]);
+        $this->settleGenerationCredits->execute($locked->id, $userCharge);
+    }
+
+    /**
+     * What Pixelforge bills for the generation, from the snapshot's own usage
+     * and rates (never the pinned table), and that cost with the markup.
+     *
+     * @return array{Nanodollars, Nanodollars} the provider cost and the user charge
+     *
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function price(GenerationSnapshot $snapshot): array
+    {
+        $usage = $snapshot->usage ?? throw InvalidGenerationSnapshotException::incompleteSuccess('usage');
+        $rates = $snapshot->rates ?? throw InvalidGenerationSnapshotException::incompleteSuccess('rates');
+
+        $providerCost = $this->calculateProviderCost->execute($usage, TokenRates::from($rates));
+
+        return [$providerCost, $this->calculateUserCharge->execute($providerCost)];
+    }
+
+    /**
      * The values are filled onto the locked model so the casts (and the
      * offset-carrying date format) apply. The UPDATE is conditional on the
      * status read under the lock, so even a missed lock cannot double-apply.
      *
+     * @param  array<string, mixed>  $attributes
+     *
      * @throws ConcurrentGenerationTransitionException when the row changed under the lock
      */
-    private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
+    private function write(Generation $locked, array $attributes): void
     {
         $readStatus = $locked->status;
 
-        $locked->fill($change instanceof GenerationSnapshot
-            ? $this->snapshotAttributes($change)
-            : $this->localFailureAttributes($change));
+        $locked->fill($attributes);
         $locked->updateTimestamps();
 
         $updated = Generation::query()

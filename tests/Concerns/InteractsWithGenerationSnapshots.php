@@ -91,4 +91,21 @@ trait InteractsWithGenerationSnapshots
     {
         return GenerationSnapshot::from(self::generationObjectFor($generation, $status, $overrides));
     }
+
+    /**
+     * The docs' succeeded Lighthouse object, shaped for the row: usage
+     * 12 / 765 / 6,450 / 3,184 at the published rates.
+     */
+    protected static function lighthouseSucceededSnapshotFor(Generation $generation): GenerationSnapshot
+    {
+        return self::snapshotFor($generation, GenerationStatus::Succeeded, [
+            'usage' => [
+                'input_text_tokens' => 12,
+                'input_image_tokens' => 765,
+                'output_tokens' => 6_450,
+                'reasoning_tokens' => 3_184,
+                'total_tokens' => 10_411,
+            ],
+        ]);
+    }
 }

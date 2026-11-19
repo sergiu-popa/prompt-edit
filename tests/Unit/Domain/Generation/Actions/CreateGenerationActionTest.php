@@ -36,6 +36,8 @@ final class CreateGenerationActionTest extends TestCase
         'output_tokens',
         'reasoning_tokens',
         'rates',
+        'provider_cost_nanodollars',
+        'user_charge_nanodollars',
         'error_code',
         'error_message',
         'error_param',
