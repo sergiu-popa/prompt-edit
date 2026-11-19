@@ -1,5 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import Login from '@/pages/Auth/Login.vue';
@@ -72,6 +72,21 @@ describe('Login page', () => {
             expect(wrapper.get('button[type="submit"]').text()).toBe('Sign in');
         },
     );
+
+    it.each([
+        ['rejected credentials', { email: 'These credentials do not match our records.' }, 'Email'],
+        ['an empty password', { password: 'The password field is required.' }, 'Password'],
+        ['two empty fields', { email: 'The email field is required.', password: 'The password field is required.' }, 'Email'],
+    ])('moves focus to the first rejected field after %s, so its message is read out', async (_case, errors, focusedLabel) => {
+        givenVisitsFailWith(errors);
+        const wrapper = mount(Login, { attachTo: document.body });
+
+        await signIn(wrapper, 'ada@example.com', 'wrong-password');
+        await flushPromises();
+
+        expect(document.activeElement).toBe(inputLabelled(wrapper, focusedLabel));
+        wrapper.unmount();
+    });
 
     it('shows a field message under each empty field', async () => {
         givenVisitsFailWith({ email: 'The email field is required.', password: 'The password field is required.' });

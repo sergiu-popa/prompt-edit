@@ -4,10 +4,12 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import Button from '@/components/ui/Button.vue';
 import Field from '@/components/ui/Field.vue';
 import TextInput from '@/components/ui/TextInput.vue';
+import { useFocusFirstInvalidField } from '@/composables/useFocusFirstInvalidField';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { paths } from '@/lib/paths';
 
 const form = useForm({ name: '', email: '', password: '', password_confirmation: '' });
+const focusFirstInvalidField = useFocusFirstInvalidField('formElement');
 
 function submit(): void {
     // The disabled button stops clicks and Enter; this stops a second submit before it re-renders.
@@ -15,7 +17,10 @@ function submit(): void {
         return;
     }
 
-    form.post(paths.register, { onFinish: () => form.reset('password', 'password_confirmation') });
+    form.post(paths.register, {
+        onError: () => focusFirstInvalidField(),
+        onFinish: () => form.reset('password', 'password_confirmation'),
+    });
 }
 </script>
 
@@ -23,7 +28,7 @@ function submit(): void {
     <Head title="Create account" />
 
     <AuthLayout title="Create account">
-        <form class="flex flex-col gap-5" novalidate @submit.prevent="submit">
+        <form ref="formElement" class="flex flex-col gap-5" novalidate @submit.prevent="submit">
             <Field v-slot="{ id, describedBy, invalid }" label="Name" :error="form.errors.name">
                 <TextInput
                     :id="id"

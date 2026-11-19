@@ -1,5 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import Register from '@/pages/Auth/Register.vue';
@@ -48,6 +48,17 @@ describe('Register page', () => {
             { name: 'Ada Lovelace', email: 'ada@example.com', password: 'short', password_confirmation: 'shorter' },
             expect.any(Object),
         );
+    });
+
+    it('moves focus to the first rejected field, so its message is read out', async () => {
+        givenVisitsFailWith({ email: 'The email has already been taken.', password: 'The password field must be at least 8 characters.' });
+        const wrapper = mount(Register, { attachTo: document.body });
+
+        await createAccount(wrapper);
+        await flushPromises();
+
+        expect(document.activeElement).toBe(inputLabelled(wrapper, 'Email'));
+        wrapper.unmount();
     });
 
     it('shows a busy, disabled button and sends one request however often it is submitted', async () => {

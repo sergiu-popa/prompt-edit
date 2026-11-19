@@ -48,6 +48,7 @@ test('shows the credentials message for a wrong password', async ({ page }, test
     const emailInput = page.getByLabel('Email');
     await expect(emailInput).toHaveAccessibleDescription(message);
     await expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(emailInput).toBeFocused();
     await expect(emailInput).toHaveValue(email);
     await expect(page.getByLabel('Password')).toHaveValue('');
     await expect(page).toHaveURL('/login');
