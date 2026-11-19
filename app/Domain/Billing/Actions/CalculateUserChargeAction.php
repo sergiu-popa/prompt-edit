@@ -21,6 +21,7 @@ final class CalculateUserChargeAction
     private const int MARKUP_DENOMINATOR = 100;
 
     /**
+     * @throws InvalidArgumentException when the provider cost is negative
      * @throws NanodollarOverflowException
      */
     public function execute(Nanodollars $providerCost): Nanodollars
