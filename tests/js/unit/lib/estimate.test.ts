@@ -135,6 +135,31 @@ describe('estimateGenerationCost rejects what it cannot price exactly', () => {
         expect(() => estimateGenerationCost(pricingWith(change), validInput)).toThrow(field);
     });
 
+    it.each<[string, (pricing: PricingTable) => void, string]>([
+        [
+            'a null tokens block',
+            (pricing) => (pricing.tokens = null as unknown as PricingTable['tokens']),
+            'tokens must be an object, got null.',
+        ],
+        [
+            'a missing rates block',
+            (pricing) => (pricing.nanodollars_per_token = undefined as unknown as PricingTable['nanodollars_per_token']),
+            'nanodollars_per_token must be an object, got undefined.',
+        ],
+        [
+            'a null output table',
+            (pricing) => (pricing.tokens.output = null as unknown as PricingTable['tokens']['output']),
+            'tokens.output must be an object, got null.',
+        ],
+        [
+            'a reasoning table given as a list',
+            (pricing) => (pricing.tokens.reasoning = [] as unknown as PricingTable['tokens']['reasoning']),
+            'tokens.reasoning must be an object, got array.',
+        ],
+    ])('rejects %s in the pricing prop and names the field', (_label, change, message) => {
+        expect(() => estimateGenerationCost(pricingWith(change), validInput)).toThrow(message);
+    });
+
     it.each([1.5, -1, NaN, 2 ** 53])('rejects a reference image count of %s', (count) => {
         expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, reference_image_count: count })).toThrow(
             'reference_image_count',

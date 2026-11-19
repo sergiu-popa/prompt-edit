@@ -114,9 +114,9 @@ function toEstimateBounds(bounds: Bounds, field: string): EstimateBounds {
 }
 
 /** e = ceil(code points ÷ characters per token); the bounds are e ∓ the variance, floored and ceiled. */
-function textTokens(promptCharacters: bigint, pricing: PricingTable): Bounds {
-    const charactersPerToken = wholeNumber(pricing.tokens.characters_per_text_token, 'tokens.characters_per_text_token');
-    const variance = wholeNumber(pricing.tokens.text_token_variance_percent, 'tokens.text_token_variance_percent');
+function textTokens(promptCharacters: bigint, tokenRules: Readonly<Record<string, unknown>>): Bounds {
+    const charactersPerToken = wholeNumber(tokenRules.characters_per_text_token, 'tokens.characters_per_text_token');
+    const variance = wholeNumber(tokenRules.text_token_variance_percent, 'tokens.text_token_variance_percent');
 
     if (charactersPerToken < 1n) {
         throw new Error('tokens.characters_per_text_token must be at least 1.');
@@ -137,15 +137,19 @@ export function estimateGenerationCost(pricing: PricingTable, input: EstimateInp
     }
 
     const promptCharacters = [...input.prompt].length;
-    const outputs = objectAt(entryFor(pricing.tokens.output, input.quality, 'quality'), `tokens.output.${input.quality}`);
+    const rates = objectAt(pricing.nanodollars_per_token, 'nanodollars_per_token');
+    const tokenRules = objectAt(pricing.tokens, 'tokens');
+    const outputTable = objectAt(tokenRules.output, 'tokens.output');
+    const outputs = objectAt(entryFor(outputTable, input.quality, 'quality'), `tokens.output.${input.quality}`);
     const outputCount = entryFor(outputs, input.size, 'size');
     const reasoningField = `tokens.reasoning.${input.quality}`;
-    const reasoning = objectAt(entryFor(pricing.tokens.reasoning, input.quality, 'quality'), reasoningField);
+    const reasoningTable = objectAt(tokenRules.reasoning, 'tokens.reasoning');
+    const reasoning = objectAt(entryFor(reasoningTable, input.quality, 'quality'), reasoningField);
 
     const tokens: Record<TokenType, Bounds> = {
-        input_text_tokens: textTokens(BigInt(promptCharacters), pricing),
+        input_text_tokens: textTokens(BigInt(promptCharacters), tokenRules),
         input_image_tokens: exact(
-            wholeNumber(pricing.tokens.per_reference_image, 'tokens.per_reference_image') *
+            wholeNumber(tokenRules.per_reference_image, 'tokens.per_reference_image') *
                 wholeNumber(input.reference_image_count, 'reference_image_count'),
         ),
         output_tokens: exact(wholeNumber(outputCount, `tokens.output.${input.quality}.${input.size}`)),
@@ -160,7 +164,7 @@ export function estimateGenerationCost(pricing: PricingTable, input: EstimateInp
     let providerCost = exact(0n);
 
     for (const type of TOKEN_TYPES) {
-        const lineCost = scaled(tokens[type], wholeNumber(pricing.nanodollars_per_token[type], `nanodollars_per_token.${type}`));
+        const lineCost = scaled(tokens[type], wholeNumber(rates[type], `nanodollars_per_token.${type}`));
 
         providerCost = plus(providerCost, lineCost);
         lines[type] = {
