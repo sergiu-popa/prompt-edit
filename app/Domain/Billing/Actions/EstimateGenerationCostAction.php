@@ -16,6 +16,7 @@ use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Brick\Math\BigInteger;
+use Brick\Math\Exception\IntegerOverflowException;
 use Brick\Math\RoundingMode;
 use Closure;
 use InvalidArgumentException;
@@ -58,9 +59,7 @@ final class EstimateGenerationCostAction
 
         $tokens = [
             TokenType::InputText->value => $this->textTokens($promptCharacters),
-            TokenType::InputImage->value => TokenBounds::exact(
-                BigInteger::of($this->pricing->tokensPerReferenceImage)->multipliedBy($referenceImageCount)->toInt(),
-            ),
+            TokenType::InputImage->value => TokenBounds::exact($this->imageTokens($referenceImageCount)),
             TokenType::Output->value => TokenBounds::exact($this->pricing->outputTokens($quality, $size)),
             TokenType::Reasoning->value => $this->pricing->reasoningTokens($quality),
         ];
@@ -87,6 +86,20 @@ final class EstimateGenerationCostAction
                 $this->calculateUserCharge->execute($providerCost->max),
             ),
         );
+    }
+
+    /**
+     * @throws NanodollarOverflowException when the token count does not fit a native int
+     */
+    private function imageTokens(int $referenceImageCount): int
+    {
+        $tokens = BigInteger::of($this->pricing->tokensPerReferenceImage)->multipliedBy($referenceImageCount);
+
+        try {
+            return $tokens->toInt();
+        } catch (IntegerOverflowException $exception) {
+            throw NanodollarOverflowException::forTokenCount($tokens, $exception);
+        }
     }
 
     /**

@@ -9,12 +9,14 @@ use App\Domain\Billing\Actions\CalculateUserChargeAction;
 use App\Domain\Billing\Actions\EstimateGenerationCostAction;
 use App\Domain\Billing\DataTransferObjects\EstimateLine;
 use App\Domain\Billing\DataTransferObjects\GenerationCostEstimate;
+use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Billing\ValueObjects\CostBounds;
 use App\Domain\Billing\ValueObjects\PricingTable;
 use App\Domain\Billing\ValueObjects\TokenBounds;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Brick\Math\BigDecimal;
+use Brick\Math\BigInteger;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -102,6 +104,15 @@ final class EstimateGenerationCostActionTest extends TestCase
 
         self::action(PricingTable::fromSnapshot(self::pinnedPricingSnapshot()))
             ->execute('a cat', ImageQuality::Low, ImageSize::Square, -1);
+    }
+
+    public function test_an_image_token_count_beyond_64_bits_surfaces_as_a_nanodollar_overflow(): void
+    {
+        $this->expectException(NanodollarOverflowException::class);
+        $this->expectExceptionMessage(sprintf('Token count %s is outside the signed 64-bit range.', BigInteger::of(765)->multipliedBy(PHP_INT_MAX)->toString()));
+
+        self::action(PricingTable::fromSnapshot(self::pinnedPricingSnapshot()))
+            ->execute('a cat', ImageQuality::Low, ImageSize::Square, PHP_INT_MAX);
     }
 
     /**
