@@ -33,7 +33,7 @@ function conceal(): void {
 </script>
 
 <template>
-    <span class="relative inline-flex">
+    <span class="relative inline-block">
         <button
             type="button"
             :aria-describedby="tooltipId"
