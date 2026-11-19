@@ -11,8 +11,8 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  * brackets, anywhere in the prompt, ignoring ASCII case.
  *
  * Precedence: a rejection comes first and stores nothing, `[blocked]` before
- * `[overloaded]` (a chaos 503 follows them). An accepted create then ends as
- * `[fail]`, else `[succeed]`, decides (a chaos `internal_error` follows
+ * `[overloaded]` (a chaos 503 follows them). An accepted create's outcome is
+ * decided by `[fail]`, else `[succeed]` (a chaos `internal_error` follows
  * them, so `[succeed]` only rules out a random failure). The modifiers
  * `[slow]`, `[duplicate]` and the fake-only `[expire]` combine with any
  * accepted outcome.
