@@ -11,13 +11,14 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  * brackets, anywhere in the prompt, ignoring ASCII case.
  *
  * Precedence: a rejection comes first and stores nothing, `[blocked]` before
- * `[overloaded]`.
+ * `[overloaded]`. An accepted create then ends as `[fail]` decides.
  */
 final readonly class FakeKeywords
 {
     private function __construct(
         public bool $blocked,
         public bool $overloaded,
+        public bool $fail,
     ) {}
 
     public static function fromPrompt(string $prompt): self
@@ -25,6 +26,7 @@ final readonly class FakeKeywords
         return new self(
             self::has($prompt, '[blocked]'),
             self::has($prompt, '[overloaded]'),
+            self::has($prompt, '[fail]'),
         );
     }
 
@@ -39,6 +41,18 @@ final readonly class FakeKeywords
 
         if ($this->overloaded) {
             return PixelforgeErrorCode::Overloaded;
+        }
+
+        return null;
+    }
+
+    /**
+     * How an accepted create ends, or null when no keyword decides.
+     */
+    public function outcome(): ?FakeGenerationOutcome
+    {
+        if ($this->fail) {
+            return FakeGenerationOutcome::GenerationFailed;
         }
 
         return null;

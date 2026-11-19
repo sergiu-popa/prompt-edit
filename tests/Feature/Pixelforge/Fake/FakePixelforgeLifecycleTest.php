@@ -165,6 +165,25 @@ final class FakePixelforgeLifecycleTest extends TestCase
         );
     }
 
+    public function test_a_fail_generation_starts_processing_then_fails_unbilled(): void
+    {
+        $created = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [fail]'));
+
+        $this->runFakeLifecycle();
+
+        $events = array_map(fn (Request $request): array => self::decoded($request), $this->fakeWebhookRequests());
+        $this->assertSame(['generation.processing', 'generation.failed'], array_column($events, 'type'));
+
+        $failed = $events[1]['data']['object'];
+        $this->assertSame('failed', $failed['status']);
+        $this->assertSame(['code' => 'generation_failed', 'message' => 'The model could not produce an image for this prompt.'], $failed['error']);
+        $this->assertSame('2026-11-19T12:00:04Z', $failed['completed_at']);
+        $this->assertNull($failed['usage']);
+        $this->assertNull($failed['image_url']);
+        $this->assertNull($failed['image_url_expires_at']);
+        $this->assertSame($this->fakeGenerationRow($created->snapshot->id)->snapshot, $failed);
+    }
+
     public function test_a_job_for_a_terminal_or_missing_generation_does_nothing(): void
     {
         $created = $this->createThroughFake(self::lighthousePayload());

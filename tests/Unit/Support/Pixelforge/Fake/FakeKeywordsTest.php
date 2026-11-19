@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Support\Pixelforge\Fake;
 
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
 use App\Support\Pixelforge\Fake\FakeKeywords;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +18,7 @@ final class FakeKeywordsTest extends TestCase
     private const array KEYWORDS = [
         'blocked' => '[blocked]',
         'overloaded' => '[overloaded]',
+        'fail' => '[fail]',
     ];
 
     #[DataProvider('placements')]
@@ -52,9 +54,12 @@ final class FakeKeywordsTest extends TestCase
     {
         $keywords = FakeKeywords::fromPrompt($prompt);
 
-        $this->assertFalse($keywords->blocked);
-        $this->assertFalse($keywords->overloaded);
+        foreach (array_keys(self::KEYWORDS) as $property) {
+            $this->assertFalse($keywords->{$property}, $property);
+        }
+
         $this->assertNull($keywords->rejection());
+        $this->assertNull($keywords->outcome());
     }
 
     /**
@@ -63,17 +68,17 @@ final class FakeKeywordsTest extends TestCase
     public static function nearMisses(): array
     {
         return [
-            'spaces inside the brackets' => ['a [ blocked ] lighthouse'],
-            'no brackets' => ['a blocked lighthouse'],
-            'a longer word' => ['a [blockedx] lighthouse'],
-            'fullwidth brackets' => ['a ［blocked］ lighthouse'],
+            'spaces inside the brackets' => ['a [ blocked ] [ fail ] lighthouse'],
+            'no brackets' => ['a blocked, overloaded, fail lighthouse'],
+            'a longer word' => ['a [blockedx] [failure] lighthouse'],
+            'fullwidth brackets' => ['a ［blocked］ ［fail］ lighthouse'],
             'an emoji prompt' => ['🎨 a lighthouse 🎨'],
             'empty' => [''],
         ];
     }
 
     #[DataProvider('rejections')]
-    public function test_blocked_comes_before_overloaded(string $prompt, ?PixelforgeErrorCode $expected): void
+    public function test_blocked_comes_before_overloaded_before_fail(string $prompt, ?PixelforgeErrorCode $expected): void
     {
         $this->assertSame($expected, FakeKeywords::fromPrompt($prompt)->rejection());
     }
@@ -88,6 +93,28 @@ final class FakeKeywordsTest extends TestCase
             'overloaded' => ['a [overloaded] lighthouse', PixelforgeErrorCode::Overloaded],
             'both, overloaded first' => ['[overloaded] a [blocked] lighthouse', PixelforgeErrorCode::ContentPolicyViolation],
             'none' => ['a lighthouse', null],
+            'fail is no rejection' => ['a [fail] lighthouse', null],
+            'every rejection and fail' => ['a [fail][overloaded][blocked] lighthouse', PixelforgeErrorCode::ContentPolicyViolation],
+            'overloaded and fail' => ['a [fail] [overloaded] lighthouse', PixelforgeErrorCode::Overloaded],
+        ];
+    }
+
+    #[DataProvider('outcomes')]
+    public function test_fail_decides_the_outcome(string $prompt, ?FakeGenerationOutcome $expected): void
+    {
+        $this->assertSame($expected, FakeKeywords::fromPrompt($prompt)->outcome());
+    }
+
+    /**
+     * @return array<string, array{string, ?FakeGenerationOutcome}>
+     */
+    public static function outcomes(): array
+    {
+        return [
+            'fail' => ['a [fail] lighthouse', FakeGenerationOutcome::GenerationFailed],
+            'fail in upper case' => ['a [FAIL] lighthouse', FakeGenerationOutcome::GenerationFailed],
+            'none' => ['a lighthouse', null],
+            'a rejection alone decides no outcome' => ['a [blocked] lighthouse', null],
         ];
     }
 }

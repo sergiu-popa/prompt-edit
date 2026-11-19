@@ -77,8 +77,10 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             throw PixelforgeNotConfiguredException::missingWebhookSecret();
         }
 
+        $keywords = FakeKeywords::fromPrompt($payload->prompt);
+
         // A rejected request stores no key, so its retry is rejected the same way.
-        $rejection = FakeKeywords::fromPrompt($payload->prompt)->rejection();
+        $rejection = $keywords->rejection();
 
         if ($rejection !== null) {
             throw $this->refusal($rejection);
@@ -92,7 +94,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             'request_hash' => $requestHash,
             'snapshot' => $this->creationSnapshot($id, $payload),
             'usage' => $this->usageGenerator->generate($payload),
-            'outcome' => FakeGenerationOutcome::Succeeded,
+            'outcome' => $keywords->outcome() ?? FakeGenerationOutcome::Succeeded,
             'processing_seconds' => $this->processingSeconds,
             'image_ttl_seconds' => $this->imageTtlSeconds,
             'duplicates_webhooks' => false,

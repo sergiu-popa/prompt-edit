@@ -82,6 +82,21 @@ final class FakePixelforgeGeneration extends Model
     }
 
     /**
+     * The planned usage is never reported: a failed generation is not billed.
+     */
+    public function markFailed(CarbonImmutable $at): void
+    {
+        $this->snapshot = [
+            ...$this->snapshot,
+            'status' => GenerationStatus::Failed->value,
+            'error' => $this->outcome->error(),
+            'completed_at' => $at->toIso8601ZuluString(),
+        ];
+
+        $this->save();
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

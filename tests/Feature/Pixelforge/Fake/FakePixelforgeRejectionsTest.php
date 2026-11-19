@@ -80,12 +80,29 @@ final class FakePixelforgeRejectionsTest extends TestCase
         $this->assertNothingCreated();
     }
 
-    public function test_blocked_wins_over_overloaded(): void
+    /**
+     * `[blocked]` before `[overloaded]` before `[fail]` (AC 15).
+     */
+    #[DataProvider('combinedRejections')]
+    public function test_a_rejection_wins_over_any_later_keyword(string $prompt, PixelforgeErrorCode $expected): void
     {
-        $exception = $this->refusal(self::lighthousePayload(prompt: '[overloaded] A lighthouse [blocked]'));
+        $exception = $this->refusal(self::lighthousePayload(prompt: $prompt));
 
-        $this->assertSame(PixelforgeErrorCode::ContentPolicyViolation, $exception->errorCode());
+        $this->assertSame($expected, $exception->errorCode());
         $this->assertNothingCreated();
+    }
+
+    /**
+     * @return array<string, array{string, PixelforgeErrorCode}>
+     */
+    public static function combinedRejections(): array
+    {
+        return [
+            'blocked and overloaded' => ['[overloaded] A lighthouse [blocked]', PixelforgeErrorCode::ContentPolicyViolation],
+            'blocked and fail' => ['A [fail] lighthouse [blocked]', PixelforgeErrorCode::ContentPolicyViolation],
+            'overloaded and fail' => ['A [fail] lighthouse [overloaded]', PixelforgeErrorCode::Overloaded],
+            'all three' => ['[fail][overloaded][blocked] A lighthouse', PixelforgeErrorCode::ContentPolicyViolation],
+        ];
     }
 
     private function refusal(CreateGenerationPayloadData $payload): PixelforgeApiException

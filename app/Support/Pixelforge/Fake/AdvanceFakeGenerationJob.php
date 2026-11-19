@@ -52,6 +52,13 @@ final class AdvanceFakeGenerationJob implements ShouldQueue
             return;
         }
 
+        if ($generation->outcome !== FakeGenerationOutcome::Succeeded) {
+            $generation->markFailed($now);
+            $sender->deliver($generation, WebhookEventType::GenerationFailed);
+
+            return;
+        }
+
         $expiresAt = $now->addSeconds($generation->image_ttl_seconds);
         $generation->markSucceeded($now, self::imageUrl($generation, $expiresAt), $expiresAt);
         $sender->deliver($generation, WebhookEventType::GenerationSucceeded);
