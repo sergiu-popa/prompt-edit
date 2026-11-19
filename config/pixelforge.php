@@ -27,11 +27,12 @@ return [
 
     /**
      * Both stay below the submit job's timeout, so a hung request can never
-     * overlap its own retry (D-33).
+     * overlap its own retry (D-33). Anything but a positive integer means the
+     * default, because Guzzle reads 0 as "wait forever".
      */
-    'connect_timeout_seconds' => (int) (env('PIXELFORGE_CONNECT_TIMEOUT') ?: 5),
+    'connect_timeout_seconds' => filter_var(env('PIXELFORGE_CONNECT_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
 
-    'request_timeout_seconds' => (int) (env('PIXELFORGE_REQUEST_TIMEOUT') ?: 30),
+    'request_timeout_seconds' => filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 30]]),
 
     /**
      * The `whsec_…` secret of the API key whose webhook URL points here. Each

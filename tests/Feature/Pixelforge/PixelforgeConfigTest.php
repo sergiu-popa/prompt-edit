@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Pixelforge;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * `config/pixelforge.php` as evaluated from the environment. `.env.example`
  * lists every name empty, and an empty value must mean the default: an empty
- * timeout would otherwise wait forever.
+ * timeout would otherwise wait forever. So must a timeout that is not a
+ * positive integer.
  */
 final class PixelforgeConfigTest extends TestCase
 {
@@ -75,6 +77,36 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame('pf_test_config_value', $config['api_key']);
         $this->assertSame(3, $config['connect_timeout_seconds']);
         $this->assertSame(20, $config['request_timeout_seconds']);
+    }
+
+    /**
+     * Guzzle reads a timeout of 0 as "wait forever", so a typo must never
+     * become one.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_timeout_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $config = $this->pixelforgeConfigWith([
+            'PIXELFORGE_CONNECT_TIMEOUT' => $value,
+            'PIXELFORGE_REQUEST_TIMEOUT' => $value,
+        ]);
+
+        $this->assertSame(5, $config['connect_timeout_seconds']);
+        $this->assertSame(30, $config['request_timeout_seconds']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidTimeouts(): array
+    {
+        return [
+            'a word' => ['thirty'],
+            'a unit suffix' => ['30s'],
+            'zero' => ['0'],
+            'negative' => ['-5'],
+            'a fraction' => ['2.5'],
+        ];
     }
 
     /**
