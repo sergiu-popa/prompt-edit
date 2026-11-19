@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import AmountRange from '@/components/estimate/AmountRange.vue';
 import { formatCount } from '@/lib/counting';
+import { MARKUP_PERCENT } from '@/lib/estimate';
 import { describeImage } from '@/lib/imageOptions';
 import type { EstimateBounds, EstimateLine, GenerationCostEstimate } from '@/types/estimate';
 import type { ImageQuality, ImageSize } from '@/types/pricing';
@@ -106,7 +107,7 @@ const totalLines = computed<TotalLine[]>(() => {
 
     return [
         { label: 'Pixelforge cost', cost: provider, emphasis: false },
-        { label: '+ 25%', cost: { min: user.min - provider.min, max: user.max - provider.max }, emphasis: false },
+        { label: `+ ${MARKUP_PERCENT}%`, cost: { min: user.min - provider.min, max: user.max - provider.max }, emphasis: false },
         { label: 'You pay', cost: user, emphasis: true },
     ];
 });

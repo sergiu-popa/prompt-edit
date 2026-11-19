@@ -4,6 +4,7 @@ import { useId } from 'vue';
 import AmountRange from '@/components/estimate/AmountRange.vue';
 import EstimateBreakdown from '@/components/estimate/EstimateBreakdown.vue';
 import MoneyAmount from '@/components/ui/MoneyAmount.vue';
+import { MARKUP_PERCENT } from '@/lib/estimate';
 import type { GenerationCostEstimate } from '@/types/estimate';
 import type { ImageQuality, ImageSize } from '@/types/pricing';
 
@@ -23,7 +24,7 @@ defineProps<{
 const headingId = useId();
 
 const copy = [
-    "You pay Pixelforge's cost + 25%.",
+    `You pay Pixelforge's cost + ${MARKUP_PERCENT}%.`,
     'Output, reference images and the markup are exact. Prompt text and reasoning are estimated until the image finishes.',
     '“Typically” assumes the average prompt-text and reasoning tokens.',
     'The actual cost is recorded when the generation finishes, from the tokens Pixelforge actually used.',

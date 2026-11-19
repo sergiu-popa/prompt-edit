@@ -22,6 +22,9 @@ const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 const MARKUP_NUMERATOR = 125n;
 const MARKUP_DENOMINATOR = 100n;
 
+/** The same markup as a whole percentage (25), for copy that names it. */
+export const MARKUP_PERCENT = Number(((MARKUP_NUMERATOR - MARKUP_DENOMINATOR) * PERCENT) / MARKUP_DENOMINATOR);
+
 const TOKEN_TYPES: readonly TokenType[] = ['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'];
 
 const KNOWN_UPFRONT: Readonly<Record<TokenType, boolean>> = {
