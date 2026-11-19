@@ -42,6 +42,20 @@ abstract class PixelforgeApiException extends RuntimeException
     }
 
     /**
+     * Merged into the log entry whenever the exception is reported.
+     *
+     * @return array{error_code: string, status: int, retry_after_seconds: ?int}
+     */
+    public function context(): array
+    {
+        return [
+            'error_code' => $this->errorCode()->value,
+            'status' => $this->status(),
+            'retry_after_seconds' => $this->retryAfterSeconds,
+        ];
+    }
+
+    /**
      * The typed error for a documented envelope, or null when the response is
      * not one: not a JSON object with an `error` object; a `type`, `code` or
      * `message` that is not a string; a `param` that is not a string of at

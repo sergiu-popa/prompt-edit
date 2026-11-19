@@ -60,10 +60,17 @@ final class SubmitGenerationAction
         try {
             $created = $this->pixelforge->createGeneration(self::payloadFor($generation));
         } catch (PixelforgeApiException $exception) {
-            $reason = self::definitiveRejectionReason($exception) ?? throw $exception;
+            $reason = self::definitiveRejectionReason($exception);
+
+            if ($reason === null) {
+                throw self::loggedForRetry($generation, $exception);
+            }
+
             $this->failLocally($generation, $reason, $exception);
 
             return;
+        } catch (AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException $exception) {
+            throw self::loggedForRetry($generation, $exception);
         }
 
         $outcome = $this->transitionGeneration->execute($generation, $created->snapshot);
@@ -102,6 +109,22 @@ final class SubmitGenerationAction
             ]),
             LocalFailureReason::IdempotencyKeyReused => Log::error('Failed a generation at no charge: Pixelforge holds its idempotency key with other params.', $context),
         };
+    }
+
+    /**
+     * The generation stays non-terminal with its hold, and the job retries
+     * with the same key. PE-013 owns the policy for these codes.
+     */
+    private static function loggedForRetry(
+        Generation $generation,
+        PixelforgeApiException|AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException $exception,
+    ): PixelforgeApiException|AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException {
+        Log::warning('Pixelforge did not take a generation create; it will be retried with the same key.', [
+            'generation_id' => $generation->id,
+            ...$exception->context(),
+        ]);
+
+        return $exception;
     }
 
     /**

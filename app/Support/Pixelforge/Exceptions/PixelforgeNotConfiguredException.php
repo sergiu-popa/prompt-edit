@@ -11,6 +11,16 @@ use RuntimeException;
  */
 final class PixelforgeNotConfiguredException extends RuntimeException
 {
+    /**
+     * Merged into the log entry whenever the exception is reported.
+     *
+     * @return array{error_code: string}
+     */
+    public function context(): array
+    {
+        return ['error_code' => 'not_configured'];
+    }
+
     public static function missingApiKey(): self
     {
         return new self('No Pixelforge API key is configured (PIXELFORGE_API_KEY).');

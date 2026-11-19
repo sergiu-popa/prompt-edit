@@ -25,6 +25,16 @@ final class AmbiguousPixelforgeOutcomeException extends RuntimeException
     }
 
     /**
+     * Merged into the log entry whenever the exception is reported.
+     *
+     * @return array{error_code: string, status: ?int}
+     */
+    public function context(): array
+    {
+        return ['error_code' => 'ambiguous', 'status' => $this->status];
+    }
+
+    /**
      * Any status without a documented error envelope, such as a proxy's 502 page.
      */
     public static function undocumentedResponse(int $status): self
