@@ -207,7 +207,9 @@ Always use `make` targets or `docker exec` to run commands inside the container:
 - **Static analysis:** `make stan`
 - **Tests:** `make test` or `make test filter=testName`
 - **Frontend checks:** `make js-check` (ESLint + Prettier check + vue-tsc) / `make js-fix`
-- **All checks:** `make check` (lint + stan + test + js-check)
+- **JS tests:** `make js-test` (Vitest unit + integration)
+- **E2E:** `make e2e` (build + Playwright in the `playwright` service; `make e2e filter=name`)
+- **All checks:** `make check` (lint + stan + test + js-check + js-test)
 - **Artisan:** `docker exec prompt-edit-app php artisan <command>`
 - **Shell:** `make bash`
 
