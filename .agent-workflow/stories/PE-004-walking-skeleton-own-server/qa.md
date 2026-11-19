@@ -91,6 +91,14 @@ These are production runtime checks QA cannot run. QA may not SSH, run `dep`, or
 4. **AC4, listen address.** `ss -ltn` should show 5432 on 127.0.0.1 only.
 5. **AC7, scheduler cron.** `v-list-cron-jobs admin` should show the every-minute `schedule:run` entry.
 
+### Orchestrator follow-up (2026-11-19, after QA, with the user's approval)
+
+1. **AC6: done.** An `inspire` job was queued in `current/`. Six seconds later `jobs` = 0 and `failed_jobs` = 0, so the systemd worker processed it.
+2. **AC10: done.** Three failed sign-ins were made from the operator's machine with throwaway `ip-check-N@example.invalid` emails: one plain, one with a spoofed `X-Forwarded-For: 203.0.113.7`, one with a spoofed `X-Real-IP: 203.0.113.8`. All three throttle keys in the `cache` table end in the operator's real public IP; neither spoofed address appears. The counters expired after a minute.
+3. **AC8: still pending.** The first real dump runs at 04:30 UTC on 2026-11-20. It will be checked after the next deploy.
+4. **AC4: done.** `ss -ltn` shows 5432 on `127.0.0.1` and `[::1]` only.
+5. **AC7: done.** `crontab -l` for `admin`, as written by Hestia's `v-add-cron-job`, shows the every-minute `schedule:run` entry.
+
 ## Notes (non-blocking)
 
 - The app container has no `pg_dump`, so a local manual `app:backup-database` run fails with exit 127 (seen in `storage/logs/laravel.log` at 13:43 UTC). Production installs the PGDG client with `postgresql-17`, so this is a dev-only gap. Dev never sets `DB_BACKUP_PATH`.
