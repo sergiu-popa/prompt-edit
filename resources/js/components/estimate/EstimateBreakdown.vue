@@ -112,7 +112,9 @@ const totalLines = computed<TotalLine[]>(() => {
                     >
                     <span v-if="line.detail" class="block text-xs text-zinc-500">{{ line.detail }}</span>
                 </td>
-                <td class="py-1.5 text-right text-zinc-900"><AmountRange :min="line.cost.min" :max="line.cost.max" align="end" /></td>
+                <td class="py-1.5 text-right whitespace-nowrap text-zinc-900">
+                    <AmountRange :min="line.cost.min" :max="line.cost.max" align="end" />
+                </td>
             </tr>
         </tbody>
         <tbody class="border-t border-zinc-200">
@@ -127,7 +129,7 @@ const totalLines = computed<TotalLine[]>(() => {
                     {{ line.label }}
                 </th>
                 <td class="pt-2 pr-3" />
-                <td :class="['pt-2 text-right', line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900']">
+                <td :class="['pt-2 text-right whitespace-nowrap', line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900']">
                     <AmountRange :min="line.cost.min" :max="line.cost.max" align="end" />
                 </td>
             </tr>
