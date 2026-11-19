@@ -15,6 +15,7 @@ use App\Domain\Billing\ValueObjects\TokenBounds;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Brick\Math\BigDecimal;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Concerns\InteractsWithPricing;
@@ -92,6 +93,15 @@ final class EstimateGenerationCostActionTest extends TestCase
 
         $this->assertNotEmpty($names);
         $this->assertSame($names, array_values(array_unique($names)));
+    }
+
+    public function test_a_negative_reference_count_is_rejected(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Reference image count must not be negative, got -1.');
+
+        self::action(PricingTable::fromSnapshot(self::pinnedPricingSnapshot()))
+            ->execute('a cat', ImageQuality::Low, ImageSize::Square, -1);
     }
 
     /**

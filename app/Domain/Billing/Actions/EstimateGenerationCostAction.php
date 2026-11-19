@@ -18,6 +18,7 @@ use App\Domain\Shared\Enums\ImageSize;
 use Brick\Math\BigInteger;
 use Brick\Math\RoundingMode;
 use Closure;
+use InvalidArgumentException;
 
 /**
  * The authoritative upfront estimate of a generation (requirements §3). The
@@ -38,10 +39,21 @@ final class EstimateGenerationCostAction
     ) {}
 
     /**
+     * Prices whatever it is given: input limits (4,000 characters, 4
+     * references) are enforced by validation, not here.
+     *
+     * @throws InvalidArgumentException when the reference image count is negative
      * @throws NanodollarOverflowException
      */
     public function execute(string $prompt, ImageQuality $quality, ImageSize $size, int $referenceImageCount): GenerationCostEstimate
     {
+        if ($referenceImageCount < 0) {
+            throw new InvalidArgumentException(sprintf(
+                'Reference image count must not be negative, got %d.',
+                $referenceImageCount,
+            ));
+        }
+
         $promptCharacters = mb_strlen($prompt, 'UTF-8');
 
         $tokens = [

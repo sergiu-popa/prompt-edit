@@ -350,6 +350,25 @@
                 "provider_nanodollars": { "min": 281, "typical": 532, "max": 782 },
                 "user_nanodollars": { "min": 352, "typical": 665, "max": 978 }
             }
+        },
+        {
+            "name": "beyond the limits: 4,001 characters and 5 references still get a price",
+            "prompt": "a",
+            "prompt_repeat": 4001,
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 5,
+            "expected": {
+                "prompt_characters": 4001,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 850, "typical": 1001, "max": 1152 }, "provider_nanodollars": { "min": 4250000, "typical": 5005000, "max": 5760000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 3825, "typical": 3825, "max": 3825 }, "provider_nanodollars": { "min": 38250000, "typical": 38250000, "max": 38250000 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 53700000, "typical": 57580000, "max": 61460000 },
+                "user_nanodollars": { "min": 67125000, "typical": 71975000, "max": 76825000 }
+            }
         }
     ]
 }
