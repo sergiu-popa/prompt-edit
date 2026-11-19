@@ -4,7 +4,7 @@
 Upfront estimate in PHP and TypeScript, locked together by one shared JSON fixture
 
 ## Status
-`qa-passed`
+`done`
 
 ## Description
 Users must see what a generation will cost before they submit it (required "generate page with upfront estimate" and "pricing"). The estimate is computed in two places:
