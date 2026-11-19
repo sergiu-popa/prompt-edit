@@ -11,12 +11,18 @@ use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
+use Closure;
+use Database\Factories\GenerationFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 final class GenerationFactoryTest extends TestCase
 {
+    use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use RefreshDatabase;
 
@@ -113,5 +119,38 @@ final class GenerationFactoryTest extends TestCase
         $this->assertNull($generation->completed_at);
         $this->assertNull($generation->rates);
         $this->assertNull($generation->image_url);
+    }
+
+    /**
+     * @return array<string, array{Closure(GenerationFactory): GenerationFactory}>
+     */
+    public static function states(): array
+    {
+        return [
+            'pending' => [fn (GenerationFactory $factory): GenerationFactory => $factory],
+            'queued' => [fn (GenerationFactory $factory): GenerationFactory => $factory->queued()],
+            'processing' => [fn (GenerationFactory $factory): GenerationFactory => $factory->processing()],
+            'succeeded' => [fn (GenerationFactory $factory): GenerationFactory => $factory->succeeded()],
+            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed()],
+            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally()],
+        ];
+    }
+
+    /**
+     * @param  Closure(GenerationFactory): GenerationFactory  $state
+     */
+    #[DataProvider('states')]
+    public function test_every_state_holds_the_definitions_max_user_estimate(Closure $state): void
+    {
+        $generation = $state(Generation::factory())->createOne();
+
+        $this->assertSame([['hold', -123_387_500]], $this->ledgerEntriesFor($generation));
+    }
+
+    public function test_a_made_row_writes_no_entry(): void
+    {
+        Generation::factory()->make();
+
+        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Domain\Billing\Actions\HoldGenerationCreditsAction;
+use App\Domain\Billing\ValueObjects\Nanodollars;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
@@ -19,12 +21,24 @@ use LogicException;
 /**
  * The definition is a pending row: PE-006's AC1 worked example, before submit.
  * Each state builds on the one before it, as Pixelforge moves a generation on.
+ * Every created row holds its max user price, as CreateGenerationAction does.
  *
  * @extends Factory<Generation>
  */
 final class GenerationFactory extends Factory
 {
     protected $model = Generation::class;
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Generation $generation): void {
+            app(HoldGenerationCreditsAction::class)->execute(
+                $generation->user_id,
+                $generation->id,
+                new Nanodollars($generation->user_estimate_max_nanodollars),
+            );
+        });
+    }
 
     /**
      * @return array<string, mixed>
