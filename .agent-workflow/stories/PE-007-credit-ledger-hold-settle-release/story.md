@@ -4,7 +4,7 @@
 Append-only credit ledger: hold the max estimate, charge the actual exactly once, failed is free
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 Grading criterion #1 is correct money: every generation is recorded at exactly the right cost, never twice, and failed generations are free. This story makes that true end to end. It uses an append-only credit ledger from the first money write (D-08), so balances (PE-017) and the operator report (PE-016) later read entries that never change, not totals that do.
