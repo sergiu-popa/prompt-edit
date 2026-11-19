@@ -28,6 +28,11 @@ final class InvalidGenerationSnapshotException extends InvalidArgumentException
         ));
     }
 
+    public static function nulByte(string $path): self
+    {
+        return new self(sprintf('The generation object\'s %s contains a NUL byte, which cannot be stored.', $path));
+    }
+
     public static function unknownStatus(mixed $status): self
     {
         return self::invalidField('status', 'a Pixelforge status', $status);

@@ -177,6 +177,10 @@ final class GenerationSnapshotTest extends TestCase
             'error without a message' => [self::queuedWith(['error' => ['code' => 'internal_error']]), 'error.message'],
             'error a string' => [self::queuedWith(['error' => 'internal_error']), 'error'],
             'image_url empty' => [self::queuedWith(['image_url' => '']), 'image_url'],
+            'id with a NUL byte' => [self::queuedWith(['id' => "gen_01JC2Z8Q\0X"]), 'id'],
+            'error.code with a NUL byte' => [self::queuedWith(['error' => ['code' => "internal\0error", 'message' => 'Please retry.']]), 'error.code'],
+            'error.message with a NUL byte' => [self::queuedWith(['error' => ['code' => 'internal_error', 'message' => "Please\0retry."]]), 'error.message'],
+            'image_url with a NUL byte' => [self::queuedWith(['image_url' => "https://pixelforge.promptedit.dev/images/x.png\0?sig=1"]), 'image_url'],
             'usage a number' => [self::queuedWith(['usage' => 12]), 'usage'],
             'rates a string' => [self::queuedWith(['rates' => '5.00']), 'rates'],
         ];

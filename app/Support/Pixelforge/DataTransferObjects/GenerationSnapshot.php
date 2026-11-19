@@ -125,7 +125,7 @@ final readonly class GenerationSnapshot
             throw InvalidGenerationSnapshotException::invalidField($field, 'a non-empty string', $value);
         }
 
-        return $value;
+        return self::storable($field, $value);
     }
 
     /**
@@ -139,8 +139,28 @@ final readonly class GenerationSnapshot
     {
         $value = $generation[$field] ?? null;
 
-        if ($value !== null && (! is_string($value) || $value === '')) {
+        if ($value === null) {
+            return null;
+        }
+
+        if (! is_string($value) || $value === '') {
             throw InvalidGenerationSnapshotException::invalidField($field, 'a non-empty string or null', $value);
+        }
+
+        return self::storable($field, $value);
+    }
+
+    /**
+     * JSON's `\u0000` decodes to a NUL byte, which Postgres text cannot hold
+     * and pdo_pgsql silently cuts the value at. A cut provider id would refuse
+     * every later snapshot of its generation, so the value is refused instead.
+     *
+     * @throws InvalidGenerationSnapshotException
+     */
+    private static function storable(string $path, string $value): string
+    {
+        if (str_contains($value, "\0")) {
+            throw InvalidGenerationSnapshotException::nulByte($path);
         }
 
         return $value;
@@ -231,7 +251,7 @@ final readonly class GenerationSnapshot
             }
         }
 
-        return [$error['code'], $error['message']];
+        return [self::storable('error.code', $error['code']), self::storable('error.message', $error['message'])];
     }
 
     /**
