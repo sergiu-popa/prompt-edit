@@ -148,19 +148,24 @@ const totalLines = computed<TotalLine[]>(() => {
                     </td>
                 </tr>
             </tbody>
-            <tbody class="block border-t border-zinc-200 @sm:table-row-group">
+            <tbody class="block border-t border-zinc-200 pt-1 @sm:table-row-group">
                 <tr v-for="line in totalLines" :key="line.label" class="flex justify-between pt-2 @sm:table-row">
                     <th
                         scope="row"
                         :class="[
-                            'pr-3 text-left whitespace-nowrap @sm:pt-2',
+                            'pr-3 text-left whitespace-nowrap @sm:pt-2.5',
                             line.emphasis ? 'font-semibold text-zinc-900' : 'font-medium text-zinc-800',
                         ]"
                     >
                         {{ line.label }}
                     </th>
-                    <td class="@sm:pt-2 @sm:pr-3" />
-                    <td :class="['text-right whitespace-nowrap @sm:pt-2', line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900']">
+                    <td class="@sm:pt-2.5 @sm:pr-3" />
+                    <td
+                        :class="[
+                            'text-right whitespace-nowrap @sm:pt-2.5',
+                            line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900',
+                        ]"
+                    >
                         <AmountRange :min="line.cost.min" :max="line.cost.max" align="end" />
                     </td>
                 </tr>

@@ -42,19 +42,25 @@ const announcement = computed(() => {
     return `Estimated cost ${range}, typically ${formatUsd(typical)}`;
 });
 
+/** One short statement per item; every point of PE-005 AC 6 is kept. */
 const copy = [
     `You pay Pixelforge's cost + ${MARKUP_PERCENT}%.`,
-    'Output, reference images and the markup are exact. Prompt text and reasoning are estimated until the image finishes.',
-    '“Typically” assumes the average prompt-text and reasoning tokens.',
-    'The actual cost is recorded when the generation finishes, from the tokens Pixelforge actually used.',
+    'Output, reference images and the markup are exact. Prompt text and reasoning are estimates until the image finishes.',
+    '“Typically” assumes average prompt-text and reasoning tokens.',
+    'The actual cost is recorded when the image finishes, from the tokens Pixelforge used.',
     'Failed generations are free.',
-    "The estimate uses Pixelforge's published prices.",
-    'Amounts are rounded to 4 decimals. Hover, focus or tap one for the exact value.',
+    "Prices are Pixelforge's published rates.",
+    'Amounts are rounded to 4 decimals; hover, focus or tap one for the exact value.',
 ] as const;
 </script>
 
 <template>
-    <section :aria-labelledby="headingId" class="flex flex-col gap-5 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
+    <!--
+        Four sections, one spacing step apart: the headline, the breakdown, its totals (a
+        divided group inside the breakdown's table) and the pricing footer. The footer bleeds
+        to the card's edges, so the card keeps its padding as the content box amounts stay in.
+    -->
+    <section :aria-labelledby="headingId" class="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs sm:p-6">
         <div class="flex flex-col gap-1">
             <h2 :id="headingId" class="text-sm font-medium text-zinc-600">Estimated cost</h2>
 
@@ -72,16 +78,14 @@ const copy = [
             <p aria-live="polite" class="sr-only">{{ announcement }}</p>
         </div>
 
-        <EstimateBreakdown
-            v-if="estimate"
-            :estimate="estimate"
-            :quality="quality"
-            :size="size"
-            :reference-image-count="referenceImageCount"
-        />
+        <div v-if="estimate" class="border-t border-zinc-200 pt-3">
+            <EstimateBreakdown :estimate="estimate" :quality="quality" :size="size" :reference-image-count="referenceImageCount" />
+        </div>
 
-        <ul class="flex flex-col gap-1.5 border-t border-zinc-200 pt-4 text-sm text-zinc-600">
-            <li v-for="statement in copy" :key="statement">{{ statement }}</li>
-        </ul>
+        <footer class="-mx-4 -mb-4 rounded-b-xl border-t border-zinc-200 bg-zinc-50 px-4 py-3 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-4">
+            <ul class="flex list-disc flex-col gap-1 pl-4 text-xs/5 text-zinc-600 marker:text-zinc-400">
+                <li v-for="statement in copy" :key="statement">{{ statement }}</li>
+            </ul>
+        </footer>
     </section>
 </template>

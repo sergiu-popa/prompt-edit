@@ -120,7 +120,7 @@ onBeforeUnmount(stopListening);
         <button
             type="button"
             :aria-describedby="tooltipId"
-            class="cursor-help rounded-sm tabular-nums underline decoration-zinc-300 decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+            class="cursor-help rounded-sm tabular-nums underline decoration-zinc-300/70 decoration-dotted underline-offset-4 transition-colors hover:decoration-zinc-500 focus-visible:decoration-zinc-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
             @pointerdown="onPointerDown"
             @pointercancel="onPointerCancel"
             @focus="onFocus"
