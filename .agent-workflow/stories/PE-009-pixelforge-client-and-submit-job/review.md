@@ -59,7 +59,7 @@ The implementation follows the plan class for class, and all 14 plan tasks are c
 
 ### Warnings
 
-- [ ] **W1. A transport failure after the response headers escapes the driver as `Illuminate\Http\Client\RequestException`, outside the typed contract.**
+- [x] **W1. A transport failure after the response headers escapes the driver as `Illuminate\Http\Client\RequestException`, outside the typed contract.**
   - `app/Support/Pixelforge/Drivers/HttpPixelforgeClient.php:65` catches only `ConnectionException`.
   - With Guzzle 8.5, a cURL error after the status line has arrived becomes a `ResponseTimeoutException` (error 28) or a `ResponseTransferException` (for example a reset while the body is read). Examples: a 503 whose body stalls past the 30 s timeout, or a 429 cut off mid-body. Laravel's `PendingRequest::marshalTransportExceptionWithResponse()` (`vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:2161-2168`) then throws `$response->toException()`, a `RequestException`, for any 4xx or 5xx status. It throws a `ConnectionException` only for a 2xx.
   - I confirmed this with a throwaway test, since deleted. An `Http::fake` callback threw `ResponseTimeoutException` carrying a `503` with a truncated body, and `createGeneration()` threw `Illuminate\Http\Client\RequestException`.
@@ -73,14 +73,17 @@ The implementation follows the plan class for class, and all 14 plan tasks are c
     - Update the contract's and the factory's docblocks: "no complete response arrived".
     - Add rows to `HttpPixelforgeClientTest::test_a_transport_failure_is_ambiguous`, or a sibling test, with an `Http::fake` callback that throws `GuzzleHttp\Exception\ResponseTimeoutException` (and `ResponseTransferException`) carrying a `503` with a truncated body. Assert that the result is ambiguous and not a typed error.
     - Add the same case to the AC 10 sentinel matrix.
+  - **Resolved in `65c32ae`.** The driver catches `ConnectionException|RequestException`, and `transportFailed()` takes an `HttpClientException` and keeps the status when a status line arrived. New rows: three cut-off responses in `HttpPixelforgeClientTest` (a 503 timeout, a 429 and a 422 reset), a 503 cut off in the key sentinel matrix, and a 422 cut off in the job's retried-failures matrix.
 
 ### Suggestions
 
 None of these blocks QA.
 
-- [ ] **S1. A non-numeric timeout silently becomes "no timeout".**
+- [x] **S1. A non-numeric timeout silently becomes "no timeout".**
   - `config/pixelforge.php:32,34` cast with `(int) (env(...) ?: default)`. An operator typo such as `PIXELFORGE_REQUEST_TIMEOUT=30s` gives 30, but `=thirty` gives `0`, and Guzzle treats `0` as "wait forever". The job's 60 s timeout still kills the worker, so D-33's no-overlap guarantee survives, but the HTTP-level bound is gone without any warning.
   - Fix: use the default for anything that is not a positive integer, for example `filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 30`. Add one `PixelforgeConfigTest` row.
-- [ ] **S2. The "Pixelforge failure with `context()`" union is spelled out twice.**
+  - **Resolved in `0251d57`.** Both timeouts use `FILTER_VALIDATE_INT` with `min_range` 1 and the default. `PixelforgeConfigTest` covers a word, `30s`, `0`, `-5` and `2.5`.
+- [x] **S2. The "Pixelforge failure with `context()`" union is spelled out twice.**
   - `SubmitGenerationAction.php:118-121` types the three classes as a union, and `SubmitGenerationJob.php:51-53` repeats them as three `instanceof` checks. PE-010 and PE-013 will add cases.
   - Fix: a small `App\Support\Pixelforge\Contracts\ReportsPixelforgeContext` interface (`context(): array`), implemented by the three families. Both places then check one type. This is optional, because the current code is correct and tested.
+  - **Resolved in `f8cc926`.** The interface extends `Throwable` and the three families implement it. The action's second catch, `loggedForRetry()` and `failed()` all use it. The give-up matrix gains a not-configured row.
