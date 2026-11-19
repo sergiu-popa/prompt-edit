@@ -6,9 +6,11 @@ Opinionated starter template for Laravel 13 applications, shipped with a Docker-
 
 - **PHP** 8.4
 - **Laravel** 13
+- **Inertia** 3 + **Vue** 3 + **TypeScript** 6
 - **Tailwind CSS** 4 + Vite
 - **PostgreSQL** 17 and **Redis** (separate containers for app and tests)
-- **PHPUnit** 12, **Larastan/PHPStan** 3, **Laravel Pint** 1
+- **PHPUnit** 13, **Larastan/PHPStan** 3, **Laravel Pint** 1
+- **ESLint**, **Prettier**, **vue-tsc**
 - **Laravel Boost** for AI-assisted development
 
 ## Requirements
@@ -48,13 +50,14 @@ All commands run inside the `prompt-edit-app` container.
 - `make npm` — install npm dependencies
 - `make npm-dev` — run Vite dev server
 - `make npm-build` — production build
+- `make js-check` / `make js-fix` — ESLint, Prettier and vue-tsc
 
 ### Quality
 - `make lint` / `make lint-fix` — Pint
 - `make stan` — PHPStan / Larastan
 - `make test` — PHPUnit (optionally `make test filter=testName`)
 - `make test-unit` / `make test-feature`
-- `make check` — lint + stan + test
+- `make check` — lint + stan + test + js-check
 
 ## Docker Services
 
@@ -76,10 +79,11 @@ Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 
 1. **Build image** — builds the `ci` target of `.docker/Dockerfile`, pushes/caches it against a branch tag, and shares it with downstream jobs via the GitHub Actions cache.
 2. **Code style** — `composer lint` (Pint in `--test` mode).
-3. **Static analysis** — `composer stan` (PHPStan with result cache restored from the `main` branch).
-4. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against Postgres and Redis service containers. **Builds fail if coverage drops below 80%.**
-5. **Docker push** — publishes the image to GHCR once all checks pass.
-6. **Cleanup** — deletes the per-run image cache entry.
+3. **Frontend checks** — `npm ci`, ESLint, Prettier check, `vue-tsc` and a production build on Node 22.
+4. **Static analysis** — `composer stan` (PHPStan with result cache restored from the `main` branch).
+5. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against Postgres and Redis service containers. **Builds fail if coverage drops below 80%.**
+6. **Docker push** — publishes the image to GHCR once all checks pass.
+7. **Cleanup** — deletes the per-run image cache entry.
 
 Required secrets: `GITHUB_TOKEN` (provided by Actions).
 

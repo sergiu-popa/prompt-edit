@@ -84,7 +84,7 @@ FROM frontend AS production-frontend
 
 RUN mkdir -p /app/public
 
-COPY package.json package-lock.json vite.config.js /app/
+COPY package.json package-lock.json vite.config.ts tsconfig.json /app/
 COPY resources/ /app/resources/
 COPY app/ /app/app/
 COPY --from=base /var/www/vendor /app/vendor
