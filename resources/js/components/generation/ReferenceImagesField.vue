@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, useTemplateRef } from 'vue';
+import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue';
 
 import Button from '@/components/ui/Button.vue';
 import MoneyAmount from '@/components/ui/MoneyAmount.vue';
@@ -27,6 +27,28 @@ const actions = useTemplateRef<HTMLElement>('actions');
 const focusedRow = ref<number | null>(null);
 
 const isFull = computed(() => rows.value.length >= props.max);
+
+/**
+ * A stable key per row, so removing a row from the middle never hands another row's DOM
+ * input (its undo history, a half-composed IME entry) to its neighbour.
+ */
+let nextRowKey = 0;
+const rowKeys = ref<number[]>(rows.value.map(() => nextRowKey++));
+
+/** If the parent replaces the rows, new rows get new keys and dropped rows lose theirs. */
+watch(
+    () => rows.value.length,
+    (length) => {
+        while (rowKeys.value.length < length) {
+            rowKeys.value.push(nextRowKey++);
+        }
+        rowKeys.value.splice(length);
+    },
+);
+
+function rowKey(index: number): number {
+    return rowKeys.value[index] ?? -(index + 1);
+}
 
 const HINT = 'Enter an http:// or https:// image URL.';
 
@@ -60,6 +82,7 @@ async function addRow(): Promise<void> {
         return;
     }
 
+    rowKeys.value.push(nextRowKey++);
     rows.value = [...rows.value, ''];
     await nextTick();
     list.value?.querySelector<HTMLInputElement>(`[id="${rowId(rows.value.length - 1)}"]`)?.focus();
@@ -67,6 +90,7 @@ async function addRow(): Promise<void> {
 
 /** The removed row's button leaves the page, so focus moves to Add instead of dropping to the body. */
 async function removeRow(index: number): Promise<void> {
+    rowKeys.value.splice(index, 1);
     rows.value = rows.value.filter((_row, rowIndex) => rowIndex !== index);
     focusedRow.value = null;
     await nextTick();
@@ -87,7 +111,7 @@ async function removeRow(index: number): Promise<void> {
             </legend>
 
             <ul v-if="rows.length > 0" ref="list" class="flex flex-col gap-3">
-                <li v-for="(row, index) in rows" :key="index" class="flex flex-col gap-1.5">
+                <li v-for="(row, index) in rows" :key="rowKey(index)" class="flex flex-col gap-1.5">
                     <label :for="rowId(index)" class="sr-only">Reference image {{ index + 1 }}</label>
                     <div class="flex items-center gap-2">
                         <TextInput

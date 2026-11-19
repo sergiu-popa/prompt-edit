@@ -100,6 +100,30 @@ describe('ReferenceImagesField', () => {
         expect(rowInputs(field).map((input) => input.element.value)).toStrictEqual(['https://a.test/a.png']);
     });
 
+    it('keeps each remaining row on its own input when a row above it is removed', async () => {
+        const field = mountField(['https://a.test/a.png', 'https://b.test/b.png', 'https://c.test/c.png']);
+        const [, second, third] = rowInputs(field).map((input) => input.element);
+
+        await button(field, 'Remove reference image 1').trigger('click');
+
+        expect(rowInputs(field).map((input) => input.element)).toStrictEqual([second, third]);
+        expect(rowInputs(field).map((input) => input.element.value)).toStrictEqual(['https://b.test/b.png', 'https://c.test/c.png']);
+    });
+
+    it('keeps rows and keys in step when the parent replaces the rows', async () => {
+        const field = mountField(['https://a.test/a.png']);
+
+        await field.setProps({ modelValue: ['https://x.test/x.png', 'https://y.test/y.png', 'https://z.test/z.png'] });
+        const [, , third] = rowInputs(field).map((input) => input.element);
+        await button(field, 'Remove reference image 2').trigger('click');
+
+        expect(rowInputs(field).map((input) => input.element.value)).toStrictEqual(['https://x.test/x.png', 'https://z.test/z.png']);
+        expect(rowInputs(field)[1]?.element).toBe(third);
+
+        await field.setProps({ modelValue: [] });
+        expect(rowInputs(field)).toHaveLength(0);
+    });
+
     it('moves focus to Add reference image after a row is removed', async () => {
         const field = mountField(['https://a.test/a.png']);
 
