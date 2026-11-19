@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Support\Pixelforge\DataTransferObjects;
 
+use App\Domain\Billing\Exceptions\InvalidTokenUsageException;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
@@ -177,7 +178,6 @@ final class GenerationSnapshotTest extends TestCase
             'image_url empty' => [self::queuedWith(['image_url' => '']), 'image_url'],
             'usage a number' => [self::queuedWith(['usage' => 12]), 'usage'],
             'rates a string' => [self::queuedWith(['rates' => '5.00']), 'rates'],
-            'a rate as a number' => [self::queuedWith(['rates' => [...self::docsRates(), 'input_text_tokens' => 5.00]]), 'rates.input_text_tokens'],
         ];
     }
 
@@ -191,6 +191,151 @@ final class GenerationSnapshotTest extends TestCase
         $this->expectExceptionMessageMatches(sprintf('/(?<![\w.])%s(?!\w)/', preg_quote($path, '/')));
 
         GenerationSnapshot::from($generation);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function incompleteSuccesses(): array
+    {
+        return [
+            'usage null' => [self::succeededWith(['usage' => null]), 'usage'],
+            'rates absent' => [self::succeededWithout('rates'), 'rates'],
+            'image_url null' => [self::succeededWith(['image_url' => null]), 'image_url'],
+            'completed_at null' => [self::succeededWith(['completed_at' => null]), 'completed_at'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $generation
+     */
+    #[DataProvider('incompleteSuccesses')]
+    public function test_a_succeeded_snapshot_without_its_result_is_rejected(array $generation, string $path): void
+    {
+        $this->expectException(InvalidGenerationSnapshotException::class);
+        $this->expectExceptionMessageMatches(sprintf('/succeeded.*(?<![\w.])%s(?!\w)/', preg_quote($path, '/')));
+
+        GenerationSnapshot::from($generation);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function unpricedUsages(): array
+    {
+        $usage = self::succeededUsage();
+        $withoutReasoning = $usage;
+        unset($withoutReasoning['reasoning_tokens']);
+
+        return [
+            'an extra token type' => [[...$usage, 'cached_tokens' => 3], 'cached_tokens'],
+            'reasoning_tokens missing' => [$withoutReasoning, 'reasoning_tokens'],
+            'a total that does not add up' => [[...$usage, 'total_tokens' => 10_412], 'total_tokens'],
+            'a count as a string' => [[...$usage, 'input_text_tokens' => '12'], 'input_text_tokens'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $usage
+     */
+    #[DataProvider('unpricedUsages')]
+    public function test_a_usage_that_drops_or_misstates_a_token_type_is_rejected(array $usage, string $key): void
+    {
+        try {
+            GenerationSnapshot::from(self::succeededWith(['usage' => $usage]));
+            $this->fail('The usage was accepted.');
+        } catch (InvalidGenerationSnapshotException $exception) {
+            $this->assertStringContainsString('usage', $exception->getMessage());
+            $this->assertStringContainsString($key, $exception->getMessage());
+            $this->assertInstanceOf(InvalidTokenUsageException::class, $exception->getPrevious());
+        }
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function unpricedRates(): array
+    {
+        $rates = self::docsRates();
+        $withoutOutput = $rates;
+        unset($withoutOutput['output_tokens']);
+
+        return [
+            'an extra token type' => [[...$rates, 'cached_tokens' => '1.00'], 'rates.cached_tokens'],
+            'output_tokens missing' => [$withoutOutput, 'rates.output_tokens'],
+            'a rate as a number' => [[...$rates, 'input_text_tokens' => 5.00], 'rates.input_text_tokens'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $rates
+     */
+    #[DataProvider('unpricedRates')]
+    public function test_rates_that_drop_or_add_a_token_type_are_rejected(array $rates, string $path): void
+    {
+        $this->expectException(InvalidGenerationSnapshotException::class);
+        $this->expectExceptionMessageMatches(sprintf('/(?<![\w.])%s(?!\w)/', preg_quote($path, '/')));
+
+        GenerationSnapshot::from(self::succeededWith(['rates' => $rates]));
+    }
+
+    public function test_rate_strings_are_kept_verbatim_and_priced_only_at_settlement(): void
+    {
+        $rates = [...self::docsRates(), 'input_text_tokens' => '5.0001'];
+
+        $this->assertSame($rates, GenerationSnapshot::from(self::succeededWith(['rates' => $rates]))->rates);
+    }
+
+    public function test_an_app_relative_image_url_is_accepted(): void
+    {
+        $snapshot = GenerationSnapshot::from(self::succeededWith(['image_url' => '/fake-pixelforge/images/gen_x.png']));
+
+        $this->assertSame('/fake-pixelforge/images/gen_x.png', $snapshot->imageUrl);
+    }
+
+    public function test_a_failed_snapshot_without_an_error_parses_as_a_generic_failure(): void
+    {
+        $snapshot = GenerationSnapshot::from(self::queuedWith([
+            'status' => 'failed',
+            'error' => null,
+            'completed_at' => '2026-11-04T14:03:29Z',
+        ]));
+
+        $this->assertSame(GenerationStatus::Failed, $snapshot->status);
+        $this->assertNull($snapshot->errorCode);
+        $this->assertNull($snapshot->errorMessage);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function succeededUsage(): array
+    {
+        $usage = self::pixelforgeFixture('generation-succeeded')['usage'];
+        assert(is_array($usage));
+
+        /** @var array<string, mixed> $usage */
+        return $usage;
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private static function succeededWith(array $overrides): array
+    {
+        return array_replace(self::pixelforgeFixture('generation-succeeded'), $overrides);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function succeededWithout(string $field): array
+    {
+        $generation = self::pixelforgeFixture('generation-succeeded');
+        unset($generation[$field]);
+
+        return $generation;
     }
 
     /**

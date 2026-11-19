@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\DataTransferObjects;
 
+use App\Domain\Billing\Enums\TokenType;
+use App\Domain\Billing\Exceptions\InvalidTokenUsageException;
 use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
@@ -45,7 +47,8 @@ final readonly class GenerationSnapshot
 
     /**
      * Unknown top-level fields are ignored; anything else that cannot be read
-     * exactly throws.
+     * exactly throws. A succeeded snapshot must carry its whole result, while a
+     * failed one may have a null error (shown as a generic failure).
      *
      * @param  array<array-key, mixed>  $generation
      *
@@ -66,10 +69,19 @@ final readonly class GenerationSnapshot
         }
 
         [$errorCode, $errorMessage] = self::error($generation);
+        $status = self::status(self::required($generation, 'status'));
+
+        if ($status === GenerationStatus::Succeeded) {
+            foreach (['usage', 'rates', 'image_url', 'completed_at'] as $field) {
+                if (($generation[$field] ?? null) === null) {
+                    throw InvalidGenerationSnapshotException::incompleteSuccess($field);
+                }
+            }
+        }
 
         return new self(
             $id,
-            self::status(self::required($generation, 'status')),
+            $status,
             self::enum(ImageSize::class, $generation, 'size'),
             self::enum(ImageQuality::class, $generation, 'quality'),
             self::generationId($metadata),
@@ -238,10 +250,17 @@ final readonly class GenerationSnapshot
             throw InvalidGenerationSnapshotException::invalidField('usage', 'an object or null', $usage);
         }
 
-        return TokenUsage::from($usage);
+        try {
+            return TokenUsage::from($usage);
+        } catch (InvalidTokenUsageException $exception) {
+            throw InvalidGenerationSnapshotException::invalidUsage($exception);
+        }
     }
 
     /**
+     * Exactly the priced token types, so none is silently dropped. The strings
+     * are kept as received: conversion to n$ happens at settlement.
+     *
      * @param  array<array-key, mixed>  $generation
      * @return ?array<string, string>
      *
@@ -257,6 +276,18 @@ final readonly class GenerationSnapshot
 
         if (! is_array($rates)) {
             throw InvalidGenerationSnapshotException::invalidField('rates', 'an object or null', $rates);
+        }
+
+        foreach (array_keys($rates) as $key) {
+            if (! in_array($key, TokenType::keys(), true)) {
+                throw InvalidGenerationSnapshotException::unpricedRate('rates.' . $key);
+            }
+        }
+
+        foreach (TokenType::keys() as $key) {
+            if (! array_key_exists($key, $rates)) {
+                throw InvalidGenerationSnapshotException::missingField('rates.' . $key);
+            }
         }
 
         $strings = [];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Exceptions;
 
+use App\Domain\Billing\Exceptions\InvalidTokenUsageException;
 use InvalidArgumentException;
 
 /**
@@ -30,5 +31,23 @@ final class InvalidGenerationSnapshotException extends InvalidArgumentException
     public static function unknownStatus(mixed $status): self
     {
         return self::invalidField('status', 'a Pixelforge status', $status);
+    }
+
+    public static function incompleteSuccess(string $path): self
+    {
+        return new self(sprintf('A succeeded generation object must carry %s.', $path));
+    }
+
+    /**
+     * PE-001's rules decide which counts can be priced; its reason is kept as the cause.
+     */
+    public static function invalidUsage(InvalidTokenUsageException $previous): self
+    {
+        return new self(sprintf('The generation object\'s usage is invalid: %s', $previous->getMessage()), previous: $previous);
+    }
+
+    public static function unpricedRate(string $path): self
+    {
+        return new self(sprintf('The generation object\'s %s is not a token type that can be priced.', $path));
     }
 }
