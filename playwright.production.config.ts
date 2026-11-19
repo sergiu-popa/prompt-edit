@@ -8,7 +8,15 @@ import { defineConfig, devices } from '@playwright/test';
  * credentials, so it can't fall back to the local app. Traces and videos are
  * off because a trace records `fill()` values, which would store the
  * reviewer password.
+ *
+ * For the same reason the failure page snapshot is off: on a failed test,
+ * Playwright writes an ARIA snapshot of the page to
+ * `test-results/…/error-context.md`, and that snapshot holds every input's
+ * value, the password field's included. `PLAYWRIGHT_NO_COPY_PROMPT` is the
+ * switch Playwright 1.65 checks before taking it; workers inherit it.
  */
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
+
 const baseURL = process.env.E2E_BASE_URL ?? '';
 
 if (!baseURL.startsWith('https://')) {

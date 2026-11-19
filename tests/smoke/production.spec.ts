@@ -67,7 +67,10 @@ test('the reviewer signs in and out', async ({ page }) => {
     await page.getByLabel('Password').fill(reviewer.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page).toHaveURL('/dashboard');
+    // While the password is in the form, nothing here may be an expect(): a failing
+    // matcher writes an ARIA snapshot of the page, input values included, to
+    // test-results/. waitForURL writes none, and the dashboard has no password field.
+    await page.waitForURL('/dashboard');
     const signOut = page.getByRole('button', { name: 'Sign out' });
     await expect(signOut).toBeVisible();
 
