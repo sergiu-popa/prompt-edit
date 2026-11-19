@@ -14,6 +14,7 @@ use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use JsonException;
@@ -24,7 +25,8 @@ use SensitiveParameter;
  * belong to the caller, with the same key and the same bytes. A redirect is
  * never followed, so the key and the body only ever reach the configured URL.
  * The key is never a method argument on the request path, and a trace of
- * the constructor redacts it.
+ * the constructor redacts it. No `Http::` exception leaves it: one that
+ * arrives without a complete response is ambiguous.
  */
 final readonly class HttpPixelforgeClient implements PixelforgeClient
 {
@@ -62,7 +64,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
                 ->withoutRedirecting()
                 ->withBody($payload->toJson(), 'application/json')
                 ->post('generations');
-        } catch (ConnectionException $exception) {
+        } catch (ConnectionException|RequestException $exception) {
             throw AmbiguousPixelforgeOutcomeException::transportFailed($exception);
         }
 

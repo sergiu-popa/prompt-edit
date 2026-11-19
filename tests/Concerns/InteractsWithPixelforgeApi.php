@@ -7,7 +7,10 @@ namespace Tests\Concerns;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use Closure;
+use GuzzleHttp\Exception\ResponseTransferException;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -79,6 +82,23 @@ trait InteractsWithPixelforgeApi
             $code->httpStatus(),
             ['Content-Type' => 'application/json', ...$headers],
         );
+    }
+
+    /**
+     * An answer whose status line arrived but whose body did not, as cURL
+     * reports a timeout or a reset while the body is read.
+     *
+     * @param  class-string<ResponseTransferException>  $guzzleException
+     */
+    protected static function pixelforgeCutOff(string $guzzleException, int $status, string $truncatedBody): Closure
+    {
+        return function (Request $request) use ($guzzleException, $status, $truncatedBody): never {
+            throw new $guzzleException(
+                'cURL error 28: Operation timed out after 30001 milliseconds with 41 out of 120 bytes received',
+                $request->toPsrRequest(),
+                new Psr7Response($status, ['Content-Type' => 'application/json'], $truncatedBody),
+            );
+        };
     }
 
     /**

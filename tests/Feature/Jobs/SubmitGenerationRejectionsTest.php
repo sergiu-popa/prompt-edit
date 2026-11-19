@@ -16,6 +16,7 @@ use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
+use GuzzleHttp\Exception\ResponseTransferException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
@@ -126,6 +127,7 @@ final class SubmitGenerationRejectionsTest extends TestCase
             '503 overloaded' => ['503', OverloadedException::class],
             'no key' => ['no key', PixelforgeNotConfiguredException::class],
             'a read timeout' => ['read timeout', AmbiguousPixelforgeOutcomeException::class],
+            'a 422 cut off mid-body' => ['422 cut off', AmbiguousPixelforgeOutcomeException::class],
             'a 502 HTML page' => ['502 html', AmbiguousPixelforgeOutcomeException::class],
             'a 2xx that is not a generation' => ['202 not a generation', AmbiguousPixelforgeOutcomeException::class],
             'a 400 whose message holds a NUL byte' => ['400 nul', AmbiguousPixelforgeOutcomeException::class],
@@ -177,6 +179,7 @@ final class SubmitGenerationRejectionsTest extends TestCase
             '429 daily' => self::pixelforgeErrorFor(PixelforgeErrorCode::DailyLimitExceeded),
             '503' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2']),
             'read timeout' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received'),
+            '422 cut off' => self::pixelforgeCutOff(ResponseTransferException::class, 422, '{"error":{"type":"invalid_request_error"'),
             '502 html' => Http::response('<html><body><h1>502 Bad Gateway</h1></body></html>', 502, ['Content-Type' => 'text/html']),
             '202 not a generation' => Http::response('{"status":"accepted"}', 202, ['Content-Type' => 'application/json']),
             '400 nul' => self::pixelforgeErrorFor(PixelforgeErrorCode::ContentPolicyViolation, ['message' => "Rejected\0 here."]),

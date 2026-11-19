@@ -22,7 +22,7 @@ interface PixelforgeClient
      * `POST /v1/generations`, keyed by the payload's idempotency key.
      *
      * @throws PixelforgeApiException for a documented error envelope
-     * @throws AmbiguousPixelforgeOutcomeException when the answer does not say whether a generation was created
+     * @throws AmbiguousPixelforgeOutcomeException when no complete response arrived, or the answer does not say whether a generation was created
      * @throws PixelforgeNotConfiguredException when nothing can be sent
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData;

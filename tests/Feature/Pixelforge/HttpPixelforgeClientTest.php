@@ -24,9 +24,12 @@ use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use App\Support\Pixelforge\Exceptions\ValidationFailedException;
+use GuzzleHttp\Exception\ResponseTimeoutException;
+use GuzzleHttp\Exception\ResponseTransferException;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionParameter;
@@ -310,6 +313,33 @@ final class HttpPixelforgeClientTest extends TestCase
         ];
     }
 
+    /**
+     * @param  class-string<ResponseTransferException>  $guzzleException
+     */
+    #[DataProvider('cutOffResponses')]
+    public function test_a_response_cut_off_after_its_status_line_is_ambiguous(string $guzzleException, int $status, string $truncatedBody): void
+    {
+        Http::fake(['*' => self::pixelforgeCutOff($guzzleException, $status, $truncatedBody)]);
+
+        $exception = $this->createExpectingAmbiguous(self::lighthousePayload());
+
+        $this->assertSame($status, $exception->status);
+        $this->assertInstanceOf(RequestException::class, $exception->getPrevious());
+        $this->assertStringNotContainsString('cURL error', $exception->getMessage());
+    }
+
+    /**
+     * @return array<string, array{class-string<ResponseTransferException>, int, string}>
+     */
+    public static function cutOffResponses(): array
+    {
+        return [
+            'a 503 whose body stalls past the timeout' => [ResponseTimeoutException::class, 503, '{"error":{"type":"api_error","code":"over'],
+            'a 429 reset mid-body' => [ResponseTransferException::class, 429, '{"error":{"type":"rate_limit_error","co'],
+            'a 422 reset mid-body' => [ResponseTransferException::class, 422, '{"error":{"type":"invalid_request_error"'],
+        ];
+    }
+
     #[DataProvider('unreadableGenerations')]
     public function test_a_2xx_that_is_not_a_generation_object_is_ambiguous(string $body, bool $hasPrevious): void
     {
@@ -386,6 +416,7 @@ final class HttpPixelforgeClientTest extends TestCase
             '202' => self::pixelforgeAccepted(self::queuedObject()),
             '401' => self::pixelforgeErrorFor(PixelforgeErrorCode::InvalidApiKey),
             'read timeout' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received'),
+            '503 cut off' => self::pixelforgeCutOff(ResponseTimeoutException::class, 503, '{"error":{"type":"api_error","code":"over'),
             '503' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2']),
             default => $this->fail(sprintf('Unknown answer %s.', $answer)),
         }]);
@@ -416,6 +447,7 @@ final class HttpPixelforgeClientTest extends TestCase
             'a 202' => ['202'],
             'a 401' => ['401'],
             'a read timeout' => ['read timeout'],
+            'a 503 cut off mid-body' => ['503 cut off'],
             'a 503' => ['503'],
         ];
     }

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Exceptions;
 
-use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\HttpClientException;
+use Illuminate\Http\Client\RequestException;
 use RuntimeException;
 use Throwable;
 
@@ -17,7 +18,7 @@ use Throwable;
 final class AmbiguousPixelforgeOutcomeException extends RuntimeException
 {
     /**
-     * @param  ?int  $status  the HTTP status, or null when no response arrived
+     * @param  ?int  $status  the HTTP status, or null when no status line arrived
      */
     private function __construct(string $message, public readonly ?int $status, ?Throwable $previous = null)
     {
@@ -51,11 +52,16 @@ final class AmbiguousPixelforgeOutcomeException extends RuntimeException
     }
 
     /**
-     * No response arrived: a connect or read timeout, or a refused or reset
-     * connection. The request may still have reached Pixelforge.
+     * No complete response arrived: a connect or read timeout, a refused or
+     * reset connection, or a status line whose body was cut off. The request
+     * may still have reached Pixelforge. The status is kept when one arrived.
      */
-    public static function transportFailed(ConnectionException $previous): self
+    public static function transportFailed(HttpClientException $previous): self
     {
-        return new self('No response arrived from Pixelforge (connection failed or timed out).', null, $previous);
+        return new self(
+            'No complete response arrived from Pixelforge (connection failed, timed out or was cut off).',
+            $previous instanceof RequestException ? $previous->response->status() : null,
+            $previous,
+        );
     }
 }
