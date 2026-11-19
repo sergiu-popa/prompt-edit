@@ -129,7 +129,8 @@ const totalLines = computed<TotalLine[]>(() => {
                 <tr v-for="line in tokenLines" :key="line.label" class="col-span-2 grid grid-cols-subgrid py-1.5 align-top @lg:table-row">
                     <th scope="row" class="pr-3 text-left font-medium whitespace-nowrap text-zinc-800 @lg:py-1.5">{{ line.label }}</th>
                     <td class="text-zinc-600 tabular-nums @lg:py-1.5 @lg:pr-3">
-                        {{ line.tokens }}
+                        <span class="whitespace-nowrap">{{ line.tokens }}</span>
+                        {{ ' ' }}
                         <span
                             v-if="line.flag"
                             :class="[
