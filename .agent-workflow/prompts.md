@@ -78,3 +78,7 @@ steer the work.
 **Prompt 9** (PE-004)
 
 > You can ssh into the droplet with root, so show me commands before you run them
+
+**Prompt 10** (after PE-004 was merged, while PE-005 was in the pipeline)
+
+> Can you run the pipeline in workflow until PE-010 in parallel? We need to finish this today, so as far as you can go, then we switch back to sequential stories
