@@ -71,6 +71,9 @@ final class SignInTest extends TestCase
         ];
     }
 
+    /**
+     * @param  list<string>  $emptyFields
+     */
     #[DataProvider('incompleteSubmissions')]
     public function test_an_empty_field_shows_a_field_message_without_an_attempt(string $email, string $password, array $emptyFields): void
     {
