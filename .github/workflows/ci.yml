@@ -283,6 +283,14 @@ jobs:
             --entrypoint php \
             ${{ env.DOCKER_BRANCH_IMAGE }} \
             artisan migrate --force
+      - name: Seed the database
+        run: |
+          docker run --rm \
+            -e REDIS_HOST -e DB_CONNECTION -e DB_HOST -e DB_DATABASE -e DB_USERNAME -e DB_PASSWORD \
+            --network $JOB_DOCKER_NETWORK \
+            --entrypoint php \
+            ${{ env.DOCKER_BRANCH_IMAGE }} \
+            artisan db:seed --force
       - name: Start the app, queue worker and scheduler
         run: |
           docker run -d --name app \

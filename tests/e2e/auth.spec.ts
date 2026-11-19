@@ -1,0 +1,91 @@
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
+import { DEMO_USER, uniqueEmail } from './support/auth';
+import { expectNoHorizontalScroll } from './support/layout';
+
+async function signIn(page: Page, email: string, password: string): Promise<void> {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+test('signs up, lands on the signed-in home and signs out', async ({ page }, testInfo) => {
+    // One unbroken 60-character word: the header must truncate it, not scroll.
+    const name = `Augusta${'x'.repeat(53)}`;
+
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Create account' }).click();
+    await expect(page).toHaveURL('/register');
+
+    await page.getByLabel('Name').fill(name);
+    await page.getByLabel('Email').fill(uniqueEmail(testInfo));
+    await page.getByLabel('Password', { exact: true }).fill('correct-password');
+    await page.getByLabel('Confirm password').fill('correct-password');
+    await page.getByRole('button', { name: 'Create account' }).click();
+
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.getByRole('banner')).toContainText(name);
+    await expect(page.getByRole('heading', { level: 1, name: "You're signed in." })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await page.getByRole('button', { name: 'Sign out' }).click();
+
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL('/login');
+});
+
+test('shows the credentials message for a wrong password', async ({ page }, testInfo) => {
+    const email = uniqueEmail(testInfo);
+    const message = 'These credentials do not match our records.';
+
+    await signIn(page, email, 'wrong-password');
+
+    const emailInput = page.getByLabel('Email');
+    await expect(emailInput).toHaveAccessibleDescription(message);
+    await expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(emailInput).toBeFocused();
+    await expect(emailInput).toHaveValue(email);
+    await expect(page.getByLabel('Password')).toHaveValue('');
+    await expect(page).toHaveURL('/login');
+});
+
+test('signs the demo user in and out with the keyboard alone', async ({ page }) => {
+    await page.goto('/login');
+
+    await page.getByLabel('Email').focus();
+    await page.keyboard.type(DEMO_USER.email);
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel('Password')).toBeFocused();
+    await page.keyboard.type(DEMO_USER.password);
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.getByRole('banner')).toContainText(DEMO_USER.name);
+
+    // Tab from the brand link, the header's first stop, proves Sign out is in the tab order.
+    const signOut = page.getByRole('button', { name: 'Sign out' });
+    await page.getByRole('link', { name: 'PromptEdit' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(signOut).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL('/');
+});
+
+test('the auth pages and the signed-in home have no horizontal scroll', async ({ page }) => {
+    for (const path of ['/login', '/register']) {
+        await page.goto(path);
+        await expectNoHorizontalScroll(page);
+    }
+
+    await signIn(page, DEMO_USER.email, DEMO_USER.password);
+
+    await expect(page).toHaveURL('/dashboard');
+    await expectNoHorizontalScroll(page);
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeInViewport();
+});
