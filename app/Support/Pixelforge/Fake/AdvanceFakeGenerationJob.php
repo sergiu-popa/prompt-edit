@@ -45,9 +45,13 @@ final class AdvanceFakeGenerationJob implements ShouldQueue
 
         if ($generation->status() === GenerationStatus::Queued) {
             $generation->markProcessing($now);
-            $sender->deliver($generation, WebhookEventType::GenerationProcessing);
 
-            self::dispatch($this->fakeGenerationId)->delay($generation->processing_seconds);
+            try {
+                $sender->deliver($generation, WebhookEventType::GenerationProcessing);
+            } finally {
+                // Even a webhook that could not be signed must not leave the generation processing for good.
+                self::dispatch($this->fakeGenerationId)->delay($generation->processing_seconds);
+            }
 
             return;
         }

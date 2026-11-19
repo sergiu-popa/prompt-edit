@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Pixelforge\Fake;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Support\Pixelforge\Exceptions\WebhookSecretNotConfiguredException;
 use App\Support\Pixelforge\Fake\AdvanceFakeGenerationJob;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -161,6 +162,38 @@ final class FakePixelforgeLifecycleTest extends TestCase
         $this->assertSame(GenerationStatus::Succeeded, $this->fakeGenerationRow($created->snapshot->id)->status());
         $this->assertSame(
             ['generation.processing', 'generation.succeeded'],
+            array_map(fn (Request $request): mixed => self::decoded($request)['type'], $this->fakeWebhookRequests()),
+        );
+    }
+
+    /**
+     * A secret removed while a generation is in flight stops that webhook,
+     * not the lifecycle: the generation still ends once a secret is back.
+     */
+    public function test_a_webhook_that_cannot_be_signed_never_stalls_the_lifecycle(): void
+    {
+        $created = $this->createThroughFake(self::lighthousePayload());
+        config(['pixelforge.webhook_secret' => '']);
+
+        try {
+            $this->runNextFakeLifecycleJob();
+            $this->fail('Expected the processing webhook to be refused without a secret.');
+        } catch (WebhookSecretNotConfiguredException) {
+            //
+        }
+
+        $this->assertSame(GenerationStatus::Processing, $this->fakeGenerationRow($created->snapshot->id)->status());
+        $this->assertSame([], $this->fakeWebhookRequests());
+        $jobs = $this->pushedFakeLifecycleJobs();
+        $this->assertCount(2, $jobs);
+        $this->assertSame(3, self::delaySecondsOf($jobs[1]));
+
+        config(['pixelforge.webhook_secret' => self::FAKE_WEBHOOK_SECRET]);
+        $this->runFakeLifecycle();
+
+        $this->assertSame(GenerationStatus::Succeeded, $this->fakeGenerationRow($created->snapshot->id)->status());
+        $this->assertSame(
+            ['generation.succeeded'],
             array_map(fn (Request $request): mixed => self::decoded($request)['type'], $this->fakeWebhookRequests()),
         );
     }
