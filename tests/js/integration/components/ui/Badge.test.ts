@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import Badge from '@/components/ui/Badge.vue';
 
-const TONES = ['neutral', 'success', 'warning'] as const;
+const TONES = ['neutral', 'info', 'success', 'warning', 'danger'] as const;
 
 /** The classes that size a badge; every tone must share them, so badges line up. */
 const SIZE_CLASSES = ['inline-flex', 'text-xs', 'rounded-md', 'align-baseline'];
