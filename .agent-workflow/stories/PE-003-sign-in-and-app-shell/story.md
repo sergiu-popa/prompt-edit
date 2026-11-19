@@ -4,7 +4,7 @@
 Sign in, sign up and sign out (Fortify + Inertia) with the app shell
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 Users must be signed in before they can generate images or see their history (required "auth"). This story adds Laravel Fortify as the authentication backend, with minimal hand-built Inertia/Vue pages for sign-in and sign-up (D-02). It also adds:
