@@ -17,11 +17,14 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use JsonException;
+use SensitiveParameter;
 
 /**
  * The real Pixelforge API over HTTP. It never retries and never logs: retries
  * belong to the caller, with the same key and the same bytes. A redirect is
  * never followed, so the key and the body only ever reach the configured URL.
+ * The key is never a method argument on the request path, and a trace of
+ * the constructor redacts it.
  */
 final readonly class HttpPixelforgeClient implements PixelforgeClient
 {
@@ -35,7 +38,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     public function __construct(
         #[Config('pixelforge.base_url')]
         private string $baseUrl,
-        #[Config('pixelforge.api_key')]
+        #[Config('pixelforge.api_key'), SensitiveParameter]
         private ?string $apiKey,
         #[Config('pixelforge.connect_timeout_seconds')]
         private int $connectTimeoutSeconds,

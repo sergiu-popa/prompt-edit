@@ -29,6 +29,9 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionParameter;
+use SensitiveParameter;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\Concerns\InteractsWithPixelforgeApi;
 use Tests\TestCase;
@@ -39,6 +42,7 @@ use Tests\TestCase;
  */
 final class HttpPixelforgeClientTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithGenerationSnapshots;
     use InteractsWithPixelforgeApi;
 
@@ -373,6 +377,54 @@ final class HttpPixelforgeClientTest extends TestCase
             'null' => [null],
             'empty' => [''],
         ];
+    }
+
+    #[DataProvider('keyHygieneAnswers')]
+    public function test_the_api_key_appears_in_no_log_or_exception(string $answer): void
+    {
+        Http::fake(['*' => match ($answer) {
+            '202' => self::pixelforgeAccepted(self::queuedObject()),
+            '401' => self::pixelforgeErrorFor(PixelforgeErrorCode::InvalidApiKey),
+            'read timeout' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received'),
+            '503' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2']),
+            default => $this->fail(sprintf('Unknown answer %s.', $answer)),
+        }]);
+
+        $thrown = null;
+
+        try {
+            $this->client()->createGeneration(self::lighthousePayload());
+        } catch (PixelforgeApiException|AmbiguousPixelforgeOutcomeException $exception) {
+            $thrown = $exception;
+        }
+
+        $this->assertSame($answer === '202', $thrown === null);
+        $this->assertStringNotContainsString(self::PIXELFORGE_API_KEY, (string) $thrown);
+
+        foreach ($this->loggedMessages() as $logged) {
+            $this->assertStringNotContainsString(self::PIXELFORGE_API_KEY, $logged->message);
+            $this->assertStringNotContainsString(self::PIXELFORGE_API_KEY, (string) json_encode($logged->context, JSON_PARTIAL_OUTPUT_ON_ERROR));
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function keyHygieneAnswers(): array
+    {
+        return [
+            'a 202' => ['202'],
+            'a 401' => ['401'],
+            'a read timeout' => ['read timeout'],
+            'a 503' => ['503'],
+        ];
+    }
+
+    public function test_a_trace_through_the_constructor_redacts_the_key(): void
+    {
+        $parameter = new ReflectionParameter([HttpPixelforgeClient::class, '__construct'], 'apiKey');
+
+        $this->assertNotSame([], $parameter->getAttributes(SensitiveParameter::class));
     }
 
     private function client(): PixelforgeClient
