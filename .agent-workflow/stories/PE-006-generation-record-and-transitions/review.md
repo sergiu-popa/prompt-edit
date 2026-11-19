@@ -82,3 +82,32 @@ The implementation matches the plan class for class: `GenerationStatus`, `Genera
   - Fix, if wanted: add `failedLocally()` building on the definition (pending, no provider id) with `ContentPolicyViolation`, and add one factory test row.
 
   — fixed in `428af32`: `failedLocally()` builds on the definition and sets `ContentPolicyViolation` along with the provider's `400` error code, message and param. It has no provider id and no provider timestamps, which matches what the transition action writes. There is one factory test, plus a conflicts test showing that a succeeded snapshot over a locally failed row is `IgnoredConflict` and is logged with `provider_id` null (the D-09 path).
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the four commits since round 1, `0b8da4a..00520e0`, plus a re-read of the round 1 findings against HEAD.
+
+Checks run on HEAD (`chain-make.sh chain check`, exit 0):
+- Pint passes on 110 files.
+- Larastan reports no errors.
+- PHPUnit runs 552 tests with 2,118 assertions, all passing.
+- ESLint, Prettier and vue-tsc are clean, and Vitest runs 107 tests, all passing.
+
+### Round 1 findings, verified
+
+- **Shared test helpers (`0b8da4a`):** `Tests\Concerns\InteractsWithGenerations` now holds `givenAGenerationIn()`, `transitionGeneration()`, `rawGenerationRow()` and `reloadedGeneration()`. A grep for `rawRow`, `transition(`, `reloaded(`, `assertInstant` and `givenAGeneration(` under `tests/` finds no private copy left.
+  - The split into `AssertsInstants` is right, because `GenerationSnapshotTest` extends the plain PHPUnit `TestCase`.
+  - The shared assertion no longer checks the timezone name. No coverage is lost: every snapshot instant goes through the one `instant()` path that ends in `->utc()` (`GenerationSnapshot.php:338`), and `GenerationSnapshotTest.php:141-144` still asserts the name `UTC` for both a `Z` instant and an offset instant.
+  - The commit is a pure rename and move with no behaviour change: 188 lines added, 189 removed.
+- **Rate strings (`3a38a0b`):** the parser now uses `TokenRates::RATE_PATTERN`, made public, so the boundary refuses exactly what settlement would. It has five test rows (letters, empty, trailing newline, negative, bare point), and each names `rates.output_tokens`. `"5.0001"` still parses, as the plan intends.
+- **Locally failed factory state (`428af32`):** `failedLocally()` builds on the pending definition, so it has no provider id and no provider timestamps, which is what the action writes. Its factory test and the D-09 conflicts test (a succeeded snapshot over a locally failed row gives `IgnoredConflict` and logs `provider_id` null) both pass.
+- **PR size:** still acknowledged. The user must choose between one PR and a split at `d9498b2` before the PR is opened, and the PR description must not claim that the user accepted it.
+
+### Commit hygiene
+
+- One code commit per finding, each with its tests, and one bookkeeping commit (`00520e0`) that touches only `review.md`.
+- Subjects use the `[PE-006] Imperative …` form, none is longer than 72 characters, and every commit ends with the trailer.
+
+No new findings.
