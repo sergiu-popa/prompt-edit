@@ -10,9 +10,8 @@ use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Log\Events\MessageLogged;
-use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
@@ -23,6 +22,7 @@ use Tests\TestCase;
  */
 final class TransitionGenerationActionConflictsTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
     use RefreshDatabase;
@@ -34,20 +34,6 @@ final class TransitionGenerationActionConflictsTest extends TestCase
     private const string OTHER_PROVIDER_ID = 'another provider id';
 
     private const string FOREIGN_PROVIDER_ID = 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K';
-
-    /**
-     * @var list<MessageLogged>
-     */
-    private array $loggedMessages = [];
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Event::listen(MessageLogged::class, function (MessageLogged $message): void {
-            $this->loggedMessages[] = $message;
-        });
-    }
 
     /**
      * @return array<string, array{GenerationStatus, string}>
@@ -200,7 +186,7 @@ final class TransitionGenerationActionConflictsTest extends TestCase
 
         $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
 
-        $this->assertSame([], $this->loggedMessages);
+        $this->assertSame([], $this->loggedMessages());
     }
 
     public function test_duplicate_stale_and_terminal_snapshots_are_not_logged(): void
@@ -212,7 +198,7 @@ final class TransitionGenerationActionConflictsTest extends TestCase
         $this->transitionGeneration($processing, self::snapshotFor($processing, GenerationStatus::Queued));
         $this->transitionGeneration($succeeded, self::snapshotFor($succeeded, GenerationStatus::Processing));
 
-        $this->assertSame([], $this->loggedMessages);
+        $this->assertSame([], $this->loggedMessages());
     }
 
     /**
@@ -220,9 +206,11 @@ final class TransitionGenerationActionConflictsTest extends TestCase
      */
     private function assertConflictLogged(string $message, array $context): void
     {
-        $this->assertCount(1, $this->loggedMessages);
-        $this->assertSame('error', $this->loggedMessages[0]->level);
-        $this->assertSame($message, $this->loggedMessages[0]->message);
-        $this->assertSame($context, $this->loggedMessages[0]->context);
+        $logged = $this->loggedMessages();
+
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame($message, $logged[0]->message);
+        $this->assertSame($context, $logged[0]->context);
     }
 }

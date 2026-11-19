@@ -10,12 +10,13 @@ use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Billing\ValueObjects\Nanodollars;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\MultipleRecordsFoundException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Ends a generation's hold once it is terminal (D-14): the hold is released in
- * full and, when it succeeded, the actual user charge is written. It opens no
- * transaction: it runs inside the transition's, under its row lock, so the
- * entries commit or roll back with the status change.
+ * full and, when it succeeded, the actual user charge is written, even above
+ * the hold. It opens no transaction: it runs inside the transition's, under
+ * its row lock, so the entries commit or roll back with the status change.
  */
 final class SettleGenerationCreditsAction
 {
@@ -33,13 +34,32 @@ final class SettleGenerationCreditsAction
             ->where('type', CreditLedgerEntryType::Hold)
             ->sole();
 
-        $this->write($hold, CreditLedgerEntryType::Release, Nanodollars::zero()->minus(new Nanodollars($hold->amount_nanodollars)));
+        $heldAmount = Nanodollars::zero()->minus(new Nanodollars($hold->amount_nanodollars));
+
+        $this->write($hold, CreditLedgerEntryType::Release, $heldAmount);
 
         if ($userCharge === null) {
             return;
         }
 
         $this->write($hold, CreditLedgerEntryType::Charge, Nanodollars::zero()->minus($userCharge));
+
+        if ($userCharge->compareTo($heldAmount) > 0) {
+            $this->warnAboveHold($generationId, $heldAmount, $userCharge);
+        }
+    }
+
+    /**
+     * The rates can change between the estimate and creation (requirements
+     * §6), so the actual is charged in full; the operator sees each case.
+     */
+    private function warnAboveHold(string $generationId, Nanodollars $heldAmount, Nanodollars $userCharge): void
+    {
+        Log::warning('A generation\'s actual charge exceeded its hold; the full charge was recorded.', [
+            'generation_id' => $generationId,
+            'hold_nanodollars' => $heldAmount->amount,
+            'charge_nanodollars' => $userCharge->amount,
+        ]);
     }
 
     /**

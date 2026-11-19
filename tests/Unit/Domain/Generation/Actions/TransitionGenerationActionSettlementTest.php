@@ -12,8 +12,10 @@ use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
@@ -25,6 +27,7 @@ use Tests\TestCase;
  */
 final class TransitionGenerationActionSettlementTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
@@ -56,9 +59,10 @@ final class TransitionGenerationActionSettlementTest extends TestCase
     /**
      * AC5–AC8: hold, provider cost and charge are all exact n$. With today's
      * rates ×1.25 is always exact; AC7's 5.001 rate is the one row that
-     * proves the ceil.
+     * proves the ceil. Only a charge above its hold warns: AC6's charge equal
+     * to its hold is the boundary, not an anomaly.
      *
-     * @return array<string, array{NewGenerationData, array<string, int>, array<string, string>, int, int, int}>
+     * @return array<string, array{NewGenerationData, array<string, int>, array<string, string>, int, int, int, bool}>
      */
     public static function settlements(): array
     {
@@ -75,6 +79,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
                 457_150_000,
                 305_510_000,
                 381_887_500,
+                false,
             ],
             'AC6 the docs maximum, charged exactly its hold' => [
                 $docsMaximum,
@@ -83,6 +88,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
                 467_343_750,
                 373_875_000,
                 467_343_750,
+                false,
             ],
             'AC7 the snapshot\'s own rates, with the markup rounded up' => [
                 $small,
@@ -91,6 +97,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
                 21_906_250,
                 14_390_013,
                 17_987_517,
+                false,
             ],
             'AC8 an actual above the hold' => [
                 $small,
@@ -99,6 +106,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
                 21_906_250,
                 25_590_000,
                 31_987_500,
+                true,
             ],
         ];
     }
@@ -115,6 +123,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
         int $hold,
         int $providerCost,
         int $userCharge,
+        bool $warned,
     ): void {
         $generation = $this->createGenerationFor(User::factory()->create(), $request);
         $this->assertSame([['hold', -$hold]], $this->ledgerEntriesFor($generation));
@@ -131,6 +140,21 @@ final class TransitionGenerationActionSettlementTest extends TestCase
         $this->assertSame($userCharge, $row->user_charge_nanodollars);
         $this->assertSame([['hold', -$hold], ['release', $hold], ['charge', -$userCharge]], $this->ledgerEntriesFor($generation));
         $this->assertSame(-$userCharge, $this->ledgerNetFor($generation));
+
+        $warnings = array_values(array_filter($this->loggedMessages(), fn (MessageLogged $message): bool => $message->level === 'warning'));
+
+        if (! $warned) {
+            $this->assertSame([], $warnings);
+
+            return;
+        }
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('A generation\'s actual charge exceeded its hold; the full charge was recorded.', $warnings[0]->message);
+        $this->assertSame(
+            ['generation_id' => $generation->id, 'hold_nanodollars' => $hold, 'charge_nanodollars' => $userCharge],
+            $warnings[0]->context,
+        );
     }
 
     /**
