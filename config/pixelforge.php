@@ -53,6 +53,13 @@ return [
      */
     'fake' => [
         /**
+         * Where the worker posts the fake's webhooks: the in-network app
+         * (compose service `app`, Apache on 8080), never the browser's host.
+         * `/webhooks/pixelforge` is appended.
+         */
+        'webhook_base_url' => env('PIXELFORGE_FAKE_WEBHOOK_URL') ?: 'http://app:8080',
+
+        /**
          * How long an accepted generation stays `processing`.
          */
         'processing_seconds' => filter_var(env('PIXELFORGE_FAKE_PROCESSING_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 3]]),

@@ -24,6 +24,7 @@ final class PixelforgeConfigTest extends TestCase
     ];
 
     private const array FAKE_VARIABLES = [
+        'PIXELFORGE_FAKE_WEBHOOK_URL',
         'PIXELFORGE_FAKE_PROCESSING_SECONDS',
         'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
     ];
@@ -140,6 +141,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
 
+        $this->assertSame('http://app:8080', $fake['webhook_base_url']);
         $this->assertSame(3, $fake['processing_seconds']);
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
     }
@@ -147,10 +149,12 @@ final class PixelforgeConfigTest extends TestCase
     public function test_set_fake_values_apply(): void
     {
         $fake = $this->fakeConfigWith([
+            'PIXELFORGE_FAKE_WEBHOOK_URL' => 'http://127.0.0.1:8080',
             'PIXELFORGE_FAKE_PROCESSING_SECONDS' => '0',
             'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '60',
         ]);
 
+        $this->assertSame('http://127.0.0.1:8080', $fake['webhook_base_url']);
         $this->assertSame(0, $fake['processing_seconds']);
         $this->assertSame(60, $fake['image_ttl_seconds']);
     }
@@ -161,7 +165,7 @@ final class PixelforgeConfigTest extends TestCase
     #[DataProvider('invalidFakeValues')]
     public function test_an_invalid_fake_value_means_the_default(string $value): void
     {
-        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, $value));
+        $fake = $this->fakeConfigWith(array_fill_keys(array_diff(self::FAKE_VARIABLES, ['PIXELFORGE_FAKE_WEBHOOK_URL']), $value));
 
         $this->assertSame(3, $fake['processing_seconds']);
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
