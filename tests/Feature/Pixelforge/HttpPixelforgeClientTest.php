@@ -7,6 +7,7 @@ namespace Tests\Feature\Pixelforge;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
@@ -34,6 +35,31 @@ final class HttpPixelforgeClientTest extends TestCase
     private const string LIGHTHOUSE_PROMPT = 'A lighthouse on a cliff at dawn, oil painting';
 
     private const string CREATE_URL = 'https://pixelforge.promptedit.dev/v1/generations';
+
+    public function test_the_http_driver_resolves_the_http_client_afresh_each_time(): void
+    {
+        config(['pixelforge.driver' => 'http']);
+
+        $first = $this->app->make(PixelforgeClient::class);
+        $second = $this->app->make(PixelforgeClient::class);
+
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $first);
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $second);
+        $this->assertNotSame($first, $second);
+    }
+
+    public function test_an_unknown_driver_fails_naming_it(): void
+    {
+        config(['pixelforge.driver' => 'htp']);
+
+        try {
+            $this->app->make(PixelforgeClient::class);
+            $this->fail('Expected a not-configured error.');
+        } catch (PixelforgeNotConfiguredException $exception) {
+            $this->assertStringContainsString('"htp"', $exception->getMessage());
+            $this->assertStringContainsString('PIXELFORGE_DRIVER', $exception->getMessage());
+        }
+    }
 
     public function test_a_create_is_posted_to_the_generations_endpoint(): void
     {
@@ -254,9 +280,9 @@ final class HttpPixelforgeClientTest extends TestCase
         ];
     }
 
-    private function client(): HttpPixelforgeClient
+    private function client(): PixelforgeClient
     {
-        return $this->app->make(HttpPixelforgeClient::class);
+        return $this->app->make(PixelforgeClient::class);
     }
 
     private function createExpectingAmbiguous(CreateGenerationPayloadData $payload): AmbiguousPixelforgeOutcomeException

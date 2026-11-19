@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use App\Models\User;
+use App\Support\Pixelforge\Contracts\PixelforgeClient;
+use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
@@ -55,6 +57,20 @@ final class BootsWithoutPixelforgeTest extends TestCase
         $this->assertSame([], self::pixelforgeNames(getenv()), 'getenv()');
         $this->assertSame([], self::pixelforgeNames($_ENV), '$_ENV');
         $this->assertSame([], self::pixelforgeNames($_SERVER), '$_SERVER');
+    }
+
+    public function test_the_client_settings_are_the_defaults_with_no_key(): void
+    {
+        $this->assertSame('http', config('pixelforge.driver'));
+        $this->assertSame('https://pixelforge.promptedit.dev/v1', config('pixelforge.base_url'));
+        $this->assertNull(config('pixelforge.api_key'));
+        $this->assertSame(5, config('pixelforge.connect_timeout_seconds'));
+        $this->assertSame(30, config('pixelforge.request_timeout_seconds'));
+    }
+
+    public function test_the_pixelforge_client_resolves_to_the_http_driver(): void
+    {
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $this->app->make(PixelforgeClient::class));
     }
 
     #[DataProvider('guestPages')]

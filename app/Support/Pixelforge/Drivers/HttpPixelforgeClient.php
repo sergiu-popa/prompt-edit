@@ -23,6 +23,11 @@ use JsonException;
  */
 final readonly class HttpPixelforgeClient implements PixelforgeClient
 {
+    /**
+     * The `pixelforge.driver` value that selects this client.
+     */
+    public const string DRIVER = 'http';
+
     public const string REPLAYED_HEADER = 'Idempotent-Replayed';
 
     public function __construct(

@@ -14,6 +14,7 @@ use Tests\TestCase;
 final class PixelforgeConfigTest extends TestCase
 {
     private const array CLIENT_VARIABLES = [
+        'PIXELFORGE_DRIVER',
         'PIXELFORGE_BASE_URL',
         'PIXELFORGE_API_KEY',
         'PIXELFORGE_CONNECT_TIMEOUT',
@@ -52,6 +53,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         $config = $this->pixelforgeConfigWith(array_fill_keys(self::CLIENT_VARIABLES, ''));
 
+        $this->assertSame('http', $config['driver']);
         $this->assertSame('https://pixelforge.promptedit.dev/v1', $config['base_url']);
         $this->assertNull($config['api_key']);
         $this->assertSame(5, $config['connect_timeout_seconds']);
@@ -61,12 +63,14 @@ final class PixelforgeConfigTest extends TestCase
     public function test_set_values_apply_and_the_timeouts_are_integers(): void
     {
         $config = $this->pixelforgeConfigWith([
+            'PIXELFORGE_DRIVER' => 'fake',
             'PIXELFORGE_BASE_URL' => 'https://pixelforge.test/v1',
             'PIXELFORGE_API_KEY' => 'pf_test_config_value',
             'PIXELFORGE_CONNECT_TIMEOUT' => '3',
             'PIXELFORGE_REQUEST_TIMEOUT' => '20',
         ]);
 
+        $this->assertSame('fake', $config['driver']);
         $this->assertSame('https://pixelforge.test/v1', $config['base_url']);
         $this->assertSame('pf_test_config_value', $config['api_key']);
         $this->assertSame(3, $config['connect_timeout_seconds']);
