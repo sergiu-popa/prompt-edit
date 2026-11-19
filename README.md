@@ -2,7 +2,7 @@
 
 Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs), a simulated asynchronous AI image API. It's being built as the take-home assessment for PromptEdit's Senior Product Engineer role. Users sign in, write a prompt, see what it will cost **before** they submit, and watch the generation finish live. They pay Pixelforge's exact cost **plus 25%**, and failed generations are free.
 
-**Stack:** Laravel 13 · Inertia 3 · Vue 3 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · Redis · Docker · GitHub Actions.
+**Stack:** Laravel 13 · Inertia 3 · Vue 3 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · Docker · GitHub Actions.
 
 ## Status
 
@@ -151,7 +151,6 @@ Defined in `docker-compose.yml`:
 | `scheduler` | `prompt-edit-scheduler` | Scheduler (`schedule:work`) |
 | `postgres` / `test-postgres` | `prompt-edit-postgres` / `-test-postgres` | Application and tmpfs-backed test databases (PostgreSQL 17) |
 | `playwright` | `prompt-edit-playwright` | Playwright 1.65.1 browsers (profile `e2e`; shares the app container's network) |
-| `redis` / `test-redis` | `prompt-edit-redis` / `-test-redis` | Application and test Redis instances |
 
 Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 
@@ -163,8 +162,8 @@ Xdebug is available by setting `XDEBUG_MODE` in `.env`.
 2. **Code style** — `composer lint` (Pint in `--test` mode).
 3. **Frontend checks** — `npm ci`, ESLint, Prettier check, `vue-tsc`, Vitest and a production build on Node 22.
 4. **Static analysis** — `composer stan` (PHPStan with result cache restored from the `main` branch).
-5. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against Postgres and Redis service containers. **Builds fail if coverage drops below 80%.**
-6. **E2E** — boots the CI image against Postgres + Redis services and runs Playwright inside the app container's network; uploads the report on failure.
+5. **Tests** — `php artisan migrate` followed by `php artisan test --coverage --min=80` against a Postgres service container. **Builds fail if coverage drops below 80%.**
+6. **E2E** — boots the CI image against a Postgres service and runs Playwright inside the app container's network; uploads the report on failure.
 7. **Docker push** — publishes the image to GHCR once all checks pass.
 8. **Cleanup** — deletes the per-run image cache entry.
 
