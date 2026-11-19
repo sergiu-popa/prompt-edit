@@ -132,13 +132,13 @@ CONF
 systemctl restart postgresql
 ss -ltn | grep 5432                                  # 127.0.0.1:5432 (and [::1]) only
 
-# 3. The role and the database. The password is generated, never echoed; psql -c can't
-#    interpolate :'pw', so the SQL comes on stdin.
+# 3. The role and the database. The password is generated and never echoed. No secret goes on
+#    a command line: sudo logs its full argv to /var/log/auth.log and every local user sees
+#    argv in ps. The shell's printf builtin builds the SQL and psql reads it from stdin; the
+#    password is hex, so it needs no quoting.
 PE_DB_PASSWORD="$(openssl rand -hex 24)"
-sudo -u postgres psql -q -v ON_ERROR_STOP=1 -v pw="$PE_DB_PASSWORD" <<'SQL'
-CREATE ROLE prompt_edit LOGIN PASSWORD :'pw';
-CREATE DATABASE prompt_edit OWNER prompt_edit ENCODING 'UTF8' TEMPLATE template0;
-SQL
+printf "CREATE ROLE prompt_edit LOGIN PASSWORD '%s';\nCREATE DATABASE prompt_edit OWNER prompt_edit ENCODING 'UTF8' TEMPLATE template0;\n" "$PE_DB_PASSWORD" \
+  | sudo -u postgres psql -q -v ON_ERROR_STOP=1
 
 # 4. shared/.env from the committed template (copy it up first, from your checkout:
 #    scp .env.production.example root@164.90.236.77:/root/), secrets filled in place
