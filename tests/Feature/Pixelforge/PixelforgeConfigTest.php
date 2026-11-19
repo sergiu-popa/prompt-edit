@@ -51,6 +51,17 @@ final class PixelforgeConfigTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * `phpunit.xml` forces the key empty, so a developer's real key in `.env`
+     * never reaches a test. Tests that need one set a sentinel. A failure
+     * names no value, so it can never print a real key.
+     */
+    public function test_the_suite_never_sees_a_developer_key(): void
+    {
+        $this->assertTrue(getenv('PIXELFORGE_API_KEY') === '', 'PIXELFORGE_API_KEY must be forced empty in phpunit.xml.');
+        $this->assertTrue(config('pixelforge.api_key') === null, 'pixelforge.api_key must be null in the test suite.');
+    }
+
     public function test_empty_values_mean_the_defaults(): void
     {
         $config = $this->pixelforgeConfigWith(array_fill_keys(self::CLIENT_VARIABLES, ''));

@@ -30,6 +30,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\StrayRequestException;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionParameter;
@@ -380,6 +381,20 @@ final class HttpPixelforgeClientTest extends TestCase
         $exception = $this->createExpectingAmbiguous(self::lighthousePayload());
 
         $this->assertInstanceOf(InvalidGenerationSnapshotException::class, $exception->getPrevious());
+    }
+
+    /**
+     * `Tests\TestCase` refuses every request no test has faked, so no test can
+     * ever reach the real API.
+     */
+    public function test_an_unfaked_create_is_refused_before_it_leaves_the_suite(): void
+    {
+        try {
+            $this->client()->createGeneration(self::lighthousePayload());
+            $this->fail('Expected the unfaked create to be refused.');
+        } catch (StrayRequestException $exception) {
+            $this->assertStringNotContainsString(self::PIXELFORGE_API_KEY, (string) $exception);
+        }
     }
 
     #[DataProvider('missingKeys')]
