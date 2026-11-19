@@ -28,9 +28,9 @@ final class HandlePixelforgeWebhookController extends Controller
         try {
             $delivery = WebhookDeliveryData::from(
                 $request->getContent(),
-                $request->header('Pixelforge-Event-Id'),
-                $request->header('Pixelforge-Event-Type'),
-                $request->header('Pixelforge-Delivery-Attempt'),
+                $request->header(WebhookDeliveryData::EVENT_ID_HEADER),
+                $request->header(WebhookDeliveryData::EVENT_TYPE_HEADER),
+                $request->header(WebhookDeliveryData::DELIVERY_ATTEMPT_HEADER),
             );
         } catch (InvalidWebhookDeliveryException $exception) {
             Log::error('Refused a signed Pixelforge webhook whose body cannot be read.', [

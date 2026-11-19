@@ -17,6 +17,15 @@ use JsonException;
 final readonly class WebhookDeliveryData
 {
     /**
+     * The unsigned delivery headers. They only inform: the signed body wins.
+     */
+    public const string EVENT_ID_HEADER = 'Pixelforge-Event-Id';
+
+    public const string EVENT_TYPE_HEADER = 'Pixelforge-Event-Type';
+
+    public const string DELIVERY_ATTEMPT_HEADER = 'Pixelforge-Delivery-Attempt';
+
+    /**
      * Postgres `integer`, so a stored attempt can never raise a DB error.
      */
     private const int MAX_DELIVERY_ATTEMPT = 2_147_483_647;

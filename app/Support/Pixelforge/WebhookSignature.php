@@ -18,6 +18,11 @@ use Illuminate\Container\Attributes\Config;
  */
 final readonly class WebhookSignature
 {
+    /**
+     * The request header that carries the signature.
+     */
+    public const string HEADER = 'Pixelforge-Signature';
+
     public function __construct(
         #[Config('pixelforge.webhook_secret')]
         private ?string $secret,

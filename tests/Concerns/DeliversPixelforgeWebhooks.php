@@ -6,6 +6,8 @@ namespace Tests\Concerns;
 
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
+use App\Support\Pixelforge\DataTransferObjects\WebhookDeliveryData;
+use App\Support\Pixelforge\WebhookSignature;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -84,10 +86,10 @@ trait DeliversPixelforgeWebhooks
         $headers = array_filter([
             'Content-Type' => 'application/json',
             'User-Agent' => 'Pixelforge-Webhooks/1.0',
-            'Pixelforge-Event-Id' => is_string($envelope['id'] ?? null) ? $envelope['id'] : null,
-            'Pixelforge-Event-Type' => is_string($envelope['type'] ?? null) ? $envelope['type'] : null,
-            'Pixelforge-Delivery-Attempt' => '1',
-            'Pixelforge-Signature' => $this->pixelforgeSignatureFor($body, CarbonImmutable::now()->getTimestamp()),
+            WebhookDeliveryData::EVENT_ID_HEADER => is_string($envelope['id'] ?? null) ? $envelope['id'] : null,
+            WebhookDeliveryData::EVENT_TYPE_HEADER => is_string($envelope['type'] ?? null) ? $envelope['type'] : null,
+            WebhookDeliveryData::DELIVERY_ATTEMPT_HEADER => '1',
+            WebhookSignature::HEADER => $this->pixelforgeSignatureFor($body, CarbonImmutable::now()->getTimestamp()),
             ...$headers,
         ], fn (?string $value): bool => $value !== null);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\Pixelforge\DataTransferObjects\WebhookDeliveryData;
 use App\Support\Pixelforge\Exceptions\InvalidWebhookSignatureException;
 use App\Support\Pixelforge\Exceptions\WebhookSecretNotConfiguredException;
 use App\Support\Pixelforge\WebhookSignature;
@@ -27,17 +28,17 @@ final readonly class VerifyPixelforgeWebhookSignature
     public function handle(Request $request, Closure $next): Response
     {
         try {
-            $this->signature->verify($request->getContent(), $request->header('Pixelforge-Signature'));
+            $this->signature->verify($request->getContent(), $request->header(WebhookSignature::HEADER));
         } catch (WebhookSecretNotConfiguredException) {
             Log::critical('Refused a Pixelforge webhook: no webhook secret is configured.', [
-                'event_id' => $request->header('Pixelforge-Event-Id'),
+                'event_id' => $request->header(WebhookDeliveryData::EVENT_ID_HEADER),
             ]);
 
             return response('', Response::HTTP_INTERNAL_SERVER_ERROR);
         } catch (InvalidWebhookSignatureException $exception) {
             Log::warning('Refused a Pixelforge webhook with an invalid signature.', [
                 'reason' => $exception->reason->value,
-                'event_id' => $request->header('Pixelforge-Event-Id'),
+                'event_id' => $request->header(WebhookDeliveryData::EVENT_ID_HEADER),
             ]);
 
             return response('', Response::HTTP_BAD_REQUEST);
