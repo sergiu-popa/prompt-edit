@@ -142,7 +142,7 @@ final class EstimateGenerationCostActionTest extends TestCase
             $snapshotOverrides['rates'][$type] = (string) BigDecimal::ofUnscaledValue($nanodollarsPerToken, self::RATE_STRING_SCALE);
         }
 
-        return array_replace_recursive(self::pinnedPricingSnapshot(), $snapshotOverrides);
+        return self::pinnedPricingSnapshotWith($snapshotOverrides);
     }
 
     /**

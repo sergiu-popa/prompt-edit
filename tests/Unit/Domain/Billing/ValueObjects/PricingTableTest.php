@@ -55,7 +55,7 @@ final class PricingTableTest extends TestCase
     #[DataProvider('acceptedScalarEdges')]
     public function test_accepts_scalar_rules_at_their_edges(string $key, int $value, callable $read): void
     {
-        $table = PricingTable::fromSnapshot(self::snapshotWith(['tokens' => [$key => $value]]));
+        $table = PricingTable::fromSnapshot(self::pinnedPricingSnapshotWith(['tokens' => [$key => $value]]));
 
         $this->assertSame($value, $read($table));
     }
@@ -65,7 +65,7 @@ final class PricingTableTest extends TestCase
         $this->expectException(InvalidRateException::class);
         $this->expectExceptionMessage('"0.0005"');
 
-        PricingTable::fromSnapshot(self::snapshotWith(['rates' => ['input_text_tokens' => '0.0005']]));
+        PricingTable::fromSnapshot(self::pinnedPricingSnapshotWith(['rates' => ['input_text_tokens' => '0.0005']]));
     }
 
     /**
@@ -92,7 +92,7 @@ final class PricingTableTest extends TestCase
         $this->expectException(InvalidPricingException::class);
         $this->expectExceptionMessage($expectedPath);
 
-        PricingTable::fromSnapshot(self::snapshotWith(['tokens' => $tokens]));
+        PricingTable::fromSnapshot(self::pinnedPricingSnapshotWith(['tokens' => $tokens]));
     }
 
     /**
@@ -157,7 +157,7 @@ final class PricingTableTest extends TestCase
             }
         }
 
-        $table = PricingTable::fromSnapshot(self::snapshotWith(['tokens' => ['output' => $distinctCells]]));
+        $table = PricingTable::fromSnapshot(self::pinnedPricingSnapshotWith(['tokens' => ['output' => $distinctCells]]));
 
         foreach ($expectations as [$quality, $size, $cell]) {
             $this->assertSame($cell, $table->outputTokens($quality, $size));
@@ -237,16 +237,7 @@ final class PricingTableTest extends TestCase
         $this->expectException(InvalidPricingException::class);
         $this->expectExceptionMessage($expectedPath);
 
-        PricingTable::fromSnapshot(self::snapshotWith(['tokens' => $tokens]));
-    }
-
-    /**
-     * @param  array<string, mixed>  $overrides
-     * @return array<string, mixed>
-     */
-    private static function snapshotWith(array $overrides): array
-    {
-        return array_replace_recursive(self::pinnedPricingSnapshot(), $overrides);
+        PricingTable::fromSnapshot(self::pinnedPricingSnapshotWith(['tokens' => $tokens]));
     }
 
     /**

@@ -29,6 +29,17 @@ trait InteractsWithPricing
     }
 
     /**
+     * The pinned snapshot with some leaves replaced; keys are never removed.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected static function pinnedPricingSnapshotWith(array $overrides): array
+    {
+        return array_replace_recursive(self::pinnedPricingSnapshot(), $overrides);
+    }
+
+    /**
      * The snapshot's rates as Pixelforge publishes them: USD per 1M tokens, as decimal strings.
      *
      * @return array<string, string>
