@@ -72,3 +72,37 @@ The D-15 and D-16 rows in `requirements.md` ride with the code commits that intr
   - Fix, if wanted: guard with the same `field`-naming error as `wholeNumber`.
 
   — fixed in `cfec57a`: `objectAt()` guards the per-quality output and reasoning entries, and a non-string prompt throws; Vitest rows cover null, number, array and undefined.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole `[PE-002]` story diff (`git diff origin/main...HEAD`, `0e971f0..240c219`), with a close look at the round 1 fix commits `9078ac3`, `b2694fc`, `66059a2` and `cfec57a`.
+
+Checks run on HEAD (`240c219`):
+- `make check`: Pint passes on 63 files, Larastan reports no errors, and PHPUnit runs 251 tests with 801 assertions, all passing.
+- `make js-check` and `make js-test`: ESLint, Prettier and vue-tsc are clean, and Vitest runs 57 tests (52 in `estimate.test.ts`), all passing.
+
+### Round 1 follow-up
+
+- **Prompt log (`9078ac3`):** Prompt 7 (`Merged. Continue with 002`) is appended verbatim under the Session 2 heading, in a bookkeeping-only commit.
+- **Image token overflow (`b2694fc`):** `EstimateGenerationCostAction::imageTokens()` (`app/Domain/Billing/Actions/EstimateGenerationCostAction.php:94-103`) catches brick's `IntegerOverflowException` and rethrows it as `NanodollarOverflowException::forTokenCount()`, keeping the previous exception. `test_an_image_token_count_beyond_64_bits_surfaces_as_a_nanodollar_overflow` pins both the type and the message. This restores PE-001's rule that Billing overflow surfaces only as `NanodollarOverflowException`. The text-token `toInt()` calls cannot overflow, because `mb_strlen` of any string that fits in memory stays far below `PHP_INT_MAX / 115`.
+- **Shared override helper (`66059a2`):** `InteractsWithPricing::pinnedPricingSnapshotWith()` replaces the private `snapshotWith()` copy in `PricingTableTest`. The action test keeps only its n$ → rate-string conversion and then delegates. No `array_replace_recursive` copy is left in the tests.
+- **Named-field errors in TS (`cfec57a`):**
+  - `objectAt()` guards the per-quality output table and reasoning range, and rejects `null`, numbers and arrays with an `Error` that names the path.
+  - A non-string prompt is rejected before `[...prompt]`.
+  - `entryFor` now returns `unknown`, so every leaf still goes through `wholeNumber`, and the removed generic cannot hide a type.
+  - The new Vitest rows assert the full messages.
+  - A grep of `lib/estimate.ts` still finds no `Math.`, `toFixed`, `parseFloat` or decimal literal.
+
+### Commit hygiene
+
+- Each round 1 fix is its own commit with its tests, and carries a short body only where the reason isn't obvious (`b2694fc`, `cfec57a`).
+- The bookkeeping is kept separate: `9078ac3` holds only the prompt log, and `240c219` holds only `review.md`.
+- Every subject is in `[PE-002] Imperative …` form, at most 72 characters, with no trailing period, and every commit carries the trailer.
+
+### Carried over
+
+- The round 1 PR-size Warning stays acknowledged. The branch is now about 2,430 added lines. **The user must still choose before the PR is opened:** one PR of 20 commits, or sequential PRs split at `f6c9ed1`, with the TypeScript mirror `57d2358`, `fc34829` and `cfec57a` going in the second. The PR description must state the size and the choice.
+
+No new findings. No Critical items remain and there are no unchecked Warnings.
