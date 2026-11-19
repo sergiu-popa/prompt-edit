@@ -49,12 +49,35 @@ function rowLabels(wrapper: VueWrapper): string[] {
 }
 
 describe('EstimatePanel', () => {
-    it("headlines the defaults' range and typical figure in a polite live region", () => {
+    it("headlines the defaults' range and typical figure", () => {
         const wrapper = mountPanel('', 'medium', '1024x1024');
 
-        const headline = wrapper.get('[aria-live="polite"]');
         expect(wrapper.get('h2').text()).toBe('Estimated cost');
-        expect(visibleText(headline)).toBe('$0.0581 – $0.0863 typically $0.0722');
+        expect(visibleText(wrapper.get('[data-headline]'))).toBe('$0.0581 – $0.0863 typically $0.0722');
+    });
+
+    it('announces the headline from a text-only polite live region, so opening a tip is not read as an update', () => {
+        const wrapper = mountPanel('', 'medium', '1024x1024');
+
+        const liveRegions = wrapper.findAll('[aria-live]');
+        expect(liveRegions).toHaveLength(1);
+        expect(liveRegions[0]!.attributes('aria-live')).toBe('polite');
+        expect(liveRegions[0]!.text()).toBe('Estimated cost $0.0581 to $0.0863, typically $0.0722');
+        expect(liveRegions[0]!.element.children).toHaveLength(0);
+    });
+
+    it('announces the new figures when the estimate changes', async () => {
+        const wrapper = mountPanel('', 'medium', '1024x1024');
+        const estimate = estimateGenerationCost(fixturePricing, {
+            prompt: LIGHTHOUSE_PROMPT,
+            quality: 'high',
+            size: '1536x1024',
+            reference_image_count: 1,
+        });
+
+        await wrapper.setProps({ estimate, quality: 'high', size: '1536x1024', referenceImageCount: 1 });
+
+        expect(wrapper.get('[aria-live="polite"]').text()).toBe('Estimated cost $0.3477 to $0.4571, typically $0.4024');
     });
 
     it('asks for a prompt while it is empty', () => {
@@ -73,7 +96,7 @@ describe('EstimatePanel', () => {
         expect(breakdownRow(wrapper, 'Pixelforge cost')).toStrictEqual(['', '$0.2705 – $0.3581']);
         expect(breakdownRow(wrapper, '+ 25%')).toStrictEqual(['', '$0.0676 – $0.0895']);
         expect(breakdownRow(wrapper, 'You pay')).toStrictEqual(['', '$0.3382 – $0.4476']);
-        expect(visibleText(wrapper.get('[aria-live="polite"]'))).toBe('$0.3382 – $0.4476 typically $0.3929');
+        expect(visibleText(wrapper.get('[data-headline]'))).toBe('$0.3382 – $0.4476 typically $0.3929');
     });
 
     it('adds a references line and marks it exact, as in the full AC4 table', () => {
@@ -95,7 +118,7 @@ describe('EstimatePanel', () => {
         expect(breakdownRow(wrapper, 'Pixelforge cost')).toStrictEqual(['', '$0.2782 – $0.3657']);
         expect(breakdownRow(wrapper, '+ 25%')).toStrictEqual(['', '$0.0695 – $0.0914']);
         expect(breakdownRow(wrapper, 'You pay')).toStrictEqual(['', '$0.3477 – $0.4571']);
-        expect(visibleText(wrapper.get('[aria-live="polite"]'))).toBe('$0.3477 – $0.4571 typically $0.4024');
+        expect(visibleText(wrapper.get('[data-headline]'))).toBe('$0.3477 – $0.4571 typically $0.4024');
     });
 
     it('multiplies the references line by the counted rows', () => {
@@ -155,7 +178,8 @@ describe('EstimatePanel', () => {
     it('shows a message instead of numbers when the estimate is unavailable', () => {
         const wrapper = mountUnavailable();
 
-        expect(visibleText(wrapper.get('[aria-live="polite"]'))).toBe(UNAVAILABLE);
+        expect(visibleText(wrapper.get('[data-headline]'))).toBe(UNAVAILABLE);
+        expect(wrapper.get('[aria-live="polite"]').text()).toBe(UNAVAILABLE);
         expect(wrapper.text()).not.toContain('$');
         expect(wrapper.find('table').exists()).toBe(false);
     });

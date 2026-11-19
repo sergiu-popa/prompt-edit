@@ -28,7 +28,7 @@ function radio(wrapper: VueWrapper, legend: string, label: string) {
 }
 
 function headline(wrapper: VueWrapper): string {
-    return visibleText(wrapper.get('aside [aria-live="polite"]'));
+    return visibleText(wrapper.get('aside [data-headline]'));
 }
 
 function counter(wrapper: VueWrapper): string {

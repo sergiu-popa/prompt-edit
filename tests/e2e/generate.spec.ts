@@ -17,11 +17,16 @@ async function expectBreakdownInsideCard(page: Page): Promise<void> {
     await expectInsideContentBox(card, card.locator('table, button'));
 }
 
-/** The live headline, read as rendered, so closed exact-value tips are not part of it. */
-async function expectEstimate(page: Page, range: string, typical: string): Promise<void> {
-    const headline = estimatePanel(page).locator('[aria-live="polite"]');
+function headline(page: Page): Locator {
+    return estimatePanel(page).locator('[data-headline]');
+}
 
-    await expect(headline).toHaveText(`${range} typically ${typical}`, { useInnerText: true });
+/** The headline, read as rendered so closed exact-value tips are not part of it, and what the live region announces. */
+async function expectEstimate(page: Page, range: string, typical: string): Promise<void> {
+    await expect(headline(page)).toHaveText(`${range} typically ${typical}`, { useInnerText: true });
+    await expect(estimatePanel(page).locator('[aria-live="polite"]')).toHaveText(
+        `Estimated cost ${range.replace(' – ', ' to ')}, typically ${typical}`,
+    );
 }
 
 /** Every XHR or fetch the page sends from now on. */
@@ -62,7 +67,7 @@ test('estimates the cost live as the prompt, quality, size and references change
     await expect(page.getByRole('radio', { name: 'Landscape' })).toBeChecked();
     await expectEstimate(page, '$0.3382 – $0.4476', '$0.3929');
 
-    const max = estimatePanel(page).locator('[aria-live="polite"]').getByRole('button', { name: '$0.4476' });
+    const max = headline(page).getByRole('button', { name: '$0.4476' });
     await max.focus();
     await expect(page.getByRole('tooltip', { name: '$0.447575000' })).toBeVisible();
     await expect(max).toHaveAccessibleDescription('$0.447575000');
@@ -86,7 +91,7 @@ test('estimates the cost live as the prompt, quality, size and references change
     await page.getByLabel('Reference image 1', { exact: true }).fill('https://example.com/style.png');
     await expectEstimate(page, '$0.3477 – $0.4571', '$0.4024');
 
-    const maxWithReference = estimatePanel(page).locator('[aria-live="polite"]').getByRole('button', { name: '$0.4571' });
+    const maxWithReference = headline(page).getByRole('button', { name: '$0.4571' });
     await maxWithReference.focus();
     await expect(page.getByRole('tooltip', { name: '$0.457137500' })).toBeVisible();
     await expect(maxWithReference).toHaveAccessibleDescription('$0.457137500');
@@ -110,7 +115,7 @@ test('a tap toggles the exact value, and a tap elsewhere closes it', async ({ pa
     await expect(page).toHaveURL('/dashboard');
     await expectEstimate(page, '$0.0581 – $0.0863', '$0.0722');
 
-    const max = estimatePanel(page).locator('[aria-live="polite"]').getByRole('button', { name: '$0.0863' });
+    const max = headline(page).getByRole('button', { name: '$0.0863' });
     const exactMax = page.getByRole('tooltip', { name: '$0.086250000' });
 
     await max.tap();
