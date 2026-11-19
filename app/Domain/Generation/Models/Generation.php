@@ -1,0 +1,86 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Generation\Models;
+
+use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Shared\Enums\ImageQuality;
+use App\Domain\Shared\Enums\ImageSize;
+use Database\Factories\GenerationFactory;
+use Illuminate\Database\Eloquent\Attributes\DateFormat;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * One image generation, keyed by the ULID that is also its Pixelforge
+ * idempotency key and `metadata.generation_id` (D-05).
+ *
+ * Every date is written with its UTC offset, so the database session's
+ * timezone never shifts a Pixelforge instant (D-10).
+ */
+#[DateFormat('Y-m-d H:i:sP')]
+#[Fillable([
+    'user_id',
+    'status',
+    'prompt',
+    'size',
+    'quality',
+    'reference_images',
+    'user_estimate_min_nanodollars',
+    'user_estimate_typical_nanodollars',
+    'user_estimate_max_nanodollars',
+    'provider_id',
+    'input_text_tokens',
+    'input_image_tokens',
+    'output_tokens',
+    'reasoning_tokens',
+    'rates',
+    'error_code',
+    'error_message',
+    'error_param',
+    'local_failure_reason',
+    'image_url',
+    'image_url_expires_at',
+    'provider_created_at',
+    'started_at',
+    'completed_at',
+])]
+#[UseFactory(GenerationFactory::class)]
+final class Generation extends Model
+{
+    /** @use HasFactory<GenerationFactory> */
+    use HasFactory, HasUlids;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'status' => GenerationStatus::class,
+            'size' => ImageSize::class,
+            'quality' => ImageQuality::class,
+            'reference_images' => 'array',
+            'user_estimate_min_nanodollars' => 'integer',
+            'user_estimate_typical_nanodollars' => 'integer',
+            'user_estimate_max_nanodollars' => 'integer',
+            'input_text_tokens' => 'integer',
+            'input_image_tokens' => 'integer',
+            'output_tokens' => 'integer',
+            'reasoning_tokens' => 'integer',
+            'rates' => 'array',
+            'local_failure_reason' => LocalFailureReason::class,
+            'image_url_expires_at' => 'immutable_datetime',
+            'provider_created_at' => 'immutable_datetime',
+            'started_at' => 'immutable_datetime',
+            'completed_at' => 'immutable_datetime',
+            'created_at' => 'immutable_datetime',
+            'updated_at' => 'immutable_datetime',
+        ];
+    }
+}
