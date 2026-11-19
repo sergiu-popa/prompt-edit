@@ -27,7 +27,7 @@ test('signs up, lands on the signed-in home and signs out', async ({ page }, tes
 
     await expect(page).toHaveURL('/dashboard');
     await expect(page.getByRole('banner')).toContainText(name);
-    await expect(page.getByRole('heading', { level: 1, name: "You're signed in." })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'New image' })).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     await page.getByRole('button', { name: 'Sign out' }).click();

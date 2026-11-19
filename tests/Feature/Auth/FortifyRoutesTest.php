@@ -66,7 +66,7 @@ final class FortifyRoutesTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->get('/dashboard')
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Dashboard'));
+            ->assertInertia(fn (Assert $page) => $page->component('Generations/Create'));
     }
 
     public function test_a_guest_sees_the_sign_in_page(): void
