@@ -49,3 +49,11 @@ steer the work.
 **Prompt 5**
 
 > Don't do a story for the project rename and scaffolding, bootstrap, do it here directly. Keep the stories only for building and functionality.
+
+---
+
+## 2026-11-19 — Session 2: story pipeline
+
+**Prompt 6**
+
+> All PRs have been merged. Let's run the pipeline for each story, in order, 1 by 1, auditor included. Once I review and merge a PR, you'll start the next one. Don't forget about GIT hygiene, I need to keep up with the new code.
