@@ -10,9 +10,15 @@ import type { AuthProps, AuthUser } from '@/types/auth';
  * same object pages reach through `@inertiajs/vue3` and `useForm`, so spying on it here
  * sees every visit.
  */
-export const page = reactive<{ props: { auth: AuthProps; errors: Record<string, string> } }>({
+export const page = reactive<{ url: string; props: { auth: AuthProps; errors: Record<string, string> } }>({
+    url: '/',
     props: { auth: { user: null }, errors: {} },
 });
+
+/** The URL Inertia reports for the current page, path and query as the server sent them. */
+export function givenThePageIsAt(url: string): void {
+    page.url = url;
+}
 
 export function givenAGuest(): void {
     page.props.auth = { user: null };
