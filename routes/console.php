@@ -11,8 +11,10 @@ Artisan::command('inspire', function () {
 
 /*
  * Before Hestia's 05:10 backup of the admin user, which carries the dump (D-22). Only where
- * DB_BACKUP_PATH is set, so local `schedule:work` and CI never run it.
+ * DB_BACKUP_PATH is set, so local `schedule:work` and CI never run it. withoutOverlapping()
+ * uses the database cache lock (D-20).
  */
 Schedule::command(BackupDatabaseCommand::class)
     ->dailyAt('04:30')
+    ->withoutOverlapping()
     ->when(fn (): bool => filled(config('database.backups.path')));

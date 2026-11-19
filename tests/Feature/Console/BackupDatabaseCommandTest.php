@@ -162,12 +162,17 @@ final class BackupDatabaseCommandTest extends TestCase
         $this->assertPasswordNeverLogged();
     }
 
-    public function test_the_schedule_runs_it_at_0430_only_where_a_backup_path_is_set(): void
+    /**
+     * `withoutOverlapping()` takes the database cache lock (D-20), the pattern later every-minute
+     * schedules copy.
+     */
+    public function test_the_schedule_runs_it_at_0430_without_overlapping_only_where_a_backup_path_is_set(): void
     {
         $event = collect($this->app->make(Schedule::class)->events())
             ->sole(fn (ScheduledEvent $event): bool => str_contains((string) $event->command, 'app:backup-database'));
 
         $this->assertSame('30 4 * * *', $event->expression);
+        $this->assertTrue($event->withoutOverlapping);
 
         config(['database.backups.path' => null]);
         $this->assertFalse($event->filtersPass($this->app));
