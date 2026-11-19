@@ -45,13 +45,24 @@ task('deploy:ci-gate', function () {
         throw error('The CI gate needs the GitHub CLI: install gh and run `gh auth login`, then deploy again.');
     }
 
-    $head = trim(runLocally('git ls-remote ' . quote($repository) . ' ' . quote("refs/heads/$target")));
+    $ref = "refs/heads/$target";
+    $listing = runLocally('git ls-remote ' . quote($repository) . ' ' . quote($ref));
 
-    if ($head === '') {
-        throw error("Refusing to deploy: '$target' is not a branch on origin. Only a pushed branch with green CI can be deployed.");
+    // ls-remote matches the pattern against the tail of every ref, so `refs/heads/main` also
+    // lists a branch named `x/refs/heads/main`. Only the exact ref counts.
+    $sha = null;
+
+    foreach (explode("\n", trim($listing)) as $line) {
+        [$candidate, $name] = array_pad(explode("\t", $line, 2), 2, '');
+
+        if ($name === $ref) {
+            $sha = $candidate;
+        }
     }
 
-    $sha = strtok($head, "\t");
+    if ($sha === null) {
+        throw error("Refusing to deploy: '$target' is not a branch on origin. Only a pushed branch with green CI can be deployed.");
+    }
 
     $runs = json_decode(runLocally(
         'gh run list --repo ' . quote($githubRepo) . ' --workflow ci.yml --commit ' . quote($sha) . ' --limit 1 --json status,conclusion,url',
