@@ -38,6 +38,8 @@ host('164.90.236.77')
 task('deploy:ci-gate', function () {
     $target = get('target');
     $repository = get('repository');
+    // owner/name for gh, derived from the git URL so the two can't drift apart.
+    $githubRepo = preg_replace('~^git@github\.com:|\.git$~', '', $repository);
 
     if (! testLocally('command -v gh >/dev/null')) {
         throw error('The CI gate needs the GitHub CLI: install gh and run `gh auth login`, then deploy again.');
@@ -52,7 +54,7 @@ task('deploy:ci-gate', function () {
     $sha = strtok($head, "\t");
 
     $runs = json_decode(runLocally(
-        'gh run list --repo sergiu-popa/prompt-edit --workflow ci.yml --commit ' . quote($sha) . ' --limit 1 --json status,conclusion,url',
+        'gh run list --repo ' . quote($githubRepo) . ' --workflow ci.yml --commit ' . quote($sha) . ' --limit 1 --json status,conclusion,url',
     ), true);
 
     if (! is_array($runs) || $runs === []) {
