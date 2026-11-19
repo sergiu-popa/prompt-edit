@@ -39,17 +39,25 @@ trait InteractsWithGenerations
     }
 
     /**
-     * The docs' example, created through the action for a new user: high,
-     * 1536x1024 and one reference image.
+     * The docs' example request: high, 1536x1024 and one reference image.
+     * Static, so data providers can build it too.
      */
-    protected function givenTheLighthouseGeneration(): Generation
+    protected static function lighthouseRequest(): NewGenerationData
     {
-        return $this->createGenerationFor(User::factory()->create(), new NewGenerationData(
+        return new NewGenerationData(
             self::LIGHTHOUSE_PROMPT,
             ImageSize::Landscape,
             ImageQuality::High,
             ['https://example.com/lighthouse-reference.png'],
-        ));
+        );
+    }
+
+    /**
+     * The docs' example, created through the action for a new user.
+     */
+    protected function givenTheLighthouseGeneration(): Generation
+    {
+        return $this->createGenerationFor(User::factory()->create(), self::lighthouseRequest());
     }
 
     /**

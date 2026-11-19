@@ -70,7 +70,7 @@ final class TransitionGenerationActionSettlementTest extends TestCase
      */
     public static function settlements(): array
     {
-        $lighthouse = new NewGenerationData(self::LIGHTHOUSE_PROMPT, ImageSize::Landscape, ImageQuality::High, ['https://example.com/lighthouse-reference.png']);
+        $lighthouse = self::lighthouseRequest();
         $docsMaximum = new NewGenerationData(str_repeat('a', 400), ImageSize::Landscape, ImageQuality::High, ['https://example.com/one.png', 'https://example.com/two.png']);
         $small = new NewGenerationData(str_repeat('b', 50), ImageSize::Square, ImageQuality::Low, []);
         $smallUsage = ['input_text_tokens' => 13, 'input_image_tokens' => 0, 'output_tokens' => 280, 'reasoning_tokens' => 250, 'total_tokens' => 543];
