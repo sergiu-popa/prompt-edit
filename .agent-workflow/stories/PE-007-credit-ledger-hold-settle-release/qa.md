@@ -81,6 +81,8 @@ To clear it, either:
 
 Choosing between these is a scope decision for the story owner.
 
+- [x] **Resolved (`cfa63c4`), option 1.** The AC text stands, so the code now meets it. `GenerationSnapshot::from()` logs at error level, with `generation_id` (from `metadata.generation_id`, null when absent), `provider_id` and the error, before it throws for a succeeded object without `usage`, `rates`, `image_url` or `completed_at`. The AC18 test is now `test_a_succeeded_object_without_usage_is_refused_logged_and_writes_nothing` and asserts the throw, the unchanged row, the single hold and the exact log entry. `GenerationSnapshotTest` now boots the app, asserts the log for all four missing fields, a null id when metadata has none, and no log for a valid snapshot. PE-008's hand-off stays: it adds the webhook event id and decides the response. `chain check` exit 0: Pint PASS (124 files), Larastan no errors, PHPUnit 610 passed (2,751 assertions), ESLint, Prettier and vue-tsc clean, Vitest 107 passed.
+
 No other AC fails. No Critical review items are open.
 
 ## Visual verification
