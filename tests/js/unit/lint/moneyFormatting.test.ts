@@ -3,7 +3,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * D-24: only resources/js/lib/money.ts formats money. These run the project's real
+ * D-25: only resources/js/lib/money.ts formats money. These run the project's real
  * ESLint config, so the rule is proven where `make js-check` applies it.
  */
 const eslint = new ESLint({ cwd: fileURLToPath(new URL('../../../..', import.meta.url)) });

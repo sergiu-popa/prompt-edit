@@ -6,7 +6,7 @@ Run on branch `pe-005-generate-page-live-estimate` from `d5f29a4` (QA recorded).
 
 ## Scope
 
-I checked the whole `[PE-005]` diff (`git diff main...HEAD`) against `story.md` AC1–13, `plan.md`, the review, both QA rounds and `.agent-workflow/CLAUDE.md`. Where the auditor checklist mentions Livewire, the project's Inertia/Vue rules apply instead. I gave the touch exact-value tip (AC5) the closest look, because the user asked for it to be fixed. PR size is not a finding, since one PR per story is the rule. PE-005's D-24 is left as it is. If PE-006 (#15) merges first, the orchestrator renumbers it.
+I checked the whole `[PE-005]` diff (`git diff main...HEAD`) against `story.md` AC1–13, `plan.md`, the review, both QA rounds and `.agent-workflow/CLAUDE.md`. Where the auditor checklist mentions Livewire, the project's Inertia/Vue rules apply instead. I gave the touch exact-value tip (AC5) the closest look, because the user asked for it to be fixed. PR size is not a finding, since one PR per story is the rule. PE-005's This story's decision was D-24. PE-006 (#15) merged first with its own D-24, so the orchestrator renumbered this one to D-25 when it rebased the branch.
 
 ## What was verified
 

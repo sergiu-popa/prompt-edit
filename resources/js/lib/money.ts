@@ -1,5 +1,5 @@
 /**
- * The only place the UI formats money (D-24). Amounts arrive as integer
+ * The only place the UI formats money (D-25). Amounts arrive as integer
  * nanodollars (n$, 10⁻⁹ USD) and are formatted with bigint arithmetic only,
  * so no amount ever passes through a float.
  *

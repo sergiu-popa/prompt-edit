@@ -10,7 +10,7 @@ Checks run on HEAD:
 - `make check`:
   - Pint passes on 87 files and Larastan reports no errors.
   - PHPUnit runs 415 tests with 1,592 assertions, all passing.
-  - ESLint (with the new D-24 rule) and vue-tsc are clean.
+  - ESLint (with the new D-25 rule) and vue-tsc are clean.
   - Vitest runs 262 tests in 21 files, all passing.
 - `make e2e`: 14 Playwright tests pass in the `desktop` and `mobile` projects, including `generate.spec.ts` in both.
 - `.github/workflows/ci.yml` runs `npm run lint` and `npm test`, so CI enforces the AC13 rule and its test.
@@ -78,7 +78,7 @@ The history reads cleanly:
 - subjects in `[PE-005] Imperative …` form, at most 67 characters, and every commit has the trailer.
 
 Notes on individual commits:
-- The D-24 row in `requirements.md` comes with the lint rule in `3938def`, as the plan specified. PE-002 and PE-003 did the same, so this is fine.
+- The D-25 row in `requirements.md` comes with the lint rule in `3938def`, as the plan specified. PE-002 and PE-003 did the same, so this is fine.
 - The four browser-check follow-ups (`9ad2606`, `86c30b3`, `db3cc16`, `4665d94`) are each one small change, and the Engineer notes explain them.
   - Only `db3cc16` changes behaviour, and it adds a test.
   - The other three change only CSS and layout, and the existing suites still pass on them.

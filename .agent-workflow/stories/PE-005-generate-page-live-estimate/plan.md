@@ -7,7 +7,7 @@ The `dashboard` route keeps its URL and name, and a thin invokable controller no
 Each task is one TDD commit: write the failing test first, then the code, and run `make check` green before committing. Also run `make e2e` for tasks 3, 4, 11, 12, 14 and 15, because they touch a page, the layout or a spec. Tasks 1–12 are the page without reference images. Tasks 13–15 add the reference rows (AC9, the last AC3 step and the AC4 references line), so the PR can still be cut after task 12 (see Size).
 
 - [x] 1. Add `lib/money.ts` (`formatUsd`, `formatUsdExact`), test-first in `tests/js/unit/lib/money.test.ts` for every AC12 and AC13 row plus the money boundary rows below. Commit: `[PE-005] Format nanodollars in lib/money.ts`
-- [x] 2. Add the money-formatting lint rule to `eslint.config.js`, test-first in `tests/js/unit/lint/moneyFormatting.test.ts` through ESLint's Node API, and record D-24. Commit: `[PE-005] Lint against money formatting outside lib/money.ts`
+- [x] 2. Add the money-formatting lint rule to `eslint.config.js`, test-first in `tests/js/unit/lint/moneyFormatting.test.ts` through ESLint's Node API, and record D-25. Commit: `[PE-005] Lint against money formatting outside lib/money.ts`
 - [x] 3. Serve the signed-in home through `ShowGenerationFormController` with the `pricing` and `limits` props. Add `GenerationInputLimits` and `types/generation.ts`. Move `pages/Dashboard.vue` to `pages/Generations/Create.vue` as a typed stub (Head "Generate", h1 "New image"), and update the `Dashboard` component name in `FortifyRoutesTest` and `SignInTest` and the heading in `auth.spec.ts`. Test-first: `GenerationFormPageTest` (AC1). Commit: `[PE-005] Serve the Generate page with pricing and limits props`
 - [x] 4. Replace AppLayout's unused `nav` slot with a built-in nav holding a **Generate** link, which has `aria-current="page"` on its own page. Add `url` to the integration `page` stub. Rewrite the nav-slot case in `AppLayout.test.ts`, and add the extra Tab in `auth.spec.ts`'s keyboard test (see Risks). Commit: `[PE-005] Add a Generate entry to the app nav`
 - [x] 5. Add `composables/useEstimate.ts`, the `GenerationFormInput` type and the shared `tests/js/support/pricing.ts`. Test-first in `tests/js/unit/composables/useEstimate.test.ts` (AC2, AC3 rows 1–3, AC7's over-limit estimate, AC10's null). Commit: `[PE-005] Compute the live estimate in a useEstimate composable`
@@ -72,7 +72,7 @@ Each task is one TDD commit: write the failing test first, then the code, and ru
 ## Decisions log (requirements §5)
 | # | Decision | Why |
 | --- | --- | --- |
-| D-24 | Only `resources/js/lib/money.ts` formats money in the UI. Amounts show 4 decimals rounded half away from zero, and any non-zero amount under $0.00005 shows `<$0.0001`. The exact 9-decimal value is always reachable by hover, focus or tap. An ESLint rule rejects `toFixed` and currency-style `Intl` formatting anywhere else in `resources/js`. Later PHP displays (PE-016) use the same rule. | Display rounding is a convenience and never the charged amount. A non-zero cost never reads as free. One formatter means one rounding rule. |
+| D-25 | Only `resources/js/lib/money.ts` formats money in the UI. Amounts show 4 decimals rounded half away from zero, and any non-zero amount under $0.00005 shows `<$0.0001`. The exact 9-decimal value is always reachable by hover, focus or tap. An ESLint rule rejects `toFixed` and currency-style `Intl` formatting anywhere else in `resources/js`. Later PHP displays (PE-016) use the same rule. | Display rounding is a convenience and never the charged amount. A non-zero cost never reads as free. One formatter means one rounding rule. |
 
 ## Tests
 `tests/js/support/pricing.ts` exports the fixture's `pricing` block typed as `PricingTable`. Its consumers are `useEstimate.test.ts`, `EstimatePanel.test.ts` and `Create.test.ts`. Expected figures are the story's literals. The pre-cut rows were derived from AC3 with integer arithmetic.
@@ -155,7 +155,7 @@ Estimate: ≈1,500–1,750 changed lines, about half of them tests. That is well
 
 | Tasks | Content | ≈ Lines |
 | --- | --- | --- |
-| 1–2 | `money.ts`, the lint rule, their tests, D-24 | 220 |
+| 1–2 | `money.ts`, the lint rule, their tests, D-25 | 220 |
 | 3–4 | Controller, limits, route, types, page rename, nav, test edits | 190 |
 | 5–9 | `useEstimate`, three primitives, `PromptField`, `counting.ts`, tests | 530 |
 | 10–12 | Panel, breakdown, `imageOptions.ts`, page, integration and E2E | 480 |
