@@ -15,6 +15,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
@@ -138,6 +139,14 @@ final class BootsWithoutPixelforgeTest extends TestCase
 
         $this->call('POST', '/webhooks/pixelforge', content: '{"id":"evt_1","object":"event","type":"ping","data":{}}')
             ->assertStatus(500);
+    }
+
+    /**
+     * The fake is not the default driver, so its image route is inert.
+     */
+    public function test_the_fake_image_route_is_not_found(): void
+    {
+        $this->get('/fake-pixelforge/images/gen_' . Str::ulid() . '.png')->assertNotFound();
     }
 
     private function removePixelforgeVariables(): void

@@ -23,6 +23,16 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_REQUEST_TIMEOUT',
     ];
 
+    private const array FAKE_VARIABLES = [
+        'PIXELFORGE_FAKE_WEBHOOK_URL',
+        'PIXELFORGE_FAKE_QUEUE_SECONDS',
+        'PIXELFORGE_FAKE_PROCESSING_SECONDS',
+        'PIXELFORGE_FAKE_SLOW_SECONDS',
+        'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
+        'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS',
+        'PIXELFORGE_FAKE_CHAOS_PERCENT',
+    ];
+
     /**
      * @var array{env: array<string, mixed>, server: array<string, mixed>, process: array<string, string|false>}
      */
@@ -32,7 +42,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         parent::setUp();
 
-        foreach (self::CLIENT_VARIABLES as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
             $this->savedVariables['env'][$name] = $_ENV[$name] ?? null;
             $this->savedVariables['server'][$name] = $_SERVER[$name] ?? null;
             $this->savedVariables['process'][$name] = getenv($name);
@@ -41,7 +51,7 @@ final class PixelforgeConfigTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (self::CLIENT_VARIABLES as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
             self::restore($_ENV, $name, $this->savedVariables['env'][$name]);
             self::restore($_SERVER, $name, $this->savedVariables['server'][$name]);
             $process = $this->savedVariables['process'][$name];
@@ -60,6 +70,17 @@ final class PixelforgeConfigTest extends TestCase
     {
         $this->assertTrue(getenv('PIXELFORGE_API_KEY') === '', 'PIXELFORGE_API_KEY must be forced empty in phpunit.xml.');
         $this->assertTrue(config('pixelforge.api_key') === null, 'pixelforge.api_key must be null in the test suite.');
+    }
+
+    /**
+     * A developer's `.env` may select the fake or hold a real `whsec_…`;
+     * neither reaches a test, which sets what it needs.
+     */
+    public function test_the_suite_never_sees_a_developer_driver_or_secret(): void
+    {
+        $this->assertTrue(getenv('PIXELFORGE_DRIVER') === 'http', 'PIXELFORGE_DRIVER must be forced to http in phpunit.xml.');
+        $this->assertTrue(getenv('PIXELFORGE_WEBHOOK_SECRET') === '', 'PIXELFORGE_WEBHOOK_SECRET must be forced empty in phpunit.xml.');
+        $this->assertTrue(in_array(config('pixelforge.webhook_secret'), [null, ''], true), 'pixelforge.webhook_secret must be empty in the test suite.');
     }
 
     public function test_empty_values_mean_the_defaults(): void
@@ -118,6 +139,130 @@ final class PixelforgeConfigTest extends TestCase
             'negative' => ['-5'],
             'a fraction' => ['2.5'],
         ];
+    }
+
+    public function test_empty_fake_values_mean_the_defaults(): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
+
+        $this->assertSame('http://app:8080', $fake['webhook_base_url']);
+        $this->assertSame(1, $fake['queue_seconds']);
+        $this->assertSame(3, $fake['processing_seconds']);
+        $this->assertSame(10, $fake['slow_processing_seconds']);
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    /**
+     * `[slow]` must be visibly slower than a normal generation.
+     */
+    public function test_the_default_slow_duration_exceeds_normal_processing(): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
+
+        $this->assertGreaterThan($fake['processing_seconds'], $fake['slow_processing_seconds']);
+    }
+
+    public function test_set_fake_values_apply(): void
+    {
+        $fake = $this->fakeConfigWith([
+            'PIXELFORGE_FAKE_WEBHOOK_URL' => 'http://127.0.0.1:8080',
+            'PIXELFORGE_FAKE_QUEUE_SECONDS' => '0',
+            'PIXELFORGE_FAKE_PROCESSING_SECONDS' => '0',
+            'PIXELFORGE_FAKE_SLOW_SECONDS' => '4',
+            'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '60',
+            'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS' => '2',
+        ]);
+
+        $this->assertSame('http://127.0.0.1:8080', $fake['webhook_base_url']);
+        $this->assertSame(0, $fake['queue_seconds']);
+        $this->assertSame(0, $fake['processing_seconds']);
+        $this->assertSame(4, $fake['slow_processing_seconds']);
+        $this->assertSame(60, $fake['image_ttl_seconds']);
+        $this->assertSame(2, $fake['expire_ttl_seconds']);
+    }
+
+    /**
+     * A TTL of 0 would hand out image URLs that are already dead.
+     */
+    #[DataProvider('invalidFakeValues')]
+    public function test_an_invalid_fake_value_means_the_default(string $value): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(array_diff(self::FAKE_VARIABLES, ['PIXELFORGE_FAKE_WEBHOOK_URL']), $value));
+
+        $this->assertSame(1, $fake['queue_seconds']);
+        $this->assertSame(3, $fake['processing_seconds']);
+        $this->assertSame(10, $fake['slow_processing_seconds']);
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidFakeValues(): array
+    {
+        return [
+            'a word' => ['abc'],
+            'negative' => ['-1'],
+            'a fraction' => ['2.5'],
+        ];
+    }
+
+    public function test_chaos_is_off_by_default(): void
+    {
+        $fake = $this->fakeConfigWith(array_fill_keys(self::FAKE_VARIABLES, ''));
+
+        $this->assertSame(['overloaded_percent' => 0, 'internal_error_percent' => 0, 'duplicate_percent' => 0], $fake['chaos']);
+    }
+
+    public function test_one_chaos_percent_feeds_every_chaos_outcome(): void
+    {
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_CHAOS_PERCENT' => '25']);
+
+        $this->assertSame(['overloaded_percent' => 25, 'internal_error_percent' => 25, 'duplicate_percent' => 25], $fake['chaos']);
+    }
+
+    #[DataProvider('invalidChaosPercents')]
+    public function test_a_chaos_percent_outside_0_to_100_means_off(string $value): void
+    {
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_CHAOS_PERCENT' => $value]);
+
+        $this->assertSame(['overloaded_percent' => 0, 'internal_error_percent' => 0, 'duplicate_percent' => 0], $fake['chaos']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidChaosPercents(): array
+    {
+        return [
+            'above 100' => ['101'],
+            'negative' => ['-1'],
+            'a fraction' => ['2.5'],
+            'a word' => ['abc'],
+        ];
+    }
+
+    public function test_a_zero_ttl_means_the_default(): void
+    {
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '0', 'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS' => '0']);
+
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    /**
+     * @param  array<string, string>  $variables
+     * @return array<string, mixed>
+     */
+    private function fakeConfigWith(array $variables): array
+    {
+        $fake = $this->pixelforgeConfigWith($variables)['fake'];
+        $this->assertIsArray($fake);
+
+        /** @var array<string, mixed> $fake */
+        return $fake;
     }
 
     /**
