@@ -75,46 +75,49 @@ async function removeRow(index: number): Promise<void> {
 </script>
 
 <template>
-    <fieldset class="relative flex min-w-0 flex-col gap-3">
-        <legend class="mb-2 text-sm font-medium text-zinc-800">Reference images (optional)</legend>
+    <!-- The count sits outside the fieldset: inside one, `top-0` is measured below the legend. -->
+    <div class="relative min-w-0">
         <p class="absolute top-0 right-0 text-sm text-zinc-500 tabular-nums">{{ rows.length }} of {{ max }}</p>
+        <fieldset class="flex min-w-0 flex-col gap-3">
+            <legend class="mb-2 text-sm font-medium text-zinc-800">Reference images (optional)</legend>
 
-        <ul v-if="rows.length > 0" ref="list" class="flex flex-col gap-3">
-            <li v-for="(row, index) in rows" :key="index" class="flex flex-col gap-1.5">
-                <label :for="rowId(index)" class="sr-only">Reference image {{ index + 1 }}</label>
-                <div class="flex items-center gap-2">
-                    <TextInput
-                        :id="rowId(index)"
-                        :model-value="row"
-                        type="url"
-                        inputmode="url"
-                        autocomplete="off"
-                        :placeholder="PLACEHOLDER"
-                        :invalid="needsHint(index)"
-                        :aria-describedby="needsHint(index) ? hintId(index) : undefined"
-                        @update:model-value="updateRow(index, $event ?? '')"
-                        @focus="focusedRow = index"
-                        @blur="focusedRow = null"
-                    />
-                    <Button
-                        variant="secondary"
-                        class="shrink-0 px-3"
-                        :aria-label="removeLabel(index)"
-                        @mousedown.prevent
-                        @click="removeRow(index)"
-                        ><span aria-hidden="true">×</span></Button
-                    >
-                </div>
-                <p v-if="needsHint(index)" :id="hintId(index)" class="text-sm text-red-600">{{ HINT }}</p>
-            </li>
-        </ul>
+            <ul v-if="rows.length > 0" ref="list" class="flex flex-col gap-3">
+                <li v-for="(row, index) in rows" :key="index" class="flex flex-col gap-1.5">
+                    <label :for="rowId(index)" class="sr-only">Reference image {{ index + 1 }}</label>
+                    <div class="flex items-center gap-2">
+                        <TextInput
+                            :id="rowId(index)"
+                            :model-value="row"
+                            type="url"
+                            inputmode="url"
+                            autocomplete="off"
+                            :placeholder="PLACEHOLDER"
+                            :invalid="needsHint(index)"
+                            :aria-describedby="needsHint(index) ? hintId(index) : undefined"
+                            @update:model-value="updateRow(index, $event ?? '')"
+                            @focus="focusedRow = index"
+                            @blur="focusedRow = null"
+                        />
+                        <Button
+                            variant="secondary"
+                            class="shrink-0 px-3"
+                            :aria-label="removeLabel(index)"
+                            @mousedown.prevent
+                            @click="removeRow(index)"
+                            ><span aria-hidden="true">×</span></Button
+                        >
+                    </div>
+                    <p v-if="needsHint(index)" :id="hintId(index)" class="text-sm text-red-600">{{ HINT }}</p>
+                </li>
+            </ul>
 
-        <div ref="actions" class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Button variant="secondary" :disabled="isFull" @mousedown.prevent @click="addRow">Add reference image</Button>
-            <p v-if="isFull" class="text-sm text-zinc-500">Up to {{ max }} reference images.</p>
-            <p v-else-if="perReferenceNanodollars !== null" class="text-sm text-zinc-600">
-                +<MoneyAmount :nanodollars="perReferenceNanodollars" /> each
-            </p>
-        </div>
-    </fieldset>
+            <div ref="actions" class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Button variant="secondary" :disabled="isFull" @mousedown.prevent @click="addRow">Add reference image</Button>
+                <p v-if="isFull" class="text-sm text-zinc-500">Up to {{ max }} reference images.</p>
+                <p v-else-if="perReferenceNanodollars !== null" class="text-sm text-zinc-600">
+                    +<MoneyAmount :nanodollars="perReferenceNanodollars" /> each
+                </p>
+            </div>
+        </fieldset>
+    </div>
 </template>
