@@ -78,5 +78,11 @@ return [
          * How long a succeeded generation's image URL works: 24 h, as the docs give it.
          */
         'image_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_IMAGE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),
+
+        /**
+         * The image URL TTL of an `[expire]` generation only, so E2E can show
+         * expiry without touching the images of tests running beside it.
+         */
+        'expire_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
     ],
 ];

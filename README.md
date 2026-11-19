@@ -85,7 +85,7 @@ These credentials are local-only: the seeder refuses to run in production.
 - Local dev and E2E use the **in-app fake** by default (`PIXELFORGE_DRIVER=fake` in `.env.example`). It needs no key and no public URL: the worker moves each generation along on delayed jobs and posts signed webhooks to the in-network app at `http://app:8080/webhooks/pixelforge`. `make setup` fills `PIXELFORGE_WEBHOOK_SECRET` with a random local value for it to sign with. The app refuses to boot with the fake in production.
 - To use the real API instead, create **one API key per environment**: local, production. Each key has its own webhook URL, signing secret and `/v1/usage` report, so the deployed app reconciles with its own key. Set `PIXELFORGE_DRIVER=http`, the key as `PIXELFORGE_API_KEY` and its `whsec_…` as `PIXELFORGE_WEBHOOK_SECRET`, never commit them, then `make restart-worker` (the worker reads `.env` once).
 - An existing checkout picks up the fake with `PIXELFORGE_DRIVER=fake`, `make webhook-secret` (it keeps a secret already there) and `make restart-worker`.
-- Prompt keywords force behaviour for testing: `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`, `[succeed]`.
+- Prompt keywords force behaviour for testing: `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`, `[succeed]`. The fake adds `[expire]`, whose image URL dies after a few seconds (`PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS`, default 5).
 
 #### Real webhooks locally
 

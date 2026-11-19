@@ -225,6 +225,63 @@ final class FakePixelforgeLifecycleTest extends TestCase
         $this->assertNotSame($requests[0]->header('Pixelforge-Event-Id'), $requests[2]->header('Pixelforge-Event-Id'));
     }
 
+    /**
+     * `[expire]` gives this one generation a short TTL; one finished seconds
+     * apart keeps the normal day.
+     */
+    public function test_an_expire_generation_image_dies_within_seconds(): void
+    {
+        $expiring = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [expire]'));
+        $normal = $this->createThroughFake(self::lighthousePayload());
+
+        $this->runFakeLifecycle();
+
+        $expiringSnapshot = $this->fakeGenerationRow($expiring->snapshot->id)->snapshot;
+        $normalSnapshot = $this->fakeGenerationRow($normal->snapshot->id)->snapshot;
+        $this->assertIsString($expiringSnapshot['completed_at']);
+        $this->assertSame(
+            CarbonImmutable::parse($expiringSnapshot['completed_at'])->addSeconds(5)->toIso8601ZuluString(),
+            $expiringSnapshot['image_url_expires_at'],
+        );
+
+        $this->travelTo(CarbonImmutable::parse($expiringSnapshot['completed_at'])->addSeconds(6));
+
+        $this->assertIsString($expiringSnapshot['image_url']);
+        $this->assertIsString($normalSnapshot['image_url']);
+        $this->get($expiringSnapshot['image_url'])->assertForbidden();
+        $this->get($normalSnapshot['image_url'])->assertOk();
+    }
+
+    public function test_fail_combines_with_slow_and_duplicate(): void
+    {
+        $created = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [fail][slow][duplicate]'));
+
+        $this->runFakeLifecycle();
+
+        $this->assertSame(10, self::delaySecondsOf($this->pushedFakeLifecycleJobs()[1]));
+        $row = $this->fakeGenerationRow($created->snapshot->id);
+        $this->assertSame(GenerationStatus::Failed, $row->status());
+        $this->assertSame('2026-11-19T12:00:11Z', $row->snapshot['completed_at']);
+        $this->assertSame(
+            ['generation.processing', 'generation.processing', 'generation.failed', 'generation.failed'],
+            array_map(fn (Request $request): mixed => self::decoded($request)['type'], $this->fakeWebhookRequests()),
+        );
+    }
+
+    public function test_slow_duplicate_and_expire_combine_with_success(): void
+    {
+        $created = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [slow][duplicate][expire]'));
+
+        $this->runFakeLifecycle();
+
+        $this->assertSame(10, self::delaySecondsOf($this->pushedFakeLifecycleJobs()[1]));
+        $row = $this->fakeGenerationRow($created->snapshot->id);
+        $this->assertSame(GenerationStatus::Succeeded, $row->status());
+        $this->assertSame('2026-11-19T12:00:11Z', $row->snapshot['completed_at']);
+        $this->assertSame('2026-11-19T12:00:16Z', $row->snapshot['image_url_expires_at']);
+        $this->assertCount(4, $this->fakeWebhookRequests());
+    }
+
     public function test_a_job_for_a_terminal_or_missing_generation_does_nothing(): void
     {
         $created = $this->createThroughFake(self::lighthousePayload());

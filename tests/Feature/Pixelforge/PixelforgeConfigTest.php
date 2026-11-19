@@ -29,6 +29,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_FAKE_PROCESSING_SECONDS',
         'PIXELFORGE_FAKE_SLOW_SECONDS',
         'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
+        'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS',
     ];
 
     /**
@@ -148,6 +149,7 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame(3, $fake['processing_seconds']);
         $this->assertSame(10, $fake['slow_processing_seconds']);
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
     }
 
     /**
@@ -168,6 +170,7 @@ final class PixelforgeConfigTest extends TestCase
             'PIXELFORGE_FAKE_PROCESSING_SECONDS' => '0',
             'PIXELFORGE_FAKE_SLOW_SECONDS' => '4',
             'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '60',
+            'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS' => '2',
         ]);
 
         $this->assertSame('http://127.0.0.1:8080', $fake['webhook_base_url']);
@@ -175,6 +178,7 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame(0, $fake['processing_seconds']);
         $this->assertSame(4, $fake['slow_processing_seconds']);
         $this->assertSame(60, $fake['image_ttl_seconds']);
+        $this->assertSame(2, $fake['expire_ttl_seconds']);
     }
 
     /**
@@ -189,6 +193,7 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame(3, $fake['processing_seconds']);
         $this->assertSame(10, $fake['slow_processing_seconds']);
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
     }
 
     /**
@@ -203,9 +208,12 @@ final class PixelforgeConfigTest extends TestCase
         ];
     }
 
-    public function test_a_zero_image_ttl_means_the_default(): void
+    public function test_a_zero_ttl_means_the_default(): void
     {
-        $this->assertSame(86_400, $this->fakeConfigWith(['PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '0'])['image_ttl_seconds']);
+        $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '0', 'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS' => '0']);
+
+        $this->assertSame(86_400, $fake['image_ttl_seconds']);
+        $this->assertSame(5, $fake['expire_ttl_seconds']);
     }
 
     /**

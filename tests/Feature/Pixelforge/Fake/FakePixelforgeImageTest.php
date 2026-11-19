@@ -68,6 +68,21 @@ final class FakePixelforgeImageTest extends TestCase
         $this->get($url)->assertForbidden();
     }
 
+    /**
+     * Like a dead signed URL: it loads up to its expiry, and is refused after.
+     */
+    public function test_an_expired_url_is_refused(): void
+    {
+        $expiresAt = CarbonImmutable::now()->addMinute();
+        $url = URL::temporarySignedRoute('fake-pixelforge.image', $expiresAt, ['generation' => $this->providerId], absolute: false);
+
+        $this->travelTo($expiresAt);
+        $this->get($url)->assertOk();
+
+        $this->travelTo($expiresAt->addSecond());
+        $this->get($url)->assertForbidden();
+    }
+
     public function test_a_missing_signature_is_refused(): void
     {
         $this->get('/fake-pixelforge/images/' . $this->providerId . '.png')->assertForbidden();
