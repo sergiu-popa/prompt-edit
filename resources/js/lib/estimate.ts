@@ -1,3 +1,4 @@
+import { countCodePoints } from '@/lib/counting';
 import type { EstimateBounds, EstimateInput, EstimateLine, GenerationCostEstimate } from '@/types/estimate';
 import type { PricingTable, TokenType } from '@/types/pricing';
 
@@ -136,7 +137,7 @@ export function estimateGenerationCost(pricing: PricingTable, input: EstimateInp
         throw new Error(`prompt must be a string, got ${typeName(input.prompt)}.`);
     }
 
-    const promptCharacters = [...input.prompt].length;
+    const promptCharacters = countCodePoints(input.prompt);
     const rates = objectAt(pricing.nanodollars_per_token, 'nanodollars_per_token');
     const tokenRules = objectAt(pricing.tokens, 'tokens');
     const outputTable = objectAt(tokenRules.output, 'tokens.output');

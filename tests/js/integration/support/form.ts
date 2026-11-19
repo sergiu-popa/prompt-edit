@@ -19,7 +19,7 @@ export async function fillIn(wrapper: VueWrapper, label: string, value: string):
 /**
  * The text of everything an input's `aria-describedby` points at.
  */
-export function descriptionOf(wrapper: VueWrapper, input: HTMLInputElement): string {
+export function descriptionOf(wrapper: VueWrapper, input: HTMLElement): string {
     return (input.getAttribute('aria-describedby') ?? '')
         .split(' ')
         .filter((id) => id !== '')
