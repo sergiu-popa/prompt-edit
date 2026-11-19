@@ -35,6 +35,11 @@ final class PixelforgeNotConfiguredException extends RuntimeException implements
         return new self('The fake Pixelforge driver needs a webhook secret to sign its webhooks (PIXELFORGE_WEBHOOK_SECRET).');
     }
 
+    public static function fakeDriverInProduction(): self
+    {
+        return new self('PIXELFORGE_DRIVER=fake is not allowed in production.');
+    }
+
     public static function unknownDriver(string $driver): self
     {
         return new self(sprintf('Unknown Pixelforge driver "%s" (PIXELFORGE_DRIVER).', $driver));

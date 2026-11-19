@@ -67,6 +67,17 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertTrue(config('pixelforge.api_key') === null, 'pixelforge.api_key must be null in the test suite.');
     }
 
+    /**
+     * A developer's `.env` may select the fake or hold a real `whsec_…`;
+     * neither reaches a test, which sets what it needs.
+     */
+    public function test_the_suite_never_sees_a_developer_driver_or_secret(): void
+    {
+        $this->assertTrue(getenv('PIXELFORGE_DRIVER') === 'http', 'PIXELFORGE_DRIVER must be forced to http in phpunit.xml.');
+        $this->assertTrue(getenv('PIXELFORGE_WEBHOOK_SECRET') === '', 'PIXELFORGE_WEBHOOK_SECRET must be forced empty in phpunit.xml.');
+        $this->assertTrue(in_array(config('pixelforge.webhook_secret'), [null, ''], true), 'pixelforge.webhook_secret must be empty in the test suite.');
+    }
+
     public function test_empty_values_mean_the_defaults(): void
     {
         $config = $this->pixelforgeConfigWith(array_fill_keys(self::CLIENT_VARIABLES, ''));

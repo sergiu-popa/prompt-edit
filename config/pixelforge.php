@@ -10,8 +10,9 @@ declare(strict_types=1);
  */
 return [
     /**
-     * Which PixelforgeClient the container builds: `http` for the real API.
-     * PE-010 adds `fake`. Any other value fails when the client is resolved.
+     * Which PixelforgeClient the container builds: `http` for the real API,
+     * or `fake` (local and E2E; refused in production). Any other value fails
+     * when the client is resolved.
      */
     'driver' => env('PIXELFORGE_DRIVER') ?: 'http',
 
