@@ -221,24 +221,33 @@ final class TransitionGenerationActionExactlyOnceTest extends TestCase
     }
 
     /**
-     * AC18's missing usage is refused at the Pixelforge boundary, so it never
-     * reaches settlement; logging the object's generation id is the job of
-     * the callers that parse a succeeded object (PE-008, PE-014).
+     * AC18's missing usage is refused, and logged with the generation id, at
+     * the Pixelforge boundary, so it never reaches settlement.
      */
-    public function test_a_succeeded_object_without_usage_is_refused_before_it_reaches_the_generation(): void
+    public function test_a_succeeded_object_without_usage_is_refused_logged_and_writes_nothing(): void
     {
         $generation = $this->givenTheLighthouseGeneration();
+        $object = self::generationObjectFor($generation, GenerationStatus::Succeeded, ['usage' => null]);
         $before = $this->rawGenerationRow($generation);
 
         try {
-            GenerationSnapshot::from(self::generationObjectFor($generation, GenerationStatus::Succeeded, ['usage' => null]));
+            GenerationSnapshot::from($object);
             $this->fail('A succeeded object without usage was parsed.');
         } catch (InvalidGenerationSnapshotException $exception) {
-            $this->assertStringContainsString('usage', $exception->getMessage());
+            $this->assertSame('A succeeded generation object must carry usage.', $exception->getMessage());
         }
 
         $this->assertSame($before, $this->rawGenerationRow($generation));
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame('Refused a succeeded Pixelforge snapshot that does not carry its whole result.', $logged[0]->message);
+        $this->assertSame(
+            ['generation_id' => $generation->id, 'provider_id' => $object['id'], 'error' => $exception->getMessage()],
+            $logged[0]->context,
+        );
     }
 
     /**
