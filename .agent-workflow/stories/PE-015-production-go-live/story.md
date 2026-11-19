@@ -7,7 +7,7 @@ Go live with real Pixelforge: live smoke, production webhooks, hardening and fir
 `draft`
 
 ## Description
-Every required feature now works against the fake driver. The walking skeleton has been deployed continuously since PE-004, with Pixelforge left unconfigured. This story turns the real integration on and ships the required scope publicly before any stretch work starts (D-13).
+Every required feature now works against the fake driver. The walking skeleton has been deployed continuously since PE-004, with Pixelforge left unconfigured. This story turns the real integration on and ships the required scope publicly before any stretch work starts (D-19).
 
 The work happens in this order:
 1. An opt-in live smoke test proves our HTTP driver, the pinned pricing and the estimator's assumptions against the real API, using a **dev** key (D-12). The assumptions include counting prompt characters as code points.
@@ -54,7 +54,7 @@ Serves:
     The provider cost, Σ usage × the generation's own rates computed through PE-001, is printed in n$ and USD and is at most 17,525,000 n$. Nothing printed contains the key or the `Authorization` header.
 
 **Production wiring**
-9. Production has a **dedicated** production API key and its signing secret, stored as Laravel Cloud secrets (`PIXELFORGE_API_KEY`, `PIXELFORGE_WEBHOOK_SECRET`), and `PIXELFORGE_DRIVER=http`. Neither value appears in the repo, in CI, in any log or in the PR.
+9. Production has a **dedicated** production API key and its signing secret, stored only in the server's `shared/.env` (`chmod 600`) as `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, and `PIXELFORGE_DRIVER=http`. Neither value appears in the repo, in CI, in any log or in the PR.
 10. In the Pixelforge dashboard, the production key's webhook URL is the public PE-008 endpoint, served over HTTPS with no redirect, including no trailing-slash or http→https redirect.
     - "Send test event" (`ping`): our endpoint answers 2xx within 10 s, and the dashboard delivery log shows it.
     - Resending an already delivered `generation.succeeded` event from the dashboard gets a 2xx and writes no new ledger rows.
@@ -72,9 +72,9 @@ Serves:
 15. Abuse limits:
     - Fortify's sign-in throttle works in PE-003's failure-counting mode. The 6th failed sign-in within a minute for the same email and IP shows "Too many login attempts. Please try again in N seconds." inline under Email, never a 429 page.
     - Generation creation is throttled per user with PE-011's limit (default 10 per minute). The 11th submission within a minute shows PE-011's inline throttle message and creates no generation, hold or Pixelforge call.
-16. On Cloud, the HTTP client timeout < the job timeout < the queue `retry_after`, consistent with the PE-013 submit window and backoff. The worker runs with the flags documented in the repo.
-17. The queue worker and the scheduler are both running on Cloud.
-18. The reconciler records the time of its last successful run. A separate health check, not the `/up` check Cloud uses for instance health, reports stale when that time is more than 5 min old and OK otherwise.
+16. On production, the HTTP client timeout < the job timeout < the database queue's `retry_after`, consistent with the PE-013 submit window and backoff. The systemd worker runs with the flags documented in the repo.
+17. The queue worker and the scheduler are both running on the droplet: `systemctl status prompt-edit-worker` is active, and the scheduler cron fired within the last minute.
+18. The reconciler records the time of its last successful run. A separate health check, distinct from `/up`, reports stale when that time is more than 5 min old and OK otherwise.
 19. Failed jobs can be listed on production, and the README says how.
 20. Public registration has a recorded decision, as a decisions-log row with the next free D-number. From now on every account can spend real Pixelforge money and share the per-account 500/day cap with the reviewer. Either:
     - registration stays open and `POST /register` is throttled per IP (default 3 per hour). The 4th attempt shows an inline message on the Create account form and creates no account. The limit is config, and `.env.example` relaxes it, because E2E registers a user per spec from one IP; or
@@ -120,8 +120,8 @@ Serves:
 25. The README operations section has a per-environment runbook for the Pixelforge key, webhook URL and signing secret. It gives variable names only, never values:
     - **local with the fake driver:** `make setup` generates the local webhook secret (PE-010), and nothing is configured in the dashboard;
     - **local against real Pixelforge:** use a dev key, `PIXELFORGE_DRIVER=http`, a tunnel, and the dev key's webhook URL and `whsec_…` secret in `.env` (PE-008's section). Explain why the dev key must never be the production key: `/v1/usage` and the webhook URL are per key;
-    - **production:** store the dedicated key and secret as Cloud secrets, set the exact final https webhook URL in the dashboard (no redirect, no trailing slash), then press "Send test event";
-    - **changing the secret**, if it is ever regenerated in the dashboard: update the Cloud secret and redeploy straight away. Deliveries signed with the old secret get 400 in the gap and are retried by Pixelforge for up to 27 min 40 s. The PE-014 reconciler catches any that give up;
+    - **production:** put the dedicated key and secret in the server's `shared/.env` and redeploy, set the exact final https webhook URL in the dashboard (no redirect, no trailing slash), then press "Send test event";
+    - **changing the secret**, if it is ever regenerated in the dashboard: update `shared/.env` and redeploy straight away. Deliveries signed with the old secret get 400 in the gap and are retried by Pixelforge for up to 27 min 40 s. The PE-014 reconciler catches any that give up;
     - **how to check it works:** the dashboard delivery log, the failed-jobs listing (AC 19) and the reconciler health check (AC 18).
 
 ## Scope
@@ -139,7 +139,7 @@ Serves:
   - polling until terminal;
   - usage within the estimator's bounds;
   - cost computed from the generation's own usage × rates.
-- Production Pixelforge wiring: a dedicated key and secret as Cloud secrets, `PIXELFORGE_DRIVER=http`, the webhook URL in the dashboard, a verified test ping and a resend.
+- Production Pixelforge wiring: a dedicated key and secret in the server's `shared/.env`, `PIXELFORGE_DRIVER=http`, the webhook URL in the dashboard, a verified test ping and a resend.
 - The hardening checklist, verified and documented:
   - the reconciler health signal;
   - the public-registration decision with its throttle or closure;
@@ -156,12 +156,12 @@ Serves:
 
 ## Technical Notes
 - **Depends on:**
-  - PE-004-walking-skeleton-laravel-cloud: the Cloud topology of web, worker, scheduler, Postgres 17 and Redis.
+  - PE-004-walking-skeleton-own-server: the droplet topology of web, the systemd worker, the cron scheduler and Postgres 17, with database queue, cache and sessions.
   - PE-014-reconciliation-poller: the last required robustness piece.
   - Every required story up to PE-014 is merged first.
 - **Decisions:**
   - D-12: the fake driver for local and E2E, plus an opt-in live smoke against the real API. Shared with PE-010.
-  - D-13: Laravel Cloud, with the required scope shipped before stretch. Shared with PE-004.
+  - D-19: the user's own droplet with Deployer, with the required scope shipped before stretch. Shared with PE-004.
   - A new decisions-log row for registration (AC 20).
 - **Project rule exception:** CLAUDE.md says tests never call the real Pixelforge API. The `live` group is the single exception D-12 sanctions. It never runs in `make test`, `make check` or CI, and a default-suite test proves the exclusion.
 - **Deferred items arrive here:**
@@ -176,8 +176,8 @@ Serves:
   - The dashboard can resend any event and shows every delivery attempt.
   - `[overloaded]` returns 503 at submit, and nothing is created or billed.
   - Image URLs stop working 24 h after completion, and refetching does not extend them. That is acceptable here, because PE-018 refreshes the demo generations before hand-in.
-- **The live smoke must never use the production key.** That would add to production's `/v1/usage` and break PE-018's exact match. The production key exists only in Cloud secrets, and the local `.env` holds the dev key as `PIXELFORGE_API_KEY`. A smoke run costs at most 17,525,000 n$ of provider cost. The replay and the 409 cost nothing.
-- Cold starts on Cloud can exceed the 10 s webhook window. Pixelforge's retries and the PE-014 poller cover that. Note it in the operations section.
+- **The live smoke must never use the production key.** That would add to production's `/v1/usage` and break PE-018's exact match. The production key exists only in the server's `shared/.env`, and the local `.env` holds the dev key as `PIXELFORGE_API_KEY`. A smoke run costs at most 17,525,000 n$ of provider cost. The replay and the 409 cost nothing.
+- A deploy (the PHP-FPM reload) or a short outage of the droplet can miss the 10 s webhook window. Pixelforge's retries and the PE-014 poller cover that. Note it in the operations section.
 - Never print, log or commit credentials, including in test output, README examples or PR descriptions. Env var names are fine.
 - **Required test layers:**
   - **PHP feature, group `live`** (opt-in, real API, dev key): AC 3–8.
@@ -203,5 +203,5 @@ No UI beyond two messages: the 419 message ("Your session expired. Please try ag
 - https://pixelforge.promptedit.dev/docs#webhooks
 - https://pixelforge.promptedit.dev/docs#testing
 - https://pixelforge.promptedit.dev/docs#images
-- requirements.md §2, §3 and §5 (D-12, D-13)
-- Laravel Cloud docs (secrets, queue workers, scheduler)
+- requirements.md §2, §3 and §5 (D-12, D-19)
+- PE-004's deployment runbook in the README (`shared/.env`, the systemd worker, the scheduler cron)

@@ -120,7 +120,7 @@ The fake underpins grading criterion #2 (robustness that can be demonstrated) an
 - **E2E uses the dev containers:** `make e2e` runs Playwright against the dev `app` and `worker`, so E2E gets the dev defaults. Keep default timings to a few seconds, and scale `[slow]` down by config.
 - **`[expire]` per generation:** Playwright runs fully parallel across the desktop and mobile projects, so a global short TTL would break the other image assertions.
 - **Webhook secret:** PE-008 lists `PIXELFORGE_WEBHOOK_SECRET` in `.env.example` with no value. This story makes setup generate a random local value, or an equivalent the Architect picks. CI E2E needs the same.
-- **State store:** it must be shared by the web and worker processes, in the DB or Redis; the Architect picks. A fake-only table would also exist in production, harmlessly, because the fake cannot be bound there.
+- **State store:** it must be shared by the web and worker processes, in the database (there is no Redis, D-20); the Architect picks the table or cache store. A fake-only table would also exist in production, harmlessly, because the fake cannot be bound there.
 - **PHP tests:**
   - The `sync` queue runs delayed jobs immediately, so the whole lifecycle and its webhooks happen inside the create call. That makes a natural webhook-before-response case.
   - Capture outgoing webhooks with `Http::fake`, then replay their exact bytes and headers into the endpoint, rather than relying on the network.
