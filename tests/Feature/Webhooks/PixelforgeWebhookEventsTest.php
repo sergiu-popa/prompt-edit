@@ -52,6 +52,7 @@ final class PixelforgeWebhookEventsTest extends TestCase
             'not JSON' => ['{"id":"evt_1",', null],
             'a JSON string' => ['"evt_1"', null],
             'a JSON list' => ['[{"id":"evt_1","type":"ping"}]', null],
+            'nested deeper than json_decode allows' => [sprintf('{"id":"evt_1","object":"event","type":"ping","data":%s%s}', str_repeat('[', 600), str_repeat(']', 600)), null],
             'no id' => ['{"object":"event","type":"ping","data":{}}', null],
             'no type' => ['{"id":"evt_1","object":"event","data":{}}', 'evt_1'],
             'a numeric id' => ['{"id":1,"object":"event","type":"ping","data":{}}', null],
