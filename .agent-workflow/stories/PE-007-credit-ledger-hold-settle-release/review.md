@@ -73,3 +73,34 @@ The implementation matches the plan class for class: `CreditLedgerEntryType`, `C
 - [x] **S2. The Lighthouse request is spelled out twice.**
   - `givenTheLighthouseGeneration()` (`tests/Concerns/InteractsWithGenerations.php:45-53`) and the `settlements()` data provider (`tests/Unit/Domain/Generation/Actions/TransitionGenerationActionSettlementTest.php:73`) each build it, with the same reference URL.
   - Fix: add a `protected static function lighthouseRequest(): NewGenerationData` to the trait. The static data provider and `givenTheLighthouseGeneration()` can then both use it.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the four `[PE-007]` commits added since round 1 (`ddc4711..51cebe5`), plus a re-check of the whole `origin/main..HEAD` series for commit hygiene.
+
+Checks run on HEAD (`chain-make.sh chain check`, exit 0):
+- Pint passes on 124 files.
+- Larastan reports no errors.
+- PHPUnit runs 608 tests with 2,730 assertions, all passing.
+- ESLint, Prettier and vue-tsc are clean, and Vitest runs 107 tests, all passing.
+
+### Round 1 findings
+
+- **W1, resolved (`51cebe5`, `bc0e387`).**
+  - PE-008's `story.md` Technical Notes now carry the AC18 obligation. A validly signed event whose `data.object` makes `GenerationSnapshot::from()` throw is logged at error level with `metadata.generation_id` and the event id, and its response code is decided explicitly.
+  - The test docblock (`TransitionGenerationActionExactlyOnceTest.php:223-227`) now names only PE-008 and PE-014.
+- **S1, resolved (`ddc4711`).**
+  - `HoldGenerationCreditsAction.php:29` now negates through `Nanodollars::zero()->minus()`, the same overflow-checked path the settlement uses. The `@throws NanodollarOverflowException` docblock matches what `Nanodollars::fromBigInteger()` throws.
+  - The new `HoldGenerationCreditsActionTest` passes `PHP_INT_MIN`. It asserts that the exception is thrown and that the ledger is unchanged. The negation throws before the insert, so the assertion is meaningful.
+- **S2, resolved (`a8a8bae`).**
+  - `InteractsWithGenerations::lighthouseRequest()` is static, so the `settlements()` data provider and `givenTheLighthouseGeneration()` share one definition. The reference URL is no longer duplicated.
+
+### Commit hygiene
+
+- Each fix is its own commit, with its test where there is one. `ddc4711` has code and test together. `a8a8bae` and `bc0e387` change tests only.
+- The bookkeeping (review checkboxes, and the PE-008 hand-off note) is kept separate in `51cebe5`.
+- The subjects follow `[PE-007] Imperative …`, are at most 72 characters and end with the trailer.
+
+No new findings.
