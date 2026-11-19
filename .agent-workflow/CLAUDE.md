@@ -61,7 +61,8 @@ Money logic that exists in both PHP and TS is tested against the **same JSON fix
 - Never print, log or commit `PIXELFORGE_API_KEY` / `PIXELFORGE_WEBHOOK_SECRET`.
 
 ### Git hygiene
-- One branch and one PR per story; PRs stay small enough to review in one sitting (≈ 400 changed lines excluding lockfiles and generated files — split the story if larger).
+- One branch and one PR per story, opened against `main` only after the previous story's PR is merged (no stacked PRs on GitHub).
+- PR size: the user reviews commit by commit, so **one PR per story is the rule even above ≈ 400 changed lines** (decided 2026-11-19). Every commit must be self-contained and pass on its own, and the plan and the PR description name a cut point in case the user asks for a split. Reviewers and auditors do not raise PR size as a finding.
 - Short commits, one logical task each: `[PE-NNN] Short description`. Each commit has its test and passes the suite.
 - Stage explicit paths. Never `git add -A`.
 

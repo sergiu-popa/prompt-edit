@@ -96,6 +96,7 @@ The 202 or replayed response goes through the same transition action as webhooks
 - The submit endpoint and its UI: PE-011-submit-generation-and-history.
 
 ## Technical Notes
+- **Deferred from the PE-006 audit:** the error-envelope parser must refuse a NUL byte in `code`, `message` and `param` before it builds `LocalGenerationFailureData`. Postgres text would silently cut it. PE-006's `GenerationSnapshot::storable()` already does this for snapshots.
 - **Depends on:**
   - PE-007-credit-ledger-hold-settle-release, for the hold and settlement.
   - PE-008-verified-idempotent-webhooks, because AC 15 and 16 apply a webhook.
