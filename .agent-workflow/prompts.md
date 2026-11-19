@@ -82,3 +82,11 @@ steer the work.
 **Prompt 10** (after PE-004 was merged, while PE-005 was in the pipeline)
 
 > Can you run the pipeline in workflow until PE-010 in parallel? We need to finish this today, so as far as you can go, then we switch back to sequential stories
+
+**Answers to clarifying questions** (PE-005 and PE-006 had each failed QA on one bug)
+
+| Question | Answer |
+|---|---|
+| Run one engineer fix round, then QA again, then the audit, for both? | Fix both |
+| When QA fails for the rest of today, run one fix round automatically instead of stopping? | One automatic fix round |
+| Make one PR per story the explicit rule, even above the ~400-line budget? | One PR per story |
