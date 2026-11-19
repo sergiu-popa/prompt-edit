@@ -15,6 +15,17 @@ enum TokenType: string
     case Reasoning = 'reasoning_tokens';
 
     /**
+     * Whether an estimate knows this type's count exactly before the generation runs.
+     */
+    public function isKnownUpfront(): bool
+    {
+        return match ($this) {
+            self::InputImage, self::Output => true,
+            self::InputText, self::Reasoning => false,
+        };
+    }
+
+    /**
      * @return list<string>
      */
     public static function keys(): array

@@ -22,5 +22,25 @@
             }
         }
     },
-    "cases": []
+    "cases": [
+        {
+            "name": "docs worked maximum: 400 characters, high, 1536x1024, 2 references",
+            "prompt": "a",
+            "prompt_repeat": 400,
+            "quality": "high",
+            "size": "1536x1024",
+            "reference_image_count": 2,
+            "expected": {
+                "prompt_characters": 400,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 85, "typical": 100, "max": 115 }, "provider_nanodollars": { "min": 425000, "typical": 500000, "max": 575000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 1530, "typical": 1530, "max": 1530 }, "provider_nanodollars": { "min": 15300000, "typical": 15300000, "max": 15300000 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 6450, "typical": 6450, "max": 6450 }, "provider_nanodollars": { "min": 258000000, "typical": 258000000, "max": 258000000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 1000, "typical": 4500, "max": 8000 }, "provider_nanodollars": { "min": 12500000, "typical": 56250000, "max": 100000000 } }
+                },
+                "provider_nanodollars": { "min": 286225000, "typical": 330050000, "max": 373875000 },
+                "user_nanodollars": { "min": 357781250, "typical": 412562500, "max": 467343750 }
+            }
+        }
+    ]
 }
