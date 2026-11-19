@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Generation;
 
 use App\Domain\Generation\Models\Generation;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\SubmitsGenerations;
@@ -131,5 +132,97 @@ final class CreateGenerationValidationTest extends TestCase
         $generation = Generation::query()->sole();
         $this->assertSame(['https://example.com/style.png', 'https://example.com/style.png'], $generation->reference_images);
         $this->assertSame(466_712_500, $generation->user_estimate_max_nanodollars);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string, string}>
+     */
+    public static function unstorableText(): array
+    {
+        $cannotBeSent = "contains characters that can't be sent.";
+
+        return [
+            'a NUL at the start of the prompt' => [['prompt' => "\0A lighthouse"], 'prompt', "Prompt {$cannotBeSent}"],
+            'a NUL in the middle of the prompt' => [['prompt' => "A light\0house"], 'prompt', "Prompt {$cannotBeSent}"],
+            'a NUL at the end of the prompt' => [['prompt' => "A lighthouse\0"], 'prompt', "Prompt {$cannotBeSent}"],
+            'invalid UTF-8 in the prompt' => [['prompt' => "A lighthouse \xFF"], 'prompt', "Prompt {$cannotBeSent}"],
+            'a NUL inside a reference' => [
+                ['reference_images' => ['https://example.com/a.png', "https://example.com/b\0.png"]],
+                'reference_images.1',
+                "Reference image 2 {$cannotBeSent}",
+            ],
+            'invalid UTF-8 in a reference' => [['reference_images' => ["https://example.com/\xFF.png"]], 'reference_images.0', "Reference image 1 {$cannotBeSent}"],
+        ];
+    }
+
+    /**
+     * Postgres text would silently cut a NUL, and invalid UTF-8 is counted differently
+     * by the two estimators, so each is a field error, never a 500.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    #[DataProvider('unstorableText')]
+    public function test_unstorable_text_is_a_field_error(array $overrides, string $key, string $message): void
+    {
+        $this->submitGeneration($overrides)
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors([$key => $message]);
+
+        $this->assertNothingWasCreated();
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invisiblePrompts(): array
+    {
+        return [
+            'no-break spaces' => ["\u{00A0}\u{00A0}"],
+            'ideographic spaces' => ["\u{3000}\u{3000}"],
+            'a byte order mark' => ["\u{FEFF}"],
+            'a line separator and an en space' => ["\u{2028}\u{2002}"],
+            'a vertical tab and a form feed' => ["\v\f"],
+        ];
+    }
+
+    /**
+     * Blank by JS trim()'s set, as the Generate page judges it: ASCII whitespace, the
+     * Unicode space separators and U+FEFF.
+     */
+    #[DataProvider('invisiblePrompts')]
+    public function test_a_prompt_of_unicode_whitespace_is_blank(string $prompt): void
+    {
+        $this->submitGeneration(['prompt' => $prompt])
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors(['prompt' => 'Enter a prompt.']);
+
+        $this->assertNothingWasCreated();
+    }
+
+    /**
+     * Unicode whitespace around visible text is kept, exactly as typed (D-37).
+     */
+    public function test_a_prompt_with_visible_text_inside_unicode_whitespace_is_accepted(): void
+    {
+        $this->submitGeneration(['prompt' => "\u{3000}A lighthouse\u{00A0}"])->assertSessionHasNoErrors();
+
+        $this->assertSame("\u{3000}A lighthouse\u{00A0}", Generation::query()->sole()->prompt);
+    }
+
+    /**
+     * PHP cannot decode an unpaired surrogate escape, so the body reads as empty: the
+     * user gets required-field errors and nothing is created.
+     */
+    public function test_a_json_body_with_an_unpaired_surrogate_gets_required_field_errors(): void
+    {
+        $body = '{"prompt":"A lighthouse \\ud800","size":"1536x1024","quality":"high","submission_token":"0b4f6c1e-8f6a-4c2e-9d3b-2a7e5c9f1b40"}';
+
+        $this->actingAs(User::factory()->create())
+            ->from(route('dashboard'))
+            ->call('POST', route('generations.store'), server: ['CONTENT_TYPE' => 'application/json'], content: $body)
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors(['prompt' => 'Enter a prompt.', 'size' => 'Choose a size.', 'quality' => 'Choose a quality.']);
+
+        $this->assertNothingWasCreated();
     }
 }

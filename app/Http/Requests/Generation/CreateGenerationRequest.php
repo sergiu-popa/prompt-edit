@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Generation;
 
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
+use App\Domain\Generation\Rules\StorableTextRule;
 use App\Domain\Generation\ValueObjects\GenerationInputLimits;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
@@ -25,6 +26,12 @@ final class CreateGenerationRequest extends FormRequest
     /** Ours: Pixelforge documents no bound on a reference URL. */
     public const int MAX_REFERENCE_URL_CHARACTERS = 2048;
 
+    /**
+     * Blank by JS trim()'s set, as the Generate page judges it: ASCII whitespace, the
+     * Unicode space and line separators (`\p{Z}`) and U+FEFF. `required` covers ASCII.
+     */
+    private const string BLANK_PROMPT_PATTERN = '/^[\t\n\x{0B}\f\r\p{Z}\x{FEFF}]*$/u';
+
     public function authorize(): bool
     {
         return true;
@@ -36,11 +43,25 @@ final class CreateGenerationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'prompt' => ['bail', 'required', 'string', 'max:' . GenerationInputLimits::MAX_PROMPT_CHARACTERS],
+            'prompt' => [
+                'bail',
+                'required',
+                'string',
+                new StorableTextRule,
+                'not_regex:' . self::BLANK_PROMPT_PATTERN,
+                'max:' . GenerationInputLimits::MAX_PROMPT_CHARACTERS,
+            ],
             'size' => ['bail', 'required', Rule::enum(ImageSize::class)],
             'quality' => ['bail', 'required', Rule::enum(ImageQuality::class)],
             'reference_images' => ['bail', 'sometimes', 'array', 'list', 'max:' . GenerationInputLimits::MAX_REFERENCE_IMAGES],
-            'reference_images.*' => ['bail', 'required', 'string', 'max:' . self::MAX_REFERENCE_URL_CHARACTERS, 'url:http,https'],
+            'reference_images.*' => [
+                'bail',
+                'required',
+                'string',
+                new StorableTextRule,
+                'max:' . self::MAX_REFERENCE_URL_CHARACTERS,
+                'url:http,https',
+            ],
             'submission_token' => ['bail', 'required', 'uuid'],
         ];
     }
@@ -57,6 +78,7 @@ final class CreateGenerationRequest extends FormRequest
         return [
             'prompt.required' => $enterAPrompt,
             'prompt.string' => $enterAPrompt,
+            'prompt.not_regex' => $enterAPrompt,
             'prompt.max' => sprintf('The prompt must be %s characters or fewer.', number_format(GenerationInputLimits::MAX_PROMPT_CHARACTERS)),
             'size.required' => 'Choose a size.',
             'size.enum' => 'Choose a size.',
