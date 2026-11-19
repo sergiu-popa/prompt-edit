@@ -99,7 +99,8 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         $id = 'gen_' . Str::ulid();
         $requestHash = hash('sha256', $payload->toJson());
 
-        $generation = FakePixelforgeGeneration::query()->firstOrCreate(['idempotency_key' => $payload->idempotencyKey()], [
+        // Lazy, so the usage and the chaos rolls are decided only for a row really inserted.
+        $generation = FakePixelforgeGeneration::query()->firstOrCreate(['idempotency_key' => $payload->idempotencyKey()], fn (): array => [
             'id' => $id,
             'request_hash' => $requestHash,
             'snapshot' => $this->creationSnapshot($id, $payload),
