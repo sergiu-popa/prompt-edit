@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use Symfony\Component\Finder\SplFileInfo;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process as SymfonyProcess;
 use Tests\TestCase;
 
 /**
@@ -159,6 +161,33 @@ final class BackupDatabaseCommandTest extends TestCase
         $this->assertSame('error', $this->loggedMessages[0]->level);
         $this->assertSame(1, $this->loggedMessages[0]->context['exit_code'] ?? null);
         $this->assertSame('pg_dump: error: connection to server failed', $this->loggedMessages[0]->context['error_output'] ?? null);
+        $this->assertPasswordNeverLogged();
+    }
+
+    public function test_a_timed_out_dump_keeps_last_weeks_copy(): void
+    {
+        config(['database.backups.path' => $this->backupPath]);
+        File::ensureDirectoryExists($this->backupPath, 0700);
+        $lastWeek = $this->backupPath . '/prompt_edit-wednesday.dump';
+        File::put($lastWeek, 'last week');
+
+        Process::fake(function (PendingProcess $process): never {
+            File::put(self::fileOption($process), 'half a dump');
+
+            throw new ProcessTimedOutException(new SymfonyProcess(['pg_dump']), ProcessTimedOutException::TYPE_GENERAL);
+        });
+        $this->travelTo(Carbon::parse(self::WEDNESDAY));
+
+        $this->backup()
+            ->expectsOutputToContain('pg_dump took longer than 300 seconds')
+            ->assertExitCode(1);
+
+        $this->assertSame('last week', File::get($lastWeek));
+        $this->assertFileDoesNotExist("{$lastWeek}.partial");
+
+        $this->assertCount(1, $this->loggedMessages);
+        $this->assertSame('error', $this->loggedMessages[0]->level);
+        $this->assertSame(300, $this->loggedMessages[0]->context['timeout_seconds'] ?? null);
         $this->assertPasswordNeverLogged();
     }
 

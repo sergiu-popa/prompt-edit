@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -15,7 +16,7 @@ use Illuminate\Support\Str;
 /**
  * The nightly database backup (D-22). It writes `<database>-<weekday>.dump` with `pg_dump`
  * into `DB_BACKUP_PATH`, so seven files rotate. The dump goes to a `.partial` file first, so a
- * failed run never replaces last week's copy. The password reaches `pg_dump` only through
+ * failed or timed-out run never replaces last week's copy. The password reaches `pg_dump` only through
  * `PGPASSWORD`: it is never on the command line, in the output or in a log.
  */
 #[Signature('app:backup-database')]
@@ -42,18 +43,27 @@ final class BackupDatabaseCommand extends Command
         $target = rtrim($directory, '/') . "/{$database}-" . Str::lower(now()->format('l')) . '.dump';
         $partial = "{$target}.partial";
 
-        $result = Process::timeout(self::TIMEOUT_SECONDS)
-            ->env(['PGPASSWORD' => (string) $connection['password']])
-            ->run([
-                'pg_dump',
-                '--format=custom',
-                '--no-password',
-                '--host=' . $connection['host'],
-                '--port=' . $connection['port'],
-                '--username=' . $connection['username'],
-                "--file={$partial}",
-                $database,
-            ]);
+        try {
+            $result = Process::timeout(self::TIMEOUT_SECONDS)
+                ->env(['PGPASSWORD' => (string) $connection['password']])
+                ->run([
+                    'pg_dump',
+                    '--format=custom',
+                    '--no-password',
+                    '--host=' . $connection['host'],
+                    '--port=' . $connection['port'],
+                    '--username=' . $connection['username'],
+                    "--file={$partial}",
+                    $database,
+                ]);
+        } catch (ProcessTimedOutException) {
+            File::delete($partial);
+
+            Log::error('Database backup timed out', ['timeout_seconds' => self::TIMEOUT_SECONDS]);
+            $this->components->error('pg_dump took longer than ' . self::TIMEOUT_SECONDS . ' seconds; the previous backups are untouched.');
+
+            return self::FAILURE;
+        }
 
         if ($result->failed()) {
             File::delete($partial);
