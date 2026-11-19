@@ -4,7 +4,7 @@
 Money in integer nanodollars: exact provider cost and the +25% charge
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 Every later money write (estimate, hold, settlement, operator report) needs one exact way to represent USD. This story adds the Billing domain's money primitives:
