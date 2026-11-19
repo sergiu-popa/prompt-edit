@@ -57,7 +57,3 @@ steer the work.
 **Prompt 6**
 
 > All PRs have been merged. Let's run the pipeline for each story, in order, 1 by 1, auditor included. Once I review and merge a PR, you'll start the next one. Don't forget about GIT hygiene, I need to keep up with the new code.
-
-**Prompt 7** (PE-002, after PE-001 was merged)
-
-> Merged. Continue with 002
