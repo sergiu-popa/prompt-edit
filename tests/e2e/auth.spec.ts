@@ -1,15 +1,6 @@
-import type { Page } from '@playwright/test';
-
 import { expect, test } from './fixtures';
-import { DEMO_USER, uniqueEmail } from './support/auth';
+import { DEMO_USER, signIn, uniqueEmail } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
-
-async function signIn(page: Page, email: string, password: string): Promise<void> {
-    await page.goto('/login');
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill(password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-}
 
 test('signs up, lands on the signed-in home and signs out', async ({ page }, testInfo) => {
     // One unbroken 60-character word: the header must truncate it, not scroll.
