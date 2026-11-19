@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fixturePricing, fixturePricingWith, LIGHTHOUSE_PROMPT } from '../../../support/pricing';
-import { givenSignedInAs } from '../../support/inertia';
+import { givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
 import { visibleText } from '../../support/text';
 
 import Create from '@/pages/Generations/Create.vue';
@@ -33,6 +33,18 @@ function headline(wrapper: VueWrapper): string {
 
 function counter(wrapper: VueWrapper): string {
     return wrapper.get('[id$="-aside"]').text();
+}
+
+function generateButton(wrapper: VueWrapper) {
+    return wrapper.get('button[type="submit"]');
+}
+
+async function addReference(wrapper: VueWrapper, url: string): Promise<void> {
+    await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Add reference image')!
+        .trigger('click');
+    await wrapper.findAll('input[type="url"]').at(-1)!.setValue(url);
 }
 
 describe('Generate page', () => {
@@ -105,14 +117,8 @@ describe('Generate page', () => {
         expect(headline(wrapper)).toBe("We couldn't calculate an estimate right now.");
     });
 
-    it('never submits the form yet', () => {
-        const wrapper = mountPage();
-
-        const submit = new Event('submit', { cancelable: true });
-        wrapper.get('form').element.dispatchEvent(submit);
-
-        expect(submit.defaultPrevented).toBe(true);
-        expect(wrapper.get('form').attributes('novalidate')).toBeDefined();
+    it('leaves validation to its own checks and the server', () => {
+        expect(mountPage().get('form').attributes('novalidate')).toBeDefined();
     });
 
     it('puts the estimate panel after the form', () => {
@@ -121,6 +127,143 @@ describe('Generate page', () => {
         const form = wrapper.get('form').element;
         const panel = wrapper.get('aside').element;
         expect(form.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('puts the submit area after the estimate panel', () => {
+        const wrapper = mountPage();
+
+        const panel = wrapper.get('aside').element;
+        const submitArea = wrapper.get('[data-submit-area]').element;
+        expect(panel.compareDocumentPosition(submitArea) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(generateButton(wrapper).attributes('form')).toBe(wrapper.get('form').attributes('id'));
+    });
+
+    describe('submitting', () => {
+        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+        async function fillLighthouse(wrapper: VueWrapper, referenceRows: string[] = ['https://example.com/style.png']): Promise<void> {
+            await wrapper.get('textarea').setValue('A lighthouse on a cliff at dawn, oil painting');
+            await radio(wrapper, 'Quality', 'High').setValue(true);
+            await radio(wrapper, 'Size', 'Landscape').setValue(true);
+
+            for (const row of referenceRows) {
+                await addReference(wrapper, row);
+            }
+        }
+
+        async function submit(wrapper: VueWrapper): Promise<void> {
+            await wrapper.get('form').trigger('submit');
+        }
+
+        function submittedToken(post: ReturnType<typeof givenVisitsStayPending>, call: number): string {
+            return (post.mock.calls[call]![1] as { submission_token: string }).submission_token;
+        }
+
+        it('posts exactly the five fields, leaving blank rows out and trimming URLs, as the estimate counted them', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage();
+
+            await fillLighthouse(wrapper, ['  https://example.com/style.png  ', '   ']);
+            expect(headline(wrapper)).toBe('$0.3478 – $0.4572 typically $0.4025');
+            await submit(wrapper);
+
+            expect(post).toHaveBeenCalledTimes(1);
+            expect(post).toHaveBeenCalledWith(
+                '/generations',
+                {
+                    prompt: 'A lighthouse on a cliff at dawn, oil painting',
+                    size: '1536x1024',
+                    quality: 'high',
+                    reference_images: ['https://example.com/style.png'],
+                    submission_token: expect.stringMatching(UUID),
+                },
+                expect.any(Object),
+            );
+        });
+
+        it('sends the prompt exactly as typed', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage();
+
+            await wrapper.get('textarea').setValue('    A lighthouse\n');
+            await submit(wrapper);
+
+            expect((post.mock.calls[0]![1] as { prompt: string }).prompt).toBe('    A lighthouse\n');
+        });
+
+        it('sends one token per visit, kept when the server sends the form back', async () => {
+            const post = givenVisitsFailWith({ prompt: 'The prompt must be 4,000 characters or fewer.' });
+            const first = mountPage();
+            await fillLighthouse(first);
+            await submit(first);
+            await submit(first);
+
+            const second = mountPage();
+            await fillLighthouse(second);
+            await submit(second);
+
+            expect(post).toHaveBeenCalledTimes(3);
+            expect(submittedToken(post, 0)).toMatch(UUID);
+            expect(submittedToken(post, 1)).toBe(submittedToken(post, 0));
+            expect(submittedToken(post, 2)).not.toBe(submittedToken(post, 0));
+        });
+
+        it('enables Generate for a valid form', async () => {
+            const wrapper = mountPage();
+
+            await fillLighthouse(wrapper);
+
+            expect(generateButton(wrapper).text()).toBe('Generate');
+            expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+        });
+
+        it.each<[string, (wrapper: VueWrapper) => Promise<void>]>([
+            ['the prompt is empty', async () => {}],
+            ['the prompt is blank', (wrapper) => wrapper.get('textarea').setValue('\u00A0 \u3000')],
+            ['the prompt is over 4,000 code points', (wrapper) => wrapper.get('textarea').setValue('a'.repeat(3_999) + '🎨🎨')],
+            [
+                'a reference is not an http(s) URL',
+                async (wrapper) => {
+                    await wrapper.get('textarea').setValue(LIGHTHOUSE_PROMPT);
+                    await addReference(wrapper, 'example.com/a.png');
+                },
+            ],
+        ])('disables Generate, and sends nothing on Enter, when %s', async (_case, arrange) => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage();
+
+            await arrange(wrapper);
+            await submit(wrapper);
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+            expect(post).not.toHaveBeenCalled();
+        });
+
+        it('disables Generate while the estimate is unavailable', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage(fixturePricingWith((pricing) => (pricing.nanodollars_per_token.output_tokens = 1.5)));
+
+            await wrapper.get('textarea').setValue(LIGHTHOUSE_PROMPT);
+            await submit(wrapper);
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+            expect(post).not.toHaveBeenCalled();
+        });
+
+        it('shows a busy, disabled Generate and sends one request however often it is submitted', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage();
+
+            await fillLighthouse(wrapper);
+            await submit(wrapper);
+            await submit(wrapper);
+            await generateButton(wrapper).trigger('click');
+
+            expect(generateButton(wrapper).text()).toBe('Generating…');
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+            expect(generateButton(wrapper).attributes('aria-busy')).toBe('true');
+            expect(post).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('reference images', () => {
@@ -132,14 +275,6 @@ describe('Generate page', () => {
             await radio(wrapper, 'Size', 'Landscape').setValue(true);
 
             return wrapper;
-        }
-
-        async function addReference(wrapper: VueWrapper, url: string): Promise<void> {
-            await wrapper
-                .findAll('button')
-                .find((button) => button.text() === 'Add reference image')!
-                .trigger('click');
-            await wrapper.findAll('input[type="url"]').at(-1)!.setValue(url);
         }
 
         it('adds each non-blank reference to the estimate', async () => {
