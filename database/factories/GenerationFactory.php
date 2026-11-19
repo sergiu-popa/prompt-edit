@@ -23,7 +23,7 @@ use LogicException;
  * The definition is a pending row: PE-006's AC1 worked example, before submit.
  * Each state builds on the one before it, as Pixelforge moves a generation on.
  * Every created row holds its max user price, as CreateGenerationAction does,
- * and a succeeded row is settled as the transition action settles it, so its
+ * and a terminal row is settled as the transition action settles it, so its
  * ledger always matches its status.
  *
  * @extends Factory<Generation>
@@ -41,12 +41,14 @@ final class GenerationFactory extends Factory
                 new Nanodollars($generation->user_estimate_max_nanodollars),
             );
 
-            if ($generation->status === GenerationStatus::Succeeded) {
-                app(SettleGenerationCreditsAction::class)->execute(
+            match ($generation->status) {
+                GenerationStatus::Succeeded => app(SettleGenerationCreditsAction::class)->execute(
                     $generation->id,
                     new Nanodollars($generation->user_charge_nanodollars ?? throw new LogicException('A succeeded generation has a user charge.')),
-                );
-            }
+                ),
+                GenerationStatus::Failed => app(SettleGenerationCreditsAction::class)->execute($generation->id, null),
+                default => null,
+            };
         });
     }
 
@@ -125,6 +127,8 @@ final class GenerationFactory extends Factory
             'error_code' => 'generation_failed',
             'error_message' => 'The model could not produce an image for this prompt.',
             'completed_at' => self::instant($attributes['started_at'])->addSeconds(16),
+            'provider_cost_nanodollars' => 0,
+            'user_charge_nanodollars' => 0,
         ]);
     }
 
@@ -140,6 +144,8 @@ final class GenerationFactory extends Factory
             'error_code' => 'content_policy_violation',
             'error_message' => 'The prompt was rejected by the content policy.',
             'error_param' => 'prompt',
+            'provider_cost_nanodollars' => 0,
+            'user_charge_nanodollars' => 0,
         ]);
     }
 

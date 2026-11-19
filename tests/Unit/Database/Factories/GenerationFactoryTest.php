@@ -128,6 +128,7 @@ final class GenerationFactoryTest extends TestCase
     public static function statesWithTheirMoney(): array
     {
         $held = [['hold', -123_387_500]];
+        $released = [...$held, ['release', 123_387_500]];
 
         return [
             'pending' => [fn (GenerationFactory $factory): GenerationFactory => $factory, null, null, $held],
@@ -137,10 +138,10 @@ final class GenerationFactoryTest extends TestCase
                 fn (GenerationFactory $factory): GenerationFactory => $factory->succeeded(),
                 87_450_000,
                 109_312_500,
-                [...$held, ['release', 123_387_500], ['charge', -109_312_500]],
+                [...$released, ['charge', -109_312_500]],
             ],
-            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed(), null, null, $held],
-            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally(), null, null, $held],
+            'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed(), 0, 0, $released],
+            'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally(), 0, 0, $released],
         ];
     }
 

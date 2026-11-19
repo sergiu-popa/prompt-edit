@@ -29,10 +29,19 @@ use Illuminate\Support\Facades\Log;
  *
  * Money moves with the status, in the same transaction: a succeeded snapshot
  * is priced from its own usage and rates before anything is written, then the
- * hold is settled against the actual charge.
+ * hold is settled against the actual charge. A failure is free and only
+ * releases the hold.
  */
 final class TransitionGenerationAction
 {
+    /**
+     * A failed generation costs nothing, from Pixelforge or from us.
+     */
+    private const array FREE = [
+        'provider_cost_nanodollars' => 0,
+        'user_charge_nanodollars' => 0,
+    ];
+
     public function __construct(
         private readonly CalculateProviderCostAction $calculateProviderCost,
         private readonly CalculateUserChargeAction $calculateUserCharge,
@@ -155,25 +164,45 @@ final class TransitionGenerationAction
     private function apply(Generation $locked, GenerationSnapshot|LocalGenerationFailureData $change): void
     {
         if ($change instanceof LocalGenerationFailureData) {
-            $this->write($locked, $this->localFailureAttributes($change));
+            $this->write($locked, [...$this->localFailureAttributes($change), ...self::FREE]);
+            $this->settleGenerationCredits->execute($locked->id, null);
 
             return;
         }
 
-        if ($change->status !== GenerationStatus::Succeeded) {
-            $this->write($locked, $this->snapshotAttributes($change));
+        match ($change->status) {
+            GenerationStatus::Succeeded => $this->applySuccess($locked, $change),
+            GenerationStatus::Failed => $this->applyProviderFailure($locked, $change),
+            default => $this->write($locked, $this->snapshotAttributes($change)),
+        };
+    }
 
-            return;
-        }
-
-        [$providerCost, $userCharge] = $this->price($change);
+    /**
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function applySuccess(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        [$providerCost, $userCharge] = $this->price($snapshot);
 
         $this->write($locked, [
-            ...$this->snapshotAttributes($change),
+            ...$this->snapshotAttributes($snapshot),
             'provider_cost_nanodollars' => $providerCost->amount,
             'user_charge_nanodollars' => $userCharge->amount,
         ]);
         $this->settleGenerationCredits->execute($locked->id, $userCharge);
+    }
+
+    /**
+     * Pixelforge does not bill a failed generation, and neither do we.
+     *
+     * @throws ConcurrentGenerationTransitionException when the row changed under the lock
+     */
+    private function applyProviderFailure(Generation $locked, GenerationSnapshot $snapshot): void
+    {
+        $this->write($locked, [...$this->snapshotAttributes($snapshot), ...self::FREE]);
+        $this->settleGenerationCredits->execute($locked->id, null);
     }
 
     /**

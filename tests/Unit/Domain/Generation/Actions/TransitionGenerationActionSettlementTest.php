@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\Actions;
 
 use App\Domain\Billing\ValueObjects\PricingTable;
+use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
+use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Models\Generation;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
@@ -23,7 +26,8 @@ use Tests\TestCase;
 
 /**
  * The money side of an applied transition: a succeeded generation is charged
- * its actual cost from its own usage and rates, and its hold is released.
+ * its actual cost from its own usage and rates, a failed one is free, and
+ * either way its hold is released.
  */
 final class TransitionGenerationActionSettlementTest extends TestCase
 {
@@ -175,5 +179,54 @@ final class TransitionGenerationActionSettlementTest extends TestCase
             $this->ledgerEntriesFor($generation),
         );
         $this->assertSame(305_510_000, $this->reloadedGeneration($generation)->provider_cost_nanodollars);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function providerFailureCodes(): array
+    {
+        return [
+            'generation_failed' => ['generation_failed'],
+            'internal_error' => ['internal_error'],
+        ];
+    }
+
+    #[DataProvider('providerFailureCodes')]
+    public function test_a_failed_snapshot_is_free_and_releases_the_hold(string $errorCode): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+
+        $outcome = $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Failed, [
+            'error' => ['code' => $errorCode, 'message' => 'The generation failed.'],
+            'usage' => null,
+        ]));
+
+        $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
+        $this->assertFreeWithItsHoldReleased($generation);
+    }
+
+    public function test_a_local_failure_is_free_and_releases_the_hold(): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+
+        $outcome = $this->transitionGeneration(
+            $generation,
+            new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, 'content_policy_violation', 'The prompt was rejected by the content policy.', 'prompt'),
+        );
+
+        $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
+        $this->assertFreeWithItsHoldReleased($generation);
+    }
+
+    private function assertFreeWithItsHoldReleased(Generation $generation): void
+    {
+        $row = $this->reloadedGeneration($generation);
+
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(0, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($generation));
+        $this->assertSame(0, $this->ledgerNetFor($generation));
     }
 }
