@@ -34,10 +34,6 @@ RUN docker-php-ext-install \
         intl \
         opcache
 
-RUN pecl install redis \
-    && rm -rf /tmp/pear \
-    && docker-php-ext-enable redis
-
 COPY --from=composer-src /usr/bin/composer /usr/bin/composer
 
 RUN mkdir /run/supervisor \
