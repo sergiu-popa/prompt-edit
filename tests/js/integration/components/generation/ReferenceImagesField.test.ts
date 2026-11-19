@@ -139,6 +139,18 @@ describe('ReferenceImagesField', () => {
         expect(input.attributes('aria-invalid')).toBeUndefined();
     });
 
+    it.each(['Add reference image', 'Remove reference image 1'])(
+        'keeps focus in the row when %s is pressed, so a hint appearing on blur cannot move the button from under the click',
+        (name) => {
+            const field = mountField(['example.com/cat.png']);
+            const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+
+            button(field, name).element.dispatchEvent(mousedown);
+
+            expect(mousedown.defaultPrevented).toBe(true);
+        },
+    );
+
     it.each([[''], ['   '], ['https://example.com/style.png']])('shows no hint for %j', (value) => {
         const field = mountField([value]);
 

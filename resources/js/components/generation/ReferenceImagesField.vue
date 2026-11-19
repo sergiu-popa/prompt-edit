@@ -10,7 +10,8 @@ import { isHttpImageUrl } from '@/lib/referenceImages';
  * Up to `max` reference image URL rows. Every non-blank row is billed, even one that
  * isn't a valid URL yet, so the estimate shows what submitting will cost once it is
  * fixed. The shape hint waits until a row loses focus, so typing `https://` never
- * flashes an error.
+ * flashes an error. Add and Remove keep focus on mousedown and move it themselves:
+ * otherwise the blur would show a hint, shift the button and swallow the click.
  */
 const props = defineProps<{
     max: number;
@@ -95,7 +96,12 @@ async function removeRow(index: number): Promise<void> {
                         @focus="focusedRow = index"
                         @blur="focusedRow = null"
                     />
-                    <Button variant="secondary" class="shrink-0 px-3" :aria-label="removeLabel(index)" @click="removeRow(index)"
+                    <Button
+                        variant="secondary"
+                        class="shrink-0 px-3"
+                        :aria-label="removeLabel(index)"
+                        @mousedown.prevent
+                        @click="removeRow(index)"
                         ><span aria-hidden="true">×</span></Button
                     >
                 </div>
@@ -104,7 +110,7 @@ async function removeRow(index: number): Promise<void> {
         </ul>
 
         <div ref="actions" class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Button variant="secondary" :disabled="isFull" @click="addRow">Add reference image</Button>
+            <Button variant="secondary" :disabled="isFull" @mousedown.prevent @click="addRow">Add reference image</Button>
             <p v-if="isFull" class="text-sm text-zinc-500">Up to {{ max }} reference images.</p>
             <p v-else-if="perReferenceNanodollars !== null" class="text-sm text-zinc-600">
                 +<MoneyAmount :nanodollars="perReferenceNanodollars" /> each
