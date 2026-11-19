@@ -17,6 +17,27 @@ async function expectBreakdownInsideCard(page: Page): Promise<void> {
     await expectInsideContentBox(card, card.locator('table, button'));
 }
 
+/**
+ * Each token line of the breakdown reads as one table row: its label and its cost start
+ * on the same line, rather than the cost stacking under the tokens as on a phone.
+ */
+async function expectOneRowPerTokenLine(page: Page): Promise<void> {
+    const rows = estimatePanel(page).locator('tbody').first().locator('tr');
+    const misaligned = await rows.evaluateAll((elements) =>
+        elements
+            .map((row) => {
+                const label = row.querySelector('th')!;
+                const cost = row.querySelector('td:last-child')!;
+
+                return { label: label.textContent!.trim(), offset: cost.getBoundingClientRect().top - label.getBoundingClientRect().top };
+            })
+            .filter((row) => Math.abs(row.offset) > 0.5),
+    );
+
+    expect(await rows.count(), 'token lines').toBeGreaterThan(0);
+    expect(misaligned, 'token lines whose cost does not share the label row').toStrictEqual([]);
+}
+
 function headline(page: Page): Locator {
     return estimatePanel(page).locator('[data-headline]');
 }
@@ -99,6 +120,10 @@ test('estimates the cost live as the prompt, quality, size and references change
 
     await expectNoHorizontalScroll(page);
     await expectBreakdownInsideCard(page);
+
+    if (testInfo.project.name !== 'mobile') {
+        await expectOneRowPerTokenLine(page);
+    }
 
     // AC11 at the narrowest phone width, where the breakdown is tightest.
     await page.setViewportSize({ width: 375, height: 812 });

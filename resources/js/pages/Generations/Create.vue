@@ -27,7 +27,7 @@ const { estimate, referenceImageCount, perReferenceNanodollars } = useEstimate((
 
     <AppLayout>
         <!-- Mobile: one column, the estimate after the form. From `lg`: two columns, the estimate kept in view. -->
-        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:items-start">
             <!-- PE-011 wires the submit; until then Enter in a field must not reload the page. -->
             <form novalidate class="flex min-w-0 flex-col gap-6" @submit.prevent>
                 <h1 class="text-xl font-semibold tracking-tight">New image</h1>
