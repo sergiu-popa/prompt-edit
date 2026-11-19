@@ -61,7 +61,7 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
     <div
         :data-highlighted="highlighted ? 'true' : undefined"
         :class="[
-            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[11px] group-last:rounded-b-[11px] sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:px-5',
+            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[calc(var(--radius-xl)-1px)] group-last:rounded-b-[calc(var(--radius-xl)-1px)] sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:px-5',
             highlighted && 'bg-sky-50/70 shadow-[inset_4px_0_0_var(--color-sky-600)]',
         ]"
     >
