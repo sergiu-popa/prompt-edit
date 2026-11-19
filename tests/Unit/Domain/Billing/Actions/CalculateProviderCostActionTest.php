@@ -10,15 +10,11 @@ use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Billing\ValueObjects\TokenUsage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Tests\Concerns\InteractsWithPricing;
 
 final class CalculateProviderCostActionTest extends TestCase
 {
-    private const array PUBLISHED_RATES = [
-        'input_text_tokens' => '5.00',
-        'input_image_tokens' => '10.00',
-        'output_tokens' => '40.00',
-        'reasoning_tokens' => '12.50',
-    ];
+    use InteractsWithPricing;
 
     /**
      * @return array<string, array{array{int, int, int, int}, array<string, string>, int, string}>
@@ -50,7 +46,7 @@ final class CalculateProviderCostActionTest extends TestCase
     ): void {
         $cost = (new CalculateProviderCostAction)->execute(
             new TokenUsage(...$counts),
-            TokenRates::from([...self::PUBLISHED_RATES, ...$rateOverrides]),
+            TokenRates::from([...self::publishedRates(), ...$rateOverrides]),
         );
 
         $this->assertSame($expectedNanodollars, $cost->amount);
@@ -79,7 +75,7 @@ final class CalculateProviderCostActionTest extends TestCase
 
         (new CalculateProviderCostAction)->execute(
             new TokenUsage(...$counts),
-            TokenRates::from([...self::PUBLISHED_RATES, ...$rateOverrides]),
+            TokenRates::from([...self::publishedRates(), ...$rateOverrides]),
         );
     }
 }
