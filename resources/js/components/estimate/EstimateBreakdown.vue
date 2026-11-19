@@ -118,7 +118,7 @@ const totalLines = computed<TotalLine[]>(() => {
     <!--
         A container query, not a viewport one: the panel is narrow both on a phone and in
         the desktop sidebar. Below 24rem (a phone) each line stacks its cost under its tokens,
-        so the amounts never run past the card; from 24rem (the 28rem desktop sidebar) it is
+        so the amounts never run past the card; from 24rem (the 30rem desktop sidebar) it is
         an ordinary three-column table, one row per line.
     -->
     <div class="@container">

@@ -48,7 +48,7 @@ const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmitta
                 Mobile: one column, the form, the estimate, then Generate, so the price comes first.
                 From `lg`: the form and Generate on the left, the estimate kept in view on the right.
             -->
-            <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:grid-rows-[auto_1fr] lg:items-start">
+            <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_30rem] lg:grid-rows-[auto_1fr] lg:items-start">
                 <form :id="formId" ref="formElement" novalidate class="flex min-w-0 flex-col gap-8" @submit.prevent="submit">
                     <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" :server-error="form.errors.prompt" />
                     <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" :error="form.errors.size" />

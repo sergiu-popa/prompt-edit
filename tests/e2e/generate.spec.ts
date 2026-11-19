@@ -19,7 +19,8 @@ async function expectBreakdownInsideCard(page: Page): Promise<void> {
 
 /**
  * Each token line of the breakdown reads as one table row: its label and its cost start
- * on the same line, rather than the cost stacking under the tokens as on a phone.
+ * on the same line, rather than the cost stacking under the tokens as on a phone, and
+ * its exact/estimated badge sits on the line of its token count instead of wrapping below.
  */
 async function expectOneRowPerTokenLine(page: Page): Promise<void> {
     const rows = estimatePanel(page).locator('tbody').first().locator('tr');
@@ -27,15 +28,22 @@ async function expectOneRowPerTokenLine(page: Page): Promise<void> {
         elements
             .map((row) => {
                 const label = row.querySelector('th')!;
+                const tokens = row.querySelector('td')!;
                 const cost = row.querySelector('td:last-child')!;
+                const count = tokens.querySelector('span')!.getBoundingClientRect();
+                const badge = tokens.querySelector('span + span:not(.block)')?.getBoundingClientRect();
 
-                return { label: label.textContent!.trim(), offset: cost.getBoundingClientRect().top - label.getBoundingClientRect().top };
+                return {
+                    label: label.textContent!.trim(),
+                    costOffset: cost.getBoundingClientRect().top - label.getBoundingClientRect().top,
+                    badgeBelowCount: badge === undefined ? false : badge.top >= count.bottom,
+                };
             })
-            .filter((row) => Math.abs(row.offset) > 0.5),
+            .filter((row) => Math.abs(row.costOffset) > 0.5 || row.badgeBelowCount),
     );
 
     expect(await rows.count(), 'token lines').toBeGreaterThan(0);
-    expect(misaligned, 'token lines whose cost does not share the label row').toStrictEqual([]);
+    expect(misaligned, 'token lines whose cost leaves the label row or whose badge wraps under its count').toStrictEqual([]);
 }
 
 function headline(page: Page): Locator {
