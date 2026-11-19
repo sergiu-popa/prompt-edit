@@ -294,4 +294,113 @@ final class PixelforgeWebhookGenerationEventsTest extends TestCase
         $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($lighthouse));
         $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
     }
+
+    /**
+     * D-27: an event that lost our metadata is matched by the provider id the
+     * create response stored, and the fallback is logged.
+     */
+    public function test_an_event_without_our_generation_id_is_matched_by_the_stored_provider_id(): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($lighthouse, ['metadata' => (object) []])))->assertOk();
+
+        $this->assertSame(GenerationStatus::Succeeded, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame(self::LIGHTHOUSE_CHARGED, $this->ledgerEntriesFor($lighthouse));
+        $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('warning', $logged[0]->level);
+        $this->assertSame('Identified a Pixelforge snapshot without our generation id by its stored provider id.', $logged[0]->message);
+        $this->assertSame(['generation_id' => $lighthouse->id, 'provider_id' => 'gen_' . strtoupper($lighthouse->id)], $logged[0]->context);
+    }
+
+    /**
+     * The provider id finds the row, but the event names another generation:
+     * the data contradicts itself, so it is refused, not merely incomplete.
+     */
+    public function test_an_event_with_a_foreign_generation_id_but_our_provider_id_is_recorded_but_refused(): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $this->travel(1)->minutes();
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($lighthouse, ['metadata' => ['generation_id' => 'not-a-ulid']])))->assertOk();
+
+        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame('Refused a Pixelforge snapshot of another generation.', $logged[0]->message);
+    }
+
+    /**
+     * Our row always exists before submission (D-05), so an unknown
+     * generation is foreign data: a retry could never help, so it is answered
+     * 2xx, recorded and logged.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    #[DataProvider('unknownGenerations')]
+    public function test_an_event_for_an_unknown_generation_is_recorded_without_one_and_changes_nothing(array $metadata): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $this->travel(1)->minutes();
+        $object = self::lighthouseSucceededObjectFor($lighthouse, ['id' => 'gen_UNKNOWN', 'metadata' => (object) $metadata]);
+        $event = self::pixelforgeEvent('generation.succeeded', $object);
+
+        $this->deliverPixelforgeEvent($event)->assertOk();
+
+        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $events = $this->storedWebhookEvents();
+        $this->assertCount(1, $events);
+        $this->assertSame([$event['id'], null], [$events[0]['event_id'], $events[0]['generation_id']]);
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('warning', $logged[0]->level);
+        $this->assertSame('Recorded a Pixelforge webhook for an unknown generation; nothing changed.', $logged[0]->message);
+        $this->assertSame(
+            [
+                'event_id' => $event['id'],
+                'type' => 'generation.succeeded',
+                'generation_id' => $metadata['generation_id'] ?? null,
+                'provider_id' => 'gen_UNKNOWN',
+            ],
+            $logged[0]->context,
+        );
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function unknownGenerations(): array
+    {
+        return [
+            'a ULID with no row' => [['generation_id' => '01jc2z8q4n6v0m3h7x5t9r2b1k']],
+            'not a ULID' => [['generation_id' => 'not-a-ulid']],
+            '500 characters' => [['generation_id' => str_repeat('a', 500)]],
+            'a ULID followed by a NUL byte' => [['generation_id' => "01jc2z8q4n6v0m3h7x5t9r2b1k\0x"]],
+            'absent' => [['order_id' => '1042']],
+        ];
+    }
+
+    /**
+     * pdo_pgsql would cut `<ULID>\0x` at the NUL byte and match the real row,
+     * so a value that is not a ULID is never queried.
+     */
+    public function test_our_ulid_followed_by_a_nul_byte_never_matches_our_row(): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $object = self::lighthouseSucceededObjectFor($lighthouse, ['id' => 'gen_UNKNOWN', 'metadata' => ['generation_id' => $lighthouse->id . "\0x"]]);
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.succeeded', $object))->assertOk();
+
+        $this->assertSame(GenerationStatus::Queued, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame([null], array_column($this->storedWebhookEvents(), 'generation_id'));
+    }
 }

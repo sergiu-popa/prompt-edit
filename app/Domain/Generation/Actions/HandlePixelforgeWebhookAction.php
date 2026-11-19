@@ -55,7 +55,18 @@ final readonly class HandlePixelforgeWebhookAction
                 return;
             }
 
-            if ($snapshot === null || $generation === null) {
+            if ($snapshot === null) {
+                return;
+            }
+
+            if ($generation === null) {
+                Log::warning('Recorded a Pixelforge webhook for an unknown generation; nothing changed.', [
+                    'event_id' => $delivery->eventId,
+                    'type' => $delivery->type,
+                    'generation_id' => $snapshot->generationId,
+                    'provider_id' => $snapshot->id,
+                ]);
+
                 return;
             }
 
@@ -64,21 +75,26 @@ final readonly class HandlePixelforgeWebhookAction
     }
 
     /**
+     * Our ULID first, because the event can arrive before the create response
+     * stored a provider id; then the stored provider id. The transition still
+     * checks both ids against the row it is given.
+     *
      * The row is locked before the event row is written: that row's foreign
      * key takes a key-share lock on the generation, so two different events
      * for one generation would otherwise deadlock on the transition's
      * `FOR UPDATE`. A value that is not a ULID is never queried, because
-     * pdo_pgsql cuts a string at a NUL byte and `<ULID>\0x` would match.
+     * pdo_pgsql cuts a string at a NUL byte and `<ULID>\0x` would match. The
+     * snapshot already refuses a provider id with a NUL byte.
      */
     private function lockedGenerationFor(GenerationSnapshot $snapshot): ?Generation
     {
         $generationId = $snapshot->generationId;
 
-        if ($generationId === null || ! Str::isUlid($generationId)) {
-            return null;
-        }
+        $byUlid = $generationId !== null && Str::isUlid($generationId)
+            ? Generation::query()->whereKey($generationId)->lockForUpdate()->first()
+            : null;
 
-        return Generation::query()->whereKey($generationId)->lockForUpdate()->first();
+        return $byUlid ?? Generation::query()->where('provider_id', $snapshot->id)->lockForUpdate()->first();
     }
 
     /**
