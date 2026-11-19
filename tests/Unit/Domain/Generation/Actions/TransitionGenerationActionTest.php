@@ -14,12 +14,14 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
 
 final class TransitionGenerationActionTest extends TestCase
 {
+    use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
     use RefreshDatabase;
@@ -84,6 +86,7 @@ final class TransitionGenerationActionTest extends TestCase
         $generation = $this->givenAGenerationIn($rowStatus);
         $snapshot = self::snapshotFor($generation, $incomingStatus);
         $before = $this->rawGenerationRow($generation);
+        $ledgerBefore = $this->ledgerEntriesFor($generation);
         $this->travel(1)->minutes();
 
         $outcome = $this->transitionGeneration($generation, $snapshot);
@@ -97,6 +100,7 @@ final class TransitionGenerationActionTest extends TestCase
         }
 
         $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame($ledgerBefore, $this->ledgerEntriesFor($generation));
     }
 
     /**
@@ -123,6 +127,7 @@ final class TransitionGenerationActionTest extends TestCase
     ): void {
         $generation = $this->givenAGenerationIn($rowStatus);
         $before = $this->rawGenerationRow($generation);
+        $ledgerBefore = $this->ledgerEntriesFor($generation);
         $this->travel(1)->minutes();
 
         $outcome = $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
@@ -136,6 +141,7 @@ final class TransitionGenerationActionTest extends TestCase
         }
 
         $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame($ledgerBefore, $this->ledgerEntriesFor($generation));
     }
 
     public function test_an_applied_local_failure_records_the_reason_and_the_providers_error(): void
