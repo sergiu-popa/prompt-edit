@@ -403,4 +403,45 @@ final class PixelforgeWebhookGenerationEventsTest extends TestCase
         $this->assertSame(GenerationStatus::Queued, $this->reloadedGeneration($lighthouse)->status);
         $this->assertSame([null], array_column($this->storedWebhookEvents(), 'generation_id'));
     }
+
+    /**
+     * The docs say to go by the generation's status, so the snapshot decides
+     * the transition, and the event type that disagrees is logged.
+     *
+     * @param  list<array{string, int}>  $ledger
+     */
+    #[DataProvider('typesThatDisagreeWithTheirSnapshot')]
+    public function test_the_snapshot_status_decides_when_the_event_type_disagrees(string $type, GenerationStatus $snapshotStatus, array $ledger): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $object = $snapshotStatus === GenerationStatus::Succeeded
+            ? self::lighthouseSucceededObjectFor($lighthouse)
+            : self::generationObjectFor($lighthouse, $snapshotStatus);
+        $event = self::pixelforgeEvent($type, $object);
+
+        $this->deliverPixelforgeEvent($event)->assertOk();
+
+        $this->assertSame($snapshotStatus, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame($ledger, $this->ledgerEntriesFor($lighthouse));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('warning', $logged[0]->level);
+        $this->assertSame('A Pixelforge webhook\'s type disagrees with its snapshot\'s status; the status decides.', $logged[0]->message);
+        $this->assertSame(
+            ['event_id' => $event['id'], 'type' => $type, 'status' => $snapshotStatus->value, 'generation_id' => $lighthouse->id],
+            $logged[0]->context,
+        );
+    }
+
+    /**
+     * @return array<string, array{string, GenerationStatus, list<array{string, int}>}>
+     */
+    public static function typesThatDisagreeWithTheirSnapshot(): array
+    {
+        return [
+            'succeeded, still processing' => ['generation.succeeded', GenerationStatus::Processing, [['hold', -457_150_000]]],
+            'processing, already succeeded' => ['generation.processing', GenerationStatus::Succeeded, self::LIGHTHOUSE_CHARGED],
+        ];
+    }
 }

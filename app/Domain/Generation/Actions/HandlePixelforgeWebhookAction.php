@@ -20,7 +20,8 @@ use Illuminate\Support\Str;
  * is written in the same transaction as the state change, and only a new row
  * hands its snapshot to the single transition action (D-06), so the ledger
  * settles or releases once. Dedupe and routing use the signed body's id and
- * type; the unsigned headers only inform.
+ * type; the unsigned headers only inform. The snapshot's status, not the
+ * event type, decides the transition, as the docs say.
  */
 final readonly class HandlePixelforgeWebhookAction
 {
@@ -68,6 +69,15 @@ final readonly class HandlePixelforgeWebhookAction
                 ]);
 
                 return;
+            }
+
+            if ($delivery->knownType->generationStatus() !== $snapshot->status) {
+                Log::warning('A Pixelforge webhook\'s type disagrees with its snapshot\'s status; the status decides.', [
+                    'event_id' => $delivery->eventId,
+                    'type' => $delivery->type,
+                    'status' => $snapshot->status->value,
+                    'generation_id' => $generation->id,
+                ]);
             }
 
             $this->transitionGeneration->execute($generation, $snapshot);
