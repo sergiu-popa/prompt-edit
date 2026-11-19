@@ -184,7 +184,7 @@ final class TransitionGenerationAction
      */
     private function applySuccess(Generation $locked, GenerationSnapshot $snapshot): void
     {
-        [$providerCost, $userCharge] = $this->price($snapshot);
+        [$providerCost, $userCharge] = $this->price($locked, $snapshot);
 
         $this->write($locked, [
             ...$this->snapshotAttributes($snapshot),
@@ -207,21 +207,35 @@ final class TransitionGenerationAction
 
     /**
      * What Pixelforge bills for the generation, from the snapshot's own usage
-     * and rates (never the pinned table), and that cost with the markup.
+     * and rates (never the pinned table), and that cost with the markup. Bad
+     * provider data is never rounded or guessed: it is logged and rethrown,
+     * so the generation stays non-terminal with only its hold. The `usage` and
+     * `rates` throws only narrow the types: GenerationSnapshot::from() already
+     * refuses a succeeded object without them.
      *
      * @return array{Nanodollars, Nanodollars} the provider cost and the user charge
      *
      * @throws InvalidRateException
      * @throws NanodollarOverflowException
      */
-    private function price(GenerationSnapshot $snapshot): array
+    private function price(Generation $locked, GenerationSnapshot $snapshot): array
     {
         $usage = $snapshot->usage ?? throw InvalidGenerationSnapshotException::incompleteSuccess('usage');
         $rates = $snapshot->rates ?? throw InvalidGenerationSnapshotException::incompleteSuccess('rates');
 
-        $providerCost = $this->calculateProviderCost->execute($usage, TokenRates::from($rates));
+        try {
+            $providerCost = $this->calculateProviderCost->execute($usage, TokenRates::from($rates));
 
-        return [$providerCost, $this->calculateUserCharge->execute($providerCost)];
+            return [$providerCost, $this->calculateUserCharge->execute($providerCost)];
+        } catch (InvalidRateException|NanodollarOverflowException $exception) {
+            Log::error('Refused a succeeded Pixelforge snapshot that cannot be priced exactly.', [
+                'generation_id' => $locked->id,
+                'provider_id' => $snapshot->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     /**

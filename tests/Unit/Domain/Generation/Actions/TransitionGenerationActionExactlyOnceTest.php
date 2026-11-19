@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\Actions;
 
 use App\Domain\Billing\Enums\CreditLedgerEntryType;
+use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
@@ -12,6 +13,7 @@ use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -183,6 +185,60 @@ final class TransitionGenerationActionExactlyOnceTest extends TestCase
             $this->assertSame('Ignored a duplicate credit ledger entry: its generation already has one of this type.', $logged[$index]->message);
             $this->assertSame(['generation_id' => $generation->id, 'type' => $type], $logged[$index]->context);
         }
+    }
+
+    /**
+     * AC18: 5.0001 USD per 1M tokens is 5,000.1 n$ per token, which is never
+     * rounded. The generation stays pending with only its hold.
+     */
+    public function test_a_rate_that_is_not_a_whole_nanodollar_is_refused_logged_and_writes_nothing(): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+        $snapshot = self::snapshotFor($generation, GenerationStatus::Succeeded, [
+            'usage' => ['input_text_tokens' => 12, 'input_image_tokens' => 765, 'output_tokens' => 6_450, 'reasoning_tokens' => 3_184],
+            'rates' => ['input_text_tokens' => '5.0001', 'input_image_tokens' => '10.00', 'output_tokens' => '40.00', 'reasoning_tokens' => '12.50'],
+        ]);
+        $before = $this->rawGenerationRow($generation);
+
+        try {
+            $this->transitionGeneration($generation, $snapshot);
+            $this->fail('A rate that is not a whole nanodollar was priced.');
+        } catch (InvalidRateException $exception) {
+            $this->assertSame('Rate input_text_tokens "5.0001" is not a whole number of nanodollars per token.', $exception->getMessage());
+        }
+
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
+
+        $logged = $this->loggedMessages();
+        $this->assertCount(1, $logged);
+        $this->assertSame('error', $logged[0]->level);
+        $this->assertSame('Refused a succeeded Pixelforge snapshot that cannot be priced exactly.', $logged[0]->message);
+        $this->assertSame(
+            ['generation_id' => $generation->id, 'provider_id' => $snapshot->id, 'error' => $exception->getMessage()],
+            $logged[0]->context,
+        );
+    }
+
+    /**
+     * AC18's missing usage is refused at the Pixelforge boundary, so it never
+     * reaches settlement; logging the object's generation id is the parsing
+     * caller's job (PE-008, PE-009, PE-014).
+     */
+    public function test_a_succeeded_object_without_usage_is_refused_before_it_reaches_the_generation(): void
+    {
+        $generation = $this->givenTheLighthouseGeneration();
+        $before = $this->rawGenerationRow($generation);
+
+        try {
+            GenerationSnapshot::from(self::generationObjectFor($generation, GenerationStatus::Succeeded, ['usage' => null]));
+            $this->fail('A succeeded object without usage was parsed.');
+        } catch (InvalidGenerationSnapshotException $exception) {
+            $this->assertStringContainsString('usage', $exception->getMessage());
+        }
+
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($generation));
     }
 
     /**
