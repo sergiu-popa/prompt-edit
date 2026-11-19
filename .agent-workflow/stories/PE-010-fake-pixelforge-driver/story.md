@@ -4,7 +4,7 @@
 In-app fake Pixelforge with signed webhooks and test keywords
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 Local development and Playwright E2E need a Pixelforge that is deterministic, free and reachable without a public URL (D-12). Real Pixelforge only calls public webhook URLs, and CI has no API key.
