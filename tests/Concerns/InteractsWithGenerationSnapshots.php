@@ -95,10 +95,13 @@ trait InteractsWithGenerationSnapshots
     /**
      * The docs' succeeded Lighthouse object, shaped for the row: usage
      * 12 / 765 / 6,450 / 3,184 at the published rates.
+     *
+     * @param  array<string, mixed>  $overrides  applied with array_replace
+     * @return array<string, mixed>
      */
-    protected static function lighthouseSucceededSnapshotFor(Generation $generation): GenerationSnapshot
+    protected static function lighthouseSucceededObjectFor(Generation $generation, array $overrides = []): array
     {
-        return self::snapshotFor($generation, GenerationStatus::Succeeded, [
+        return self::generationObjectFor($generation, GenerationStatus::Succeeded, [
             'usage' => [
                 'input_text_tokens' => 12,
                 'input_image_tokens' => 765,
@@ -106,6 +109,15 @@ trait InteractsWithGenerationSnapshots
                 'reasoning_tokens' => 3_184,
                 'total_tokens' => 10_411,
             ],
+            ...$overrides,
         ]);
+    }
+
+    /**
+     * The docs' succeeded Lighthouse object as a snapshot.
+     */
+    protected static function lighthouseSucceededSnapshotFor(Generation $generation): GenerationSnapshot
+    {
+        return GenerationSnapshot::from(self::lighthouseSucceededObjectFor($generation));
     }
 }
