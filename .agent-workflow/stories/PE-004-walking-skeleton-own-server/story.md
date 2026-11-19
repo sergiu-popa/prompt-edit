@@ -4,7 +4,7 @@
 Walking skeleton live on prompt.sergiupopa.dev
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 The brief requires a public deployment with a few generations left on it. Deploying the signed-in shell now means every later story gets redeployed and smoke-checked on the real server, instead of being found broken at the end.

@@ -124,3 +124,63 @@ These are optional and don't block the verdict.
 - [x] `deploy.php:55`: the gate hard-codes `--repo sergiu-popa/prompt-edit`, while the `repository` setting already holds the same slug. Fix: derive it once, for example with `preg_replace('~^git@github\.com:|\.git$~', '', $repository)`, or set it as a `github_repo` setting, so the two can't drift apart.
 
   — fixed in `15800be`: the gate derives `owner/name` from `repository` with that `preg_replace`. The resulting `gh run list --repo sergiu-popa/prompt-edit …` call was checked locally against `main`'s head.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole story diff, `git diff origin/main...HEAD` (the `[PE-004]` commits `7cea8a1..ef33040`), checked against `story.md` and `plan.md`. I re-read every changed file, not only the round 1 fixes. Nothing was run against the droplet. Provisioning and the first deploy come next, and every root or state-changing command there is shown to the user before it runs.
+
+Checks run on HEAD (`ef33040`):
+- `make check`:
+  - Pint passes on 84 files and Larastan reports no errors.
+  - PHPUnit runs 406 tests with 1,544 assertions, all passing. That is one test and seven assertions more than round 1: the TTY refusal and the `withoutOverlapping` assertion.
+  - ESLint, Prettier (including `tests/smoke`) and vue-tsc are clean.
+  - Vitest runs 107 tests, all passing.
+- Playwright `--list`:
+  - With dummy `https://` values, `playwright.production.config.ts` lists the 5 smoke tests.
+  - The default config lists no smoke test.
+- `dep tree deploy`: `deploy:ci-gate` runs before `deploy`, and npm runs after `deploy:vendors`. `deploy:php-fpm:reload` runs after `deploy:symlink`, and `artisan:reload` runs last. This is unchanged from round 1.
+
+### Round 1 findings
+
+Each fix is in its own commit and does what review.md says:
+- **`4d7f760` (Warning 1).** `README.md` step 3 builds the SQL with the `printf` builtin and pipes it to `sudo -u postgres psql`, so the password is on no argv. psql reads stdin non-interactively, which writes no history. Postgres's default `log_statement = none` doesn't log the statement. Step 4 still passes the secrets to `perl` through its environment, and the restore passes them through `PGPASSWORD`. AC19 now holds throughout the runbook.
+- **`e878988`.** `UpsertUserCommand::handle()` checks `stream_isatty()` before it reads, validates or logs anything (`app/Console/Commands/UpsertUserCommand.php:30-36`). The new test opens `/dev/ptmx`, and asserts that a TTY is present rather than skipping without one, so it can't pass vacuously. It also asserts exit 1, no user and no log line. Over `ssh host 'cmd'` without `-t`, the remote stdin is the pipe, so the README's `printf … | ssh` route is unaffected.
+- **`b011411`.** `routes/console.php:17-20` adds `->withoutOverlapping()`, and the schedule test asserts it.
+- **`15800be`.** `deploy.php:42` derives `owner/name` from `repository`, so the `gh run list` repo can't drift from the clone URL.
+- **PR size.** It stays acknowledged. The branch now has 1,811 insertions, 186 of them `.agent-workflow`. The user still decides between one PR and a split at `28d2668` before the PR is opened.
+
+### Whole-diff re-read
+
+I found no new Critical issues or Warnings. These are the points I re-checked because they would fail only on the real server:
+- **`deploy.php`.**
+  - The gate refuses `--tag`/`--revision` deploys, because `refs/heads/<sha>` resolves to nothing.
+  - It pins `target` to the approved sha, which `deploy:update_code` can `rev-list` and `archive`.
+  - `writable_dirs` [] makes the recipe need no `http_user` (yum sets it, but it is only used for ACL writable modes).
+  - The build needs no PHP during `npm run build`, because `vite.config.ts` has no Wayfinder or other plugin that would shell out to a `php` other than `php8.4`.
+- **Worker.** The unit's default `--timeout` of 60 s is below the database queue's `retry_after` of 90 s (`config/queue.php:43`), as the story requires for PE-013. With `RestartSec=3`, five restarts take about 15 s, longer than systemd's default 10 s start-limit window. A crash loop before the first deploy therefore never trips the start limit.
+- **Sudoers.** `ssh admin@… sudo systemctl start prompt-edit-worker` resolves to `/usr/bin/systemctl` through `secure_path`, so it matches the scoped rule. Ubuntu doesn't set `requiretty`.
+- **Backups.** The app timezone is UTC (`config/app.php:68`), so `30 4 * * *` is 04:30 UTC, as the README and D-22 say. The droplet's clock is still the Risks item for the orchestrator (`timedatectl`).
+- **Smoke.**
+  - `promptedit-session` matches `config/session.php:130-133` (`Str::slug('PromptEdit')`).
+  - `toHaveURL('/dashboard')` and the `Email`/`Password` labels are the same calls `tests/e2e/auth.spec.ts` already uses.
+  - The fixture's stubbed `fonts.bunny.net` requests are `https://`, so they don't trip the mixed-content assertion.
+
+### Commit hygiene
+
+The history reads cleanly:
+- bookkeeping is only in `7cea8a1` (plan), `b1acb59` (checkboxes and status), `eef194f` (review round 1) and `ef33040` (round 1 resolutions);
+- each round 1 fix is one logical change in its own commit, with its test where one is possible (`e878988`, `b011411`), and a short body where the reason isn't obvious;
+- every subject is `[PE-004] Imperative …`, under 72 characters, with no trailing period and with the trailer.
+
+### Before the first deploy (orchestrator, not engineering)
+
+- The branch isn't on origin yet: `gh run list --branch pe-004-walking-skeleton-own-server` is empty. `dep deploy --branch=pe-004-walking-skeleton-own-server` will refuse, correctly, until the branch is pushed and CI is green on its head.
+- `DB_BACKUP_PATH` must be in `shared/.env`. It is in the template, so step 4 of the runbook covers it.
+
+### Suggestions
+
+These are optional and don't block the verdict.
+
+- [ ] `.agent-workflow/prompts.md`: the user's process instruction for this story's server work ("You can ssh into the droplet with root, so show me commands before you run them") isn't logged yet. It sets how provisioning is done, so it belongs in the log under PE-004. This is the main session's bookkeeping, not an engineering task.
