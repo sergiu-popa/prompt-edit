@@ -10,6 +10,7 @@ use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
+use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\Response;
@@ -58,7 +59,11 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
             ->post('generations');
 
         if (! $response->successful()) {
-            throw AmbiguousPixelforgeOutcomeException::undocumentedResponse($response->status());
+            throw PixelforgeApiException::tryFromResponse(
+                $response->status(),
+                $response->body(),
+                $response->hasHeader('Retry-After') ? $response->header('Retry-After') : null,
+            ) ?? AmbiguousPixelforgeOutcomeException::undocumentedResponse($response->status());
         }
 
         return new CreatedGenerationData(

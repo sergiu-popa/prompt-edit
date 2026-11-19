@@ -7,6 +7,7 @@ namespace App\Support\Pixelforge\Contracts;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
+use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 
 /**
@@ -20,6 +21,7 @@ interface PixelforgeClient
     /**
      * `POST /v1/generations`, keyed by the payload's idempotency key.
      *
+     * @throws PixelforgeApiException for a documented error envelope
      * @throws AmbiguousPixelforgeOutcomeException when the answer does not say whether a generation was created
      * @throws PixelforgeNotConfiguredException when nothing can be sent
      */

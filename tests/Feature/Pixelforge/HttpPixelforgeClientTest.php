@@ -10,9 +10,20 @@ use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
+use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
+use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
+use App\Support\Pixelforge\Exceptions\DailyLimitExceededException;
+use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
+use App\Support\Pixelforge\Exceptions\InvalidApiKeyException;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
+use App\Support\Pixelforge\Exceptions\NotFoundException;
+use App\Support\Pixelforge\Exceptions\OverloadedException;
+use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
+use App\Support\Pixelforge\Exceptions\ValidationFailedException;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -189,6 +200,63 @@ final class HttpPixelforgeClientTest extends TestCase
 
     /**
      * @param  array<string, string>  $headers
+     * @param  class-string<PixelforgeApiException>  $class
+     */
+    #[DataProvider('documentedErrors')]
+    public function test_each_documented_error_envelope_becomes_its_typed_error(PixelforgeErrorCode $code, array $headers, string $class, ?int $retryAfterSeconds): void
+    {
+        Http::fake(['*' => self::pixelforgeErrorFor($code, headers: $headers)]);
+
+        try {
+            $this->client()->createGeneration(self::lighthousePayload());
+            $this->fail('Expected a typed Pixelforge error.');
+        } catch (PixelforgeApiException $exception) {
+            $this->assertInstanceOf($class, $exception);
+            $this->assertSame($code, $exception->errorCode());
+            $this->assertSame(self::pixelforgeErrorType($code), $exception->type);
+            $this->assertSame($code->httpStatus(), $exception->status());
+            $this->assertSame(sprintf('Pixelforge says %s.', str_replace('_', ' ', $code->value)), $exception->getMessage());
+            $this->assertSame($retryAfterSeconds, $exception->retryAfterSeconds);
+        }
+    }
+
+    /**
+     * @return array<string, array{PixelforgeErrorCode, array<string, string>, class-string<PixelforgeApiException>, ?int}>
+     */
+    public static function documentedErrors(): array
+    {
+        return [
+            '400 content policy violation' => [PixelforgeErrorCode::ContentPolicyViolation, [], ContentPolicyViolationException::class, null],
+            '401 invalid api key' => [PixelforgeErrorCode::InvalidApiKey, [], InvalidApiKeyException::class, null],
+            '404 not found' => [PixelforgeErrorCode::NotFound, [], NotFoundException::class, null],
+            '409 idempotency key reused' => [PixelforgeErrorCode::IdempotencyKeyReused, [], IdempotencyKeyReusedException::class, null],
+            '422 validation failed' => [PixelforgeErrorCode::ValidationFailed, [], ValidationFailedException::class, null],
+            '429 rate limit exceeded, Retry-After 17' => [PixelforgeErrorCode::RateLimitExceeded, ['Retry-After' => '17'], RateLimitExceededException::class, 17],
+            '429 concurrency limit exceeded, Retry-After 5' => [PixelforgeErrorCode::ConcurrencyLimitExceeded, ['Retry-After' => '5'], ConcurrencyLimitExceededException::class, 5],
+            '429 daily limit exceeded, no Retry-After' => [PixelforgeErrorCode::DailyLimitExceeded, [], DailyLimitExceededException::class, null],
+            '503 overloaded, Retry-After 2' => [PixelforgeErrorCode::Overloaded, ['Retry-After' => '2'], OverloadedException::class, 2],
+        ];
+    }
+
+    public function test_a_validation_failure_keeps_its_param_and_field_errors(): void
+    {
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::ValidationFailed, [
+            'message' => 'The size field is invalid.',
+            'param' => 'size',
+            'errors' => ['size' => ['The selected size is invalid.']],
+        ])]);
+
+        try {
+            $this->client()->createGeneration(self::lighthousePayload());
+            $this->fail('Expected a validation failure.');
+        } catch (ValidationFailedException $exception) {
+            $this->assertSame('size', $exception->param);
+            $this->assertSame('The selected size is invalid.', $exception->errors['size'][0] ?? null);
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $headers
      */
     #[DataProvider('nonEnvelopeResponses')]
     public function test_a_response_without_a_documented_envelope_is_ambiguous(int $status, string $body, array $headers): void
@@ -208,6 +276,8 @@ final class HttpPixelforgeClientTest extends TestCase
         return [
             'a 502 HTML page' => [502, '<html><body><h1>502 Bad Gateway</h1></body></html>', ['Content-Type' => 'text/html']],
             'an empty 500' => [500, '', []],
+            'an undocumented code' => [429, '{"error":{"type":"rate_limit_error","code":"quota_exceeded","message":"Quota exceeded."}}', ['Content-Type' => 'application/json']],
+            'a documented code at another status' => [500, '{"error":{"type":"api_error","code":"overloaded","message":"Overloaded."}}', ['Content-Type' => 'application/json']],
         ];
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -55,6 +56,41 @@ trait InteractsWithPixelforgeApi
             202,
             array_filter(['Content-Type' => 'application/json', 'Idempotent-Replayed' => $replayed], fn (?string $value): bool => $value !== null),
         );
+    }
+
+    /**
+     * The docs-shaped error envelope for the code, at the code's status, with
+     * the docs' `type` for it. The error's fields replace the defaults.
+     *
+     * @param  array<string, mixed>  $error
+     * @param  array<string, string>  $headers
+     */
+    protected static function pixelforgeErrorFor(PixelforgeErrorCode $code, array $error = [], array $headers = []): PromiseInterface
+    {
+        return Http::response(
+            json_encode(['error' => [
+                'type' => self::pixelforgeErrorType($code),
+                'code' => $code->value,
+                'message' => sprintf('Pixelforge says %s.', str_replace('_', ' ', $code->value)),
+                ...$error,
+            ]], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            $code->httpStatus(),
+            ['Content-Type' => 'application/json', ...$headers],
+        );
+    }
+
+    /**
+     * The `type` the docs give each code.
+     */
+    protected static function pixelforgeErrorType(PixelforgeErrorCode $code): string
+    {
+        return match ($code) {
+            PixelforgeErrorCode::InvalidApiKey => 'authentication_error',
+            PixelforgeErrorCode::ContentPolicyViolation, PixelforgeErrorCode::NotFound, PixelforgeErrorCode::ValidationFailed => 'invalid_request_error',
+            PixelforgeErrorCode::IdempotencyKeyReused => 'idempotency_error',
+            PixelforgeErrorCode::RateLimitExceeded, PixelforgeErrorCode::ConcurrencyLimitExceeded, PixelforgeErrorCode::DailyLimitExceeded => 'rate_limit_error',
+            PixelforgeErrorCode::Overloaded => 'api_error',
+        };
     }
 
     /**
