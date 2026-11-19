@@ -93,7 +93,7 @@ These credentials are local-only: the seeder refuses to run in production.
 
 Live at **https://prompt.sergiupopa.dev**, deployed with [Deployer](https://deployer.org) (`deploy.php`, D-19) on the HestiaCP droplet `164.90.236.77`, user `admin`, in `/home/admin/web/prompt.sergiupopa.dev`.
 
-- **Web:** Hestia's nginx (Let's Encrypt, forced HTTPS) → Apache with the `deployer` template (DocumentRoot `current/public`) → PHP 8.4-FPM running as `admin` (backend `Symfony-PHP-8_4`, whose `open_basedir` is the whole domain folder). Apache sees `HTTPS=on` and mod_remoteip gives PHP the visitor's IP, so Laravel trusts no proxy (D-21).
+- **Web:** Hestia's nginx (Let's Encrypt, forced HTTPS) → Apache with the `deployer` template (DocumentRoot `current/public`) → PHP 8.4-FPM running as `admin` (backend `Symfony-PHP-8_4`, whose `open_basedir` is the whole domain folder). Apache sees `HTTPS=on` and mod_remoteip gives PHP the visitor's IP, so Laravel trusts no proxy (D-21). The chain does pass a client's `X-Forwarded-Host` on to PHP as the Host, so the app answers only for its own host and its subdomains (`trustHosts()`), and any other host gets a 400.
 - **Queue worker:** the systemd unit `prompt-edit-worker` (`queue:work database`, `WorkingDirectory` = `current`).
 - **Scheduler:** a Hestia cron job for `admin` runs `schedule:run` every minute. It also runs the nightly backup.
 - **Database:** PostgreSQL 17 (PGDG) on localhost:5432, database and role `prompt_edit`. Queue, cache and sessions use it too; there is no Redis (D-20).
@@ -232,7 +232,7 @@ The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.
 
 **Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.
 
-The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, the http → https redirect, a plain 404, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
+The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
 
 ```bash
 export E2E_BASE_URL=https://prompt.sergiupopa.dev   # plus E2E_REVIEWER_EMAIL and E2E_REVIEWER_PASSWORD, as above

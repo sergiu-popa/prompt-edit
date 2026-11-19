@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\InteractsWithAuthentication;
 use Tests\TestCase;
@@ -79,6 +80,40 @@ final class HttpsBehindHestiaProxyTest extends TestCase
         ];
     }
 
+    /**
+     * Production's proxy chain passes a client's `X-Forwarded-Host` on to PHP as the Host, so
+     * the app itself refuses any host but APP_URL's. TrustHosts skips the `testing` and `local`
+     * environments, so these rows run the request as production.
+     */
+    public function test_a_spoofed_host_is_refused_in_production(): void
+    {
+        $this->runAsProduction();
+
+        $this->get('https://attacker.example/dashboard')
+            ->assertBadRequest()
+            ->assertHeaderMissing('Location');
+    }
+
+    #[DataProvider('ownHosts')]
+    public function test_the_own_host_and_its_subdomains_still_answer_in_production(string $host): void
+    {
+        $this->runAsProduction();
+
+        $this->get("https://{$host}/dashboard")
+            ->assertRedirect("https://{$host}/login");
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function ownHosts(): array
+    {
+        return [
+            'the domain' => [self::HOST],
+            'the www alias Hestia adds' => ['www.' . self::HOST],
+        ];
+    }
+
     public function test_the_sign_in_throttle_keys_on_the_remote_address_not_a_forwarded_one(): void
     {
         $this->freezeTime();
@@ -100,5 +135,19 @@ final class HttpsBehindHestiaProxyTest extends TestCase
             ->assertRedirect(route('dashboard'))
             ->assertSessionHasNoErrors();
         $this->assertAuthenticated();
+    }
+
+    protected function tearDown(): void
+    {
+        // Symfony keeps the trusted host patterns in a static, so later tests would inherit them.
+        Request::setTrustedHosts([]);
+
+        parent::tearDown();
+    }
+
+    private function runAsProduction(): void
+    {
+        config(['app.url' => 'https://' . self::HOST]);
+        $this->app['env'] = 'production';
     }
 }

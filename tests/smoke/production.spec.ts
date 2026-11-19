@@ -42,6 +42,20 @@ test('an unknown URL answers a plain 404', async ({ request }) => {
     }
 });
 
+test('a spoofed X-Forwarded-Host never reaches a generated URL', async ({ request }) => {
+    // The proxy chain hands PHP a client's X-Forwarded-Host as the Host, so the app
+    // refuses every host but its own (TrustHosts, D-21).
+    for (const path of ['/login', '/dashboard']) {
+        const response = await request.get(path, {
+            headers: { 'X-Forwarded-Host': 'attacker.example' },
+            maxRedirects: 0,
+        });
+
+        expect(response.headers()['location'] ?? '', `${path} Location`).not.toContain('attacker.example');
+        expect(await response.text(), `${path} body`).not.toContain('attacker.example');
+    }
+});
+
 test('the sign-in page renders over https with secure cookies', async ({ page, context }) => {
     const requested: string[] = [];
     page.on('request', (request) => requested.push(request.url()));
