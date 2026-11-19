@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Billing\ValueObjects;
 
+use App\Domain\Billing\Exceptions\InvalidUsdAmountException;
 use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Billing\ValueObjects\Nanodollars;
 use Brick\Math\BigInteger;
@@ -128,6 +129,84 @@ final class NanodollarsTest extends TestCase
         $this->expectException(NanodollarOverflowException::class);
 
         $operation();
+    }
+
+    /**
+     * @return array<string, array{int, string}>
+     */
+    public static function usdStrings(): array
+    {
+        return [
+            'docs worked maximum' => [373_875_000, '0.373875000'],
+            'zero' => [0, '0.000000000'],
+            'one nanodollar' => [1, '0.000000001'],
+            'negative' => [-150, '-0.000000150'],
+            'dollars and nanodollars' => [1_234_567_890_123, '1234.567890123'],
+            'PHP_INT_MAX' => [PHP_INT_MAX, '9223372036.854775807'],
+            'PHP_INT_MIN' => [PHP_INT_MIN, '-9223372036.854775808'],
+        ];
+    }
+
+    #[DataProvider('usdStrings')]
+    public function test_renders_as_a_9_decimal_usd_string_without_rounding(int $amount, string $expected): void
+    {
+        $this->assertSame($expected, (new Nanodollars($amount))->toUsdString());
+    }
+
+    #[DataProvider('usdStrings')]
+    public function test_parsing_a_rendered_usd_string_round_trips(int $expected, string $usd): void
+    {
+        $parsed = Nanodollars::fromUsdString($usd);
+
+        $this->assertSame($expected, $parsed->amount);
+        $this->assertSame($usd, $parsed->toUsdString());
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function shortUsdStrings(): array
+    {
+        return [
+            'one decimal' => ['1.5', 1_500_000_000],
+            'whole dollars' => ['2', 2_000_000_000],
+            'negative cents' => ['-0.25', -250_000_000],
+        ];
+    }
+
+    #[DataProvider('shortUsdStrings')]
+    public function test_parses_usd_strings_with_fewer_than_9_decimals(string $usd, int $expected): void
+    {
+        $this->assertSame($expected, Nanodollars::fromUsdString($usd)->amount);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidUsdStrings(): array
+    {
+        return [
+            'sub-nanodollar precision' => ['0.0000000001'],
+            'empty' => [''],
+            'decimal comma' => ['1,5'],
+            'exponent' => ['1e-9'],
+            'leading plus' => ['+1.5'],
+            'no integer part' => ['.5'],
+            'no fraction digits' => ['1.'],
+            'leading space' => [' 1.5'],
+            'trailing newline' => ["1.5\n"],
+            'non-ASCII digit' => ["\u{0661}.5"],
+            'above PHP_INT_MAX' => ['9223372036.854775808'],
+            'below PHP_INT_MIN' => ['-9223372036.854775809'],
+        ];
+    }
+
+    #[DataProvider('invalidUsdStrings')]
+    public function test_rejects_malformed_sub_nanodollar_or_out_of_range_usd_strings(string $usd): void
+    {
+        $this->expectException(InvalidUsdAmountException::class);
+
+        Nanodollars::fromUsdString($usd);
     }
 
     /**
