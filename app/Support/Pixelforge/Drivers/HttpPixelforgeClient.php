@@ -13,6 +13,7 @@ use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use Illuminate\Container\Attributes\Config;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use JsonException;
@@ -48,15 +49,19 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
             throw PixelforgeNotConfiguredException::missingApiKey();
         }
 
-        $response = Http::baseUrl($this->baseUrl)
-            ->withToken($this->apiKey)
-            ->acceptJson()
-            ->withHeaders(['Idempotency-Key' => $payload->idempotencyKey()])
-            ->connectTimeout($this->connectTimeoutSeconds)
-            ->timeout($this->requestTimeoutSeconds)
-            ->withoutRedirecting()
-            ->withBody($payload->toJson(), 'application/json')
-            ->post('generations');
+        try {
+            $response = Http::baseUrl($this->baseUrl)
+                ->withToken($this->apiKey)
+                ->acceptJson()
+                ->withHeaders(['Idempotency-Key' => $payload->idempotencyKey()])
+                ->connectTimeout($this->connectTimeoutSeconds)
+                ->timeout($this->requestTimeoutSeconds)
+                ->withoutRedirecting()
+                ->withBody($payload->toJson(), 'application/json')
+                ->post('generations');
+        } catch (ConnectionException $exception) {
+            throw AmbiguousPixelforgeOutcomeException::transportFailed($exception);
+        }
 
         if (! $response->successful()) {
             throw PixelforgeApiException::tryFromResponse(

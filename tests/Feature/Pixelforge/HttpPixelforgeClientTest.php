@@ -25,6 +25,7 @@ use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use App\Support\Pixelforge\Exceptions\ValidationFailedException;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -278,6 +279,30 @@ final class HttpPixelforgeClientTest extends TestCase
             'an empty 500' => [500, '', []],
             'an undocumented code' => [429, '{"error":{"type":"rate_limit_error","code":"quota_exceeded","message":"Quota exceeded."}}', ['Content-Type' => 'application/json']],
             'a documented code at another status' => [500, '{"error":{"type":"api_error","code":"overloaded","message":"Overloaded."}}', ['Content-Type' => 'application/json']],
+        ];
+    }
+
+    #[DataProvider('transportFailures')]
+    public function test_a_transport_failure_is_ambiguous(string $curlMessage): void
+    {
+        Http::fake(['*' => Http::sequence()->pushFailedConnection($curlMessage)]);
+
+        $exception = $this->createExpectingAmbiguous(self::lighthousePayload());
+
+        $this->assertNull($exception->status);
+        $this->assertInstanceOf(ConnectionException::class, $exception->getPrevious());
+        $this->assertStringNotContainsString($curlMessage, $exception->getMessage());
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function transportFailures(): array
+    {
+        return [
+            'connect timeout' => ['cURL error 28: Connection timed out after 5001 milliseconds (see https://curl.haxx.se/libcurl/c/libcurl-errors.html) for https://pixelforge.promptedit.dev/v1/generations'],
+            'read timeout' => ['cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received (see https://curl.haxx.se/libcurl/c/libcurl-errors.html) for https://pixelforge.promptedit.dev/v1/generations'],
+            'connection refused' => ['cURL error 7: Failed to connect to pixelforge.promptedit.dev port 443: Connection refused (see https://curl.haxx.se/libcurl/c/libcurl-errors.html) for https://pixelforge.promptedit.dev/v1/generations'],
         ];
     }
 
