@@ -110,6 +110,7 @@ Its hold is −457,150,000 n$.
 - **Counting code points:**
   - Laravel's string `max` rule counts with `mb_strlen`, which is code points and matches Pixelforge.
   - HTML `maxlength` counts UTF-16 units, so it must not be what enforces the limit.
+  - **Deferred from the PE-002 audit:** a prompt with invalid UTF-8 (PHP) or lone UTF-16 surrogates (TS) is counted differently by the two estimators. Server validation must reject such a prompt with a field error, never a 500 or a silently mismatched estimate.
   - The TS side counts with `[...prompt].length` (PE-002).
 - **Trimming:** Laravel's `TrimStrings` middleware changes the prompt before validation, so the server may count a different string from the client. Either trim on both sides or exempt the prompt; the Architect picks (AC 7).
 - **Reference rows:** the page's estimate and its submitted list must come from the same filtered rows (AC 3), so the displayed max is the hold. Whitespace around a URL doesn't change the price, which counts references, not URLs.

@@ -168,6 +168,8 @@ Serves:
   - PE-003 deferred registration rate limiting and the friendly 419 page.
   - PE-004 deferred whether registration stays open once real spend is possible.
   - Inertia shows a non-Inertia 419 response in its error modal, so the 419 must come back as a redirect with a flash message.
+  - From the PE-003 audit: `POST /user/confirm-password`, which Fortify always registers, is not throttled. Throttle it, or prove it is unreachable.
+  - From the PE-003 audit: a crafted `POST /register` with an invalid-UTF-8 name answers 500 (Postgres error 22021). Reject invalid UTF-8 in validation with a field error.
 - **Pixelforge facts** (https://pixelforge.promptedit.dev/docs#authentication, #pricing, #webhooks, #usage, #testing, #images):
   - The webhook URL, the signing secret and usage are **per key**.
   - Rate limits (60 rpm, 3 concurrent, 500/day) are **per account**, so the smoke and production share them.
