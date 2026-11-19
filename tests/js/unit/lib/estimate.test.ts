@@ -4,7 +4,7 @@ import estimatesJson from '../../../fixtures/estimates.json';
 
 import { estimateGenerationCost } from '@/lib/estimate';
 import type { EstimateInput, GenerationCostEstimate } from '@/types/estimate';
-import type { PricingTable } from '@/types/pricing';
+import type { PricingTable, TokenRange } from '@/types/pricing';
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
 
@@ -111,6 +111,26 @@ describe('estimateGenerationCost rejects what it cannot price exactly', () => {
         ['the live float variance', (pricing) => (pricing.tokens.text_token_variance_percent = 0.15), 'tokens.text_token_variance_percent'],
         ['a variance above 100', (pricing) => (pricing.tokens.text_token_variance_percent = 101), 'tokens.text_token_variance_percent'],
         ['a fractional reference image size', (pricing) => (pricing.tokens.per_reference_image = 765.5), 'tokens.per_reference_image'],
+        [
+            'a null reasoning range',
+            (pricing) => (pricing.tokens.reasoning.low = null as unknown as TokenRange),
+            'tokens.reasoning.low must be an object, got null.',
+        ],
+        [
+            'a numeric reasoning range',
+            (pricing) => (pricing.tokens.reasoning.low = 500 as unknown as TokenRange),
+            'tokens.reasoning.low must be an object, got number.',
+        ],
+        [
+            'a null output table for the quality',
+            (pricing) => (pricing.tokens.output.low = null as unknown as PricingTable['tokens']['output']['low']),
+            'tokens.output.low must be an object, got null.',
+        ],
+        [
+            'an output table given as a list',
+            (pricing) => (pricing.tokens.output.low = [280] as unknown as PricingTable['tokens']['output']['low']),
+            'tokens.output.low must be an object, got array.',
+        ],
     ])('rejects %s and names the field', (_label, change, field) => {
         expect(() => estimateGenerationCost(pricingWith(change), validInput)).toThrow(field);
     });
@@ -118,6 +138,17 @@ describe('estimateGenerationCost rejects what it cannot price exactly', () => {
     it.each([1.5, -1, NaN, 2 ** 53])('rejects a reference image count of %s', (count) => {
         expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, reference_image_count: count })).toThrow(
             'reference_image_count',
+        );
+    });
+
+    it.each<[string, unknown]>([
+        ['null', null],
+        ['undefined', undefined],
+        ['a number', 5],
+        ['a list of characters', ['a', 'b']],
+    ])('rejects a prompt that is %s', (_label, prompt) => {
+        expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, prompt: prompt as string })).toThrow(
+            'prompt must be a string',
         );
     });
 

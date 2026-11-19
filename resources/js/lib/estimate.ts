@@ -45,13 +45,30 @@ function wholeNumber(value: unknown, field: string): bigint {
     return BigInt(value);
 }
 
+function typeName(value: unknown): string {
+    if (value === null) {
+        return 'null';
+    }
+
+    return Array.isArray(value) ? 'array' : typeof value;
+}
+
+/** Narrows a nested part of the pricing table to an object, so a malformed prop names its field. */
+function objectAt(value: unknown, field: string): Readonly<Record<string, unknown>> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error(`${field} must be an object, got ${typeName(value)}.`);
+    }
+
+    return value as Record<string, unknown>;
+}
+
 /** Looks a quality or size up by own key only, so `__proto__` or `toString` never resolve. */
-function entryFor<T>(table: Readonly<Record<string, T>>, key: string, field: string): T {
+function entryFor(table: Readonly<Record<string, unknown>>, key: string, field: string): unknown {
     if (!Object.hasOwn(table, key)) {
         throw new Error(`${field} "${key}" is not in the pricing table.`);
     }
 
-    return table[key] as T;
+    return table[key];
 }
 
 function toSafeNumber(value: bigint, field: string): number {
@@ -115,10 +132,15 @@ function textTokens(promptCharacters: bigint, pricing: PricingTable): Bounds {
 }
 
 export function estimateGenerationCost(pricing: PricingTable, input: EstimateInput): GenerationCostEstimate {
+    if (typeof input.prompt !== 'string') {
+        throw new Error(`prompt must be a string, got ${typeName(input.prompt)}.`);
+    }
+
     const promptCharacters = [...input.prompt].length;
-    const outputCount = entryFor(entryFor(pricing.tokens.output, input.quality, 'quality'), input.size, 'size');
+    const outputs = objectAt(entryFor(pricing.tokens.output, input.quality, 'quality'), `tokens.output.${input.quality}`);
+    const outputCount = entryFor(outputs, input.size, 'size');
     const reasoningField = `tokens.reasoning.${input.quality}`;
-    const reasoning = entryFor(pricing.tokens.reasoning, input.quality, 'quality');
+    const reasoning = objectAt(entryFor(pricing.tokens.reasoning, input.quality, 'quality'), reasoningField);
 
     const tokens: Record<TokenType, Bounds> = {
         input_text_tokens: textTokens(BigInt(promptCharacters), pricing),
