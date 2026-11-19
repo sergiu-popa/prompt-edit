@@ -30,7 +30,7 @@ function recordRequests(page: Page): string[] {
     return requests;
 }
 
-test('estimates the cost live as the prompt, quality and size change, with no request', async ({ page }, testInfo) => {
+test('estimates the cost live as the prompt, quality, size and references change, with no request', async ({ page }, testInfo) => {
     await signIn(page, DEMO_USER.email, DEMO_USER.password);
 
     await expect(page).toHaveURL('/dashboard');
@@ -70,6 +70,20 @@ test('estimates the cost live as the prompt, quality and size change, with no re
     } else {
         expect(panel!.x, 'the panel sits beside the form').toBeGreaterThanOrEqual(form!.x + form!.width);
     }
+
+    await expectNoHorizontalScroll(page);
+
+    await expect(page.locator('p', { hasText: 'each' })).toHaveText('+$0.0096 each', { useInnerText: true });
+    await page.getByRole('button', { name: 'Add reference image' }).click();
+    await expect(page.getByLabel('Reference image 1', { exact: true })).toBeFocused();
+    await page.getByLabel('Reference image 1', { exact: true }).fill('https://example.com/style.png');
+    await expectEstimate(page, '$0.3477 – $0.4571', '$0.4024');
+
+    const maxWithReference = estimatePanel(page).locator('[aria-live="polite"]').getByRole('button', { name: '$0.4571' });
+    await maxWithReference.focus();
+    await expect(page.getByRole('tooltip', { name: '$0.457137500' })).toBeVisible();
+    await expect(maxWithReference).toHaveAccessibleDescription('$0.457137500');
+    await expect(page.getByText('Enter an http:// or https:// image URL.')).toHaveCount(0);
 
     await expectNoHorizontalScroll(page);
     expect(requests, 'XHR or fetch requests while editing').toStrictEqual([]);
