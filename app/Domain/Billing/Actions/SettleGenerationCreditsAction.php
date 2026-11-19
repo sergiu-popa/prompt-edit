@@ -66,7 +66,7 @@ final class SettleGenerationCreditsAction
      * The entry belongs to the hold's owner, so a settlement can never move
      * another user's credit.
      *
-     * `ON CONFLICT DO NOTHING` (D-25): a unique violation would abort the
+     * `ON CONFLICT DO NOTHING` (D-26): a unique violation would abort the
      * whole Postgres transaction and roll the status change back with it. The
      * status guard makes a duplicate impossible in normal operation, so an
      * ignored insert means a guard was bypassed and is logged for the operator.

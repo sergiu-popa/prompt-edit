@@ -50,7 +50,7 @@ The implementation matches the plan class for class: `CreditLedgerEntryType`, `C
 
 - The plan (`607b635`) and the checkboxes and status (`43911cb`) each have their own bookkeeping commit.
 - There is one code commit per plan task (`6aa889c`..`8e7ae24`), each with its tests. Tasks 6, 7 and 11 pin behaviour with tests only, as planned.
-- The D-25 row in `requirements.md` comes with `90bd4da`, the commit that introduces the `ON CONFLICT DO NOTHING` writes it documents, as the plan specified.
+- The D-26 row in `requirements.md` comes with `90bd4da`, the commit that introduces the `ON CONFLICT DO NOTHING` writes it documents, as the plan specified.
 - Every subject uses `[PE-007] Imperative …` and is at most 67 characters. Every commit ends with the trailer.
 - I ran the checks on HEAD only. Each intermediate commit is self-contained by inspection.
 

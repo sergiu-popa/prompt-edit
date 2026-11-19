@@ -55,7 +55,7 @@ Both migrations are made with `php artisan make:migration`. Postgres 17.
 **`add_costs_to_generations_table`**: `provider_cost_nanodollars` and `user_charge_nanodollars`, both bigint and nullable. They are null until the generation is terminal (AC4), and 0 / 0 on failed. D-09 sets only the provider cost. No backfill is needed, because no real generations exist before PE-011.
 
 ## Decisions log (requirements §5)
-Use the next free D-number after the highest one in `requirements.md` at commit time. That is D-25 if PE-006 adds nothing more. The row is added in task 8's commit.
+Use the next free D-number after the highest one in `requirements.md` at commit time. It was D-25 at commit time. The orchestrator renumbered it to D-26 because PE-005, built in parallel, owns D-25. The row is added in task 8's commit.
 
 | # | Decision | Why |
 | --- | --- | --- |
