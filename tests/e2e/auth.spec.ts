@@ -67,8 +67,10 @@ test('signs the demo user in and out with the keyboard alone', async ({ page }) 
     await expect(page).toHaveURL('/dashboard');
     await expect(page.getByRole('banner')).toContainText(DEMO_USER.name);
 
+    // Tab from the brand link, the header's first stop, proves Sign out is in the tab order.
     const signOut = page.getByRole('button', { name: 'Sign out' });
-    await signOut.focus();
+    await page.getByRole('link', { name: 'PromptEdit' }).focus();
+    await page.keyboard.press('Tab');
     await expect(signOut).toBeFocused();
     await page.keyboard.press('Enter');
 
