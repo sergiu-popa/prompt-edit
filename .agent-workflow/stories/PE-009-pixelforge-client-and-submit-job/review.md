@@ -1,5 +1,35 @@
 # Review — PE-009-pixelforge-client-and-submit-job
 
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the three fix commits `65c32ae`, `0251d57` and `f8cc926`, plus the bookkeeping commit `f705023`, on top of round 1's `1aa19c8`.
+
+Checks run on HEAD (`chain-make.sh chain check`, exit 0):
+- Pint and Larastan are clean.
+- PHPUnit runs 916 tests with 4,472 assertions, all passing (11 more than round 1).
+- ESLint, Prettier and vue-tsc are clean, and Vitest runs 107 tests, all passing.
+
+### Round 1 findings, verified
+
+- **W1 (fixed in `65c32ae`).**
+  - `HttpPixelforgeClient.php:67` now catches `ConnectionException|RequestException`. I checked `PendingRequest::marshalTransportExceptionWithResponse()`: it throws a `RequestException` for a 4xx or 5xx response and a `ConnectionException` for anything else, so both cut-off cases are covered. No `->throw()` is configured on the request, so the new catch cannot hide a complete response. Complete responses still go through `tryFromResponse()`.
+  - `transportFailed()` takes the common parent `HttpClientException` and keeps the status when a status line arrived. Its message stays fixed. The truncated body is kept only on the previous exception, and the key sentinel row for a 503 cut off shows that the key never reaches it.
+  - The job's retried-failures matrix gains a 422 cut off mid-body. That row matters most: it proves that a definitive-looking status without a complete envelope is retried, not failed locally.
+- **S1 (fixed in `0251d57`).** Both timeouts use `FILTER_VALIDATE_INT` with `min_range` 1 and a default. A word, `30s`, `0`, `-5` and `2.5` each fall back to the default.
+- **S2 (fixed in `f8cc926`).**
+  - `ReportsPixelforgeContext` extends `Throwable`, so it can be caught and thrown directly.
+  - In `SubmitGenerationAction::execute()`, the `PixelforgeApiException` catch still comes first, so definitive rejections keep their own path. The second catch now covers the ambiguous and not-configured errors through the interface.
+  - `failed()` checks the one type, and the give-up matrix gains a not-configured row.
+
+### Commit hygiene
+
+- There is one commit per finding, and each fix ships with its tests. The bookkeeping (`f705023`, the ticked `review.md`) has its own commit.
+- All subjects start with `[PE-009]` and are at most 72 characters. Every message ends with the trailer.
+
+No new findings.
+
 ## Round 1
 
 **Verdict: REQUEST CHANGES**
