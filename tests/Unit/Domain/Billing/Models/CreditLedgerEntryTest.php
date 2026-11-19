@@ -10,6 +10,8 @@ use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Generation\Models\Generation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -144,6 +146,40 @@ final class CreditLedgerEntryTest extends TestCase
             $this->fail('The entry was deleted.');
         } catch (ImmutableCreditLedgerEntryException $exception) {
             $this->assertSame(sprintf('Credit ledger entry %d is append-only and cannot be deleted.', $entry->id), $exception->getMessage());
+        }
+
+        $this->assertSame($before, $this->rawEntryRow($entry));
+    }
+
+    /**
+     * @return array<string, array{Closure(Builder): int}>
+     */
+    public static function rawWrites(): array
+    {
+        return [
+            'update' => [fn (Builder $entries): int => $entries->update(['amount_nanodollars' => 0])],
+            'delete' => [fn (Builder $entries): int => $entries->delete()],
+        ];
+    }
+
+    /**
+     * The raw write runs in a nested transaction, so its savepoint is rolled
+     * back and the test's own transaction stays usable after Postgres refuses it.
+     *
+     * @param  Closure(Builder): int  $write
+     */
+    #[DataProvider('rawWrites')]
+    public function test_the_database_refuses_a_raw_write_that_bypasses_the_model(Closure $write): void
+    {
+        $entry = $this->givenAnEntry();
+        $before = $this->rawEntryRow($entry);
+
+        try {
+            DB::transaction(fn (): int => $write(DB::table('credit_ledger_entries')->where('id', $entry->id)));
+            $this->fail('A raw write changed the entry.');
+        } catch (QueryException $exception) {
+            $this->assertSame('23001', $exception->getCode());
+            $this->assertStringContainsString(sprintf('Credit ledger entry %d is append-only', $entry->id), $exception->getMessage());
         }
 
         $this->assertSame($before, $this->rawEntryRow($entry));

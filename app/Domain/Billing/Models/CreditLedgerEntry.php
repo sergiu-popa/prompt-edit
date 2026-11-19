@@ -13,8 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * One signed movement of a user's credit, in integer nanodollars (D-03, D-08).
- * Entries are append-only: the model refuses to update or delete one. Raw
- * query-builder writes bypass this guard, so nothing in the app makes them.
+ * Entries are append-only: the model refuses to update or delete one, and a
+ * database trigger refuses the raw query-builder writes that bypass the model.
  *
  * @property int $id
  * @property int $user_id
