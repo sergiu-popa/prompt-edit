@@ -222,8 +222,8 @@ final class TransitionGenerationActionExactlyOnceTest extends TestCase
 
     /**
      * AC18's missing usage is refused at the Pixelforge boundary, so it never
-     * reaches settlement; logging the object's generation id is the parsing
-     * caller's job (PE-008, PE-009, PE-014).
+     * reaches settlement; logging the object's generation id is the job of
+     * the callers that parse a succeeded object (PE-008, PE-014).
      */
     public function test_a_succeeded_object_without_usage_is_refused_before_it_reaches_the_generation(): void
     {
