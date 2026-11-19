@@ -27,11 +27,19 @@ final class UpsertUserCommand extends Command
 {
     public function handle(): int
     {
+        $passwordSource = $this->passwordSource();
+
+        if (stream_isatty($passwordSource)) {
+            $this->components->error('Pipe the password on stdin instead of typing it (README, "Reviewer account").');
+
+            return self::FAILURE;
+        }
+
         $email = Str::lower(trim($this->stringArgument('email')));
         $name = trim($this->stringArgument('name'));
 
         $validator = Validator::make(
-            ['name' => $name, 'email' => $email, 'password' => $this->passwordFromStdin()],
+            ['name' => $name, 'email' => $email, 'password' => $this->firstLineOf($passwordSource)],
             [
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255'],
@@ -69,14 +77,27 @@ final class UpsertUserCommand extends Command
     }
 
     /**
-     * The first line of the input stream (set by tests) or of STDIN, with only its line ending
-     * stripped: registration doesn't trim passwords either.
+     * The input stream (set by tests) or STDIN. On a terminal, reading it would wait without a
+     * prompt and echo the password as it is typed, so `handle()` refuses a TTY.
+     *
+     * @return resource
      */
-    private function passwordFromStdin(): string
+    private function passwordSource(): mixed
     {
         $stream = $this->input instanceof StreamableInputInterface ? $this->input->getStream() : null;
 
-        $line = fgets($stream ?? STDIN);
+        return $stream ?? STDIN;
+    }
+
+    /**
+     * The first line of the stream, with only its line ending stripped: registration doesn't
+     * trim passwords either.
+     *
+     * @param  resource  $stream
+     */
+    private function firstLineOf(mixed $stream): string
+    {
+        $line = fgets($stream);
 
         if ($line === false) {
             return '';

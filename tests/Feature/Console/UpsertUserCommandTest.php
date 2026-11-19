@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 use Tests\TestCase;
 
@@ -135,6 +137,29 @@ final class UpsertUserCommandTest extends TestCase
         $this->assertTrue(Hash::check('pass word ', $password));
         $this->assertFalse(Hash::check('pass word', $password));
         $this->assertPasswordNeverLeaked('pass word ', $output);
+    }
+
+    /**
+     * Run from a terminal without a pipe, `fgets` would wait without a prompt and echo the
+     * password as it is typed, so the command refuses instead. A pseudo-terminal stands in for
+     * the operator's TTY.
+     */
+    public function test_it_refuses_to_read_the_password_from_a_terminal(): void
+    {
+        $terminal = @fopen('/dev/ptmx', 'r+');
+        $this->assertNotFalse($terminal, 'Precondition: this test needs /dev/ptmx for a pseudo-terminal.');
+        $this->assertTrue(stream_isatty($terminal), 'Precondition: /dev/ptmx must open as a TTY.');
+
+        $input = new ArrayInput(['email' => 'ada@example.com', 'name' => 'Ada']);
+        $input->setStream($terminal);
+        $output = new BufferedOutput;
+
+        $exitCode = Artisan::all()['app:upsert-user']->run($input, $output);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Pipe the password on stdin', $output->fetch());
+        $this->assertSame(0, User::query()->count());
+        $this->assertSame([], $this->loggedMessages);
     }
 
     /**

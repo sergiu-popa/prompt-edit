@@ -185,7 +185,7 @@ The worker's flags keep each job's timeout (60 s by default) under the database 
 
 ### Reviewer account
 
-`app:upsert-user` creates or updates a user by email. The password is read from the first line of stdin, never from an argument, so it isn't visible in `ps` on the shared droplet or saved in the server's shell history (D-23). From your machine:
+`app:upsert-user` creates or updates a user by email. The password is read from the first line of stdin, never from an argument, so it isn't visible in `ps` on the shared droplet or saved in the server's shell history (D-23). Run on a terminal without a pipe, it refuses rather than echo the password as you type it. From your machine:
 
 ```bash
 read -rs E2E_REVIEWER_PASSWORD; export E2E_REVIEWER_PASSWORD   # not echoed, not in history
