@@ -72,6 +72,14 @@ make setup   # .env from .env.example, containers, composer + npm, key, migratio
 
 The app is served at http://prompt-edit.localhost. `make npm-dev` runs Vite in dev mode.
 
+`make seed` creates a local demo account, and running it again resets it:
+
+| Email | Password |
+| --- | --- |
+| `demo@promptedit.test` | `promptedit-demo` |
+
+These credentials are local-only: the seeder refuses to run in production.
+
 ### Pixelforge (used from PE-009 onwards)
 
 - Create **one API key per environment**: local, production. Each key has its own webhook URL, signing secret and `/v1/usage` report, so the deployed app reconciles with its own key.
@@ -128,6 +136,8 @@ All commands run inside the `prompt-edit-app` container.
 | End-to-end — critical user flows in a real browser | Playwright (`playwright` Compose service) | `tests/e2e` | `make e2e` |
 
 Every Playwright test also fails if the browser logs a console or page error (`tests/e2e/fixtures.ts`).
+
+E2E signs in as the demo account, so run `make seed` once before `make e2e`. Each run also registers a few `e2e-…@promptedit.test` users in the local database, which is harmless.
 
 ## Docker Services
 
