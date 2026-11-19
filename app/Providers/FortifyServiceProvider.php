@@ -38,6 +38,6 @@ final class FortifyServiceProvider extends ServiceProvider
          * Fortify always registers GET /user/confirm-password, but no page asks for a
          * password confirmation, so it is not found rather than a missing view.
          */
-        Fortify::confirmPasswordView(fn () => abort(404));
+        Fortify::confirmPasswordView(fn (): never => abort(404));
     }
 }
