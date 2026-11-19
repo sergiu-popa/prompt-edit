@@ -165,6 +165,43 @@ final class CreateGenerationActionTest extends TestCase
     }
 
     /**
+     * @return array<string, array{list<string>, int}>
+     */
+    public static function referenceImagesWithANulByte(): array
+    {
+        return [
+            'at the start' => [["\0https://a.example/x.png"], 1],
+            'in the middle' => [["https://a.example/x\0.png"], 1],
+            'at the end' => [["https://a.example/x.png\0"], 1],
+            'in the second of two' => [['https://a.example/x.png', "https://b.example/y\0.png"], 2],
+        ];
+    }
+
+    /**
+     * The json column would keep it as \u0000, but no URL holds a NUL byte,
+     * so it is refused like the prompt rather than sent to Pixelforge.
+     *
+     * @param  list<string>  $referenceImages
+     */
+    #[DataProvider('referenceImagesWithANulByte')]
+    public function test_a_reference_image_with_a_nul_byte_is_refused_before_anything_is_written(array $referenceImages, int $position): void
+    {
+        $user = User::factory()->create();
+
+        try {
+            $this->createGeneration($user, new NewGenerationData('a cat', ImageSize::Square, ImageQuality::Low, $referenceImages));
+            $this->fail('The reference image with a NUL byte was accepted.');
+        } catch (InvalidGenerationRequestException $exception) {
+            $this->assertSame(
+                sprintf('Reference image %d contains a NUL byte, which cannot be stored.', $position),
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertSame(0, DB::table('generations')->count());
+    }
+
+    /**
      * @return array<string, array{list<string>}>
      */
     public static function referenceImages(): array

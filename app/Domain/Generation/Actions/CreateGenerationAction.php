@@ -54,7 +54,7 @@ final class CreateGenerationAction
 
     /**
      * Postgres text cannot hold U+0000, and pdo_pgsql silently cuts the
-     * value at it instead of failing the insert.
+     * value at it instead of failing the insert. No URL holds one either.
      *
      * @throws InvalidGenerationRequestException
      */
@@ -62,6 +62,12 @@ final class CreateGenerationAction
     {
         if (str_contains($data->prompt, "\0")) {
             throw InvalidGenerationRequestException::nulByteInPrompt();
+        }
+
+        foreach ($data->referenceImages as $index => $referenceImage) {
+            if (str_contains($referenceImage, "\0")) {
+                throw InvalidGenerationRequestException::nulByteInReferenceImage($index + 1);
+            }
         }
     }
 }

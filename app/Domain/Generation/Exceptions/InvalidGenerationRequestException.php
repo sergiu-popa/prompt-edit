@@ -17,4 +17,12 @@ final class InvalidGenerationRequestException extends InvalidArgumentException
     {
         return new self('The prompt contains a NUL byte, which cannot be stored.');
     }
+
+    /**
+     * @param  int  $position  one-based, in the order given
+     */
+    public static function nulByteInReferenceImage(int $position): self
+    {
+        return new self(sprintf('Reference image %d contains a NUL byte, which cannot be stored.', $position));
+    }
 }
