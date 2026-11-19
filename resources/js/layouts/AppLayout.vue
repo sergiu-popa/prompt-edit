@@ -34,13 +34,13 @@ function signOut(): void {
 <template>
     <div class="min-h-screen bg-zinc-50">
         <!--
-            Mobile: the brand and Sign out share the first row and the name wraps below.
+            Mobile: the brand and Sign out share the first row, then the nav and the name wrap below.
             From `sm`: brand, nav, then the name and Sign out on the right.
         -->
         <header class="border-b border-zinc-200 bg-white">
             <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 sm:px-6">
                 <Link :href="paths.dashboard" class="order-1 text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
-                <nav aria-label="Main" class="order-4 flex w-full items-center gap-4 text-sm sm:order-2 sm:w-auto">
+                <nav aria-label="Main" class="order-3 flex w-full items-center gap-4 text-sm sm:order-2 sm:w-auto">
                     <Link
                         v-for="item in navItems"
                         :key="item.href"
@@ -50,7 +50,9 @@ function signOut(): void {
                         >{{ item.label }}</Link
                     >
                 </nav>
-                <p class="order-3 w-full min-w-0 truncate text-sm text-zinc-600 sm:ml-auto sm:w-auto sm:max-w-64">{{ userName }}</p>
+                <p class="order-4 w-full min-w-0 truncate text-sm text-zinc-600 sm:order-3 sm:ml-auto sm:w-auto sm:max-w-64">
+                    {{ userName }}
+                </p>
                 <Button
                     variant="secondary"
                     class="order-2 ml-auto sm:order-4 sm:ml-0"
