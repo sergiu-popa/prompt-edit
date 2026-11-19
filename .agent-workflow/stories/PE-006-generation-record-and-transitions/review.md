@@ -49,7 +49,7 @@ The implementation matches the plan class for class: `GenerationStatus`, `Genera
 
 ### Warnings
 
-- [ ] **The same transition-test helpers are copied into three or more files** (guidelines §6: extract shared setup into a `Tests\Concerns` trait when it repeats in 3+ files):
+- [x] **The same transition-test helpers are copied into three or more files** (guidelines §6: extract shared setup into a `Tests\Concerns` trait when it repeats in 3+ files):
   - `rawRow()`: `tests/Unit/Domain/Generation/Actions/TransitionGenerationActionTest.php:336`, `TransitionGenerationActionConflictsTest.php:224` and `TransitionGenerationActionSequencesTest.php:141`.
   - `transition()`: `TransitionGenerationActionTest.php:328`, `TransitionGenerationActionConflictsTest.php:216` and `TransitionGenerationActionSequencesTest.php:133`.
   - `reloaded()`: `TransitionGenerationActionTest.php:341`, `CreateGenerationActionTest.php:169` and `tests/Unit/Database/Factories/GenerationFactoryTest.php:99`.
@@ -59,6 +59,8 @@ The implementation matches the plan class for class: `GenerationStatus`, `Genera
   PE-007 (settle, release and D-09 on these exact outcomes), PE-008 and PE-014 all need "a row in status X", "apply this change" and "the raw row is untouched", so a fourth and fifth copy would follow.
   - Fix: add `Tests\Concerns\InteractsWithGenerations` with domain-named helpers, for example `givenAGenerationIn(GenerationStatus)`, `transitionGeneration(Generation, GenerationSnapshot|LocalGenerationFailureData)`, `rawGenerationRow(Generation)`, `reloadedGeneration(Generation)` and `assertSameInstant(string, mixed)`. Use it in the five files and delete the private copies. Keep `InteractsWithGenerationSnapshots` for Pixelforge objects only.
   - Commit: `[PE-006] Share generation test helpers in a concern`.
+
+  — fixed in `0b8da4a`: `Tests\Concerns\InteractsWithGenerations` holds `givenAGenerationIn()`, `transitionGeneration()`, `rawGenerationRow()` and `reloadedGeneration()`, and every private copy is gone from the five Laravel tests. `assertSameInstant()` lives in a small `Tests\Concerns\AssertsInstants` that `InteractsWithGenerations` uses, because `GenerationSnapshotTest` is a plain PHPUnit test that does not boot the app. That test's old helper also checked that each instant's timezone is named UTC. The shared one compares in UTC instead, and `test_an_offset_instant_is_converted_to_utc_whatever_the_php_timezone` still asserts the UTC timezone explicitly.
 - [x] **The PR is far over the project's size rule.** `.agent-workflow/CLAUDE.md` § Git hygiene sets about 400 changed lines and says to split a larger story. The story's Technical Notes also said to split it into (a) AC1–AC7 and AC15–AC16 and (b) AC8–AC14 *before planning*. This branch has about 3,180 changed lines:
   - `app/` 934, `database/` 173;
   - `tests/Unit` 1,666, `tests/Concerns` 94, `tests/fixtures` 89 and `tests/scripts` 49;
@@ -70,9 +72,13 @@ The implementation matches the plan class for class: `GenerationStatus`, `Genera
 
 ### Suggestions
 
-- [ ] `app/Support/Pixelforge/DataTransferObjects/GenerationSnapshot.php:269-304`: `rates()` re-implements the key and type rules of PE-001's `TokenRates::from()` (`app/Domain/Billing/ValueObjects/TokenRates.php:42-100`), but leaves out its `RATE_PATTERN`. As a result `"abc"`, `""` or `"5.00\n"` parses and is written onto a succeeded row. Once PE-007 settles inside this transaction, `TokenRates::from()` will throw there, and that webhook can then never apply.
+- [x] `app/Support/Pixelforge/DataTransferObjects/GenerationSnapshot.php:269-304`: `rates()` re-implements the key and type rules of PE-001's `TokenRates::from()` (`app/Domain/Billing/ValueObjects/TokenRates.php:42-100`), but leaves out its `RATE_PATTERN`. As a result `"abc"`, `""` or `"5.00\n"` parses and is written onto a succeeded row. Once PE-007 settles inside this transaction, `TokenRates::from()` will throw there, and that webhook can then never apply.
   - Fix: at the boundary, reject a rate that does not match `/^[0-9]+(?:\.[0-9]+)?\z/` (ideally a shared constant or a `TokenRates` validator), keeping the strings verbatim. The plan's decision to leave the whole-n$ check (`"5.0001"`) to PE-007 can stay as it is.
   - Add one test row each for `"abc"` and `"5.00\n"`.
-- [ ] `database/factories/GenerationFactory.php:94`: there is no state for a locally failed row (`failed`, `provider_id` null, `local_failure_reason` set). AC16's "failed has an error or a local reason" therefore covers only the first branch.
+
+  — fixed in `3a38a0b`: `TokenRates::RATE_PATTERN` is now public and `GenerationSnapshot::rates()` uses it, keeping the strings verbatim. New rows: `"abc"`, `""`, `"5.00\n"`, `"-5.00"` and `"5."`. `"5.0001"` still parses.
+- [x] `database/factories/GenerationFactory.php:94`: there is no state for a locally failed row (`failed`, `provider_id` null, `local_failure_reason` set). AC16's "failed has an error or a local reason" therefore covers only the first branch.
   - PE-007's D-09 path (an `IgnoredConflict` over a locally failed row) and PE-009 both need one. `TransitionGenerationActionConflictsTest` currently gets the `failed row, succeeded snapshot` pair only from a Pixelforge-failed row.
   - Fix, if wanted: add `failedLocally()` building on the definition (pending, no provider id) with `ContentPolicyViolation`, and add one factory test row.
+
+  — fixed in `428af32`: `failedLocally()` builds on the definition and sets `ContentPolicyViolation` along with the provider's `400` error code, message and param. It has no provider id and no provider timestamps, which matches what the transition action writes. There is one factory test, plus a conflicts test showing that a succeeded snapshot over a locally failed row is `IgnoredConflict` and is logged with `provider_id` null (the D-09 path).
