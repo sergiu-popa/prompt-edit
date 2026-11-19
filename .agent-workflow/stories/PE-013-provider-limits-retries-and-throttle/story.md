@@ -152,8 +152,8 @@ Serves grading #2 robustness (primary), #1 correct money (failures are free, a s
   - `release()` increments the attempt count.
   - When both `retryUntil` and `tries` are defined, `retryUntil` takes precedence.
   - The local worker (`.docker/supervisor/conf.d/worker.conf`) runs `queue:work --sleep=3 --tries=3 --max-time=3600`.
-  - The local queue connection is `database`, with `retry_after` 90 s (`DB_QUEUE_RETRY_AFTER`). Cloud's worker flags come from PE-004. Keep both consistent with AC 19.
-- **Budget storage:** the budget must live in a store shared across processes (Redis is in the stack), never in process memory.
+  - The local queue connection is `database`, with `retry_after` 90 s (`DB_QUEUE_RETRY_AFTER`). The production worker's flags come from PE-004's systemd unit. Keep both consistent with AC 19.
+- **Budget storage:** the budget must live in a store shared across processes (the database cache store, D-20), never in process memory.
 - **Config:** every bound is a config value, and its default is the production value stated above. There is no separate E2E environment:
   - `make e2e` runs against the dev containers.
   - The CI E2E image is built from `.env.example` (PE-010).

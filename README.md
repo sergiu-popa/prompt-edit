@@ -10,7 +10,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 | --- | --- |
 | Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs, to merge in order: #3 → #2 → #4 → #5 → #6 |
 | Product features | Planned as 18 stories (below); each is delivered as one reviewable PR |
-| Deployment | Laravel Cloud: walking skeleton in PE-004, real Pixelforge in PE-015 |
+| Deployment | Own server at prompt.sergiupopa.dev (Deployer): walking skeleton in PE-004, real Pixelforge in PE-015 |
 
 ### Required scope
 
@@ -19,7 +19,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 | [PE-001](.agent-workflow/stories/PE-001-money-nanodollars-and-markup/story.md) | Money in integer nanodollars: exact provider cost and the +25% charge |
 | [PE-002](.agent-workflow/stories/PE-002-upfront-estimate-shared-fixture/story.md) | Upfront estimate in PHP and TypeScript, locked together by one shared JSON fixture |
 | [PE-003](.agent-workflow/stories/PE-003-sign-in-and-app-shell/story.md) | Sign in, sign up and sign out (Fortify + Inertia) with the app shell |
-| [PE-004](.agent-workflow/stories/PE-004-walking-skeleton-laravel-cloud/story.md) | Walking skeleton live on Laravel Cloud |
+| [PE-004](.agent-workflow/stories/PE-004-walking-skeleton-own-server/story.md) | Walking skeleton live on prompt.sergiupopa.dev |
 | [PE-005](.agent-workflow/stories/PE-005-generate-page-live-estimate/story.md) | Generate page with an instant upfront cost estimate |
 | [PE-006](.agent-workflow/stories/PE-006-generation-record-and-transitions/story.md) | Generation record and the single forward-only transition action |
 | [PE-007](.agent-workflow/stories/PE-007-credit-ledger-hold-settle-release/story.md) | Append-only credit ledger: hold the max estimate, charge the actual exactly once, failed is free |

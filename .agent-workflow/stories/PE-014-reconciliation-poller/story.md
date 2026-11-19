@@ -110,7 +110,7 @@ Serves grading #1 correct money (a charge or a release always happens, and exact
 - The local and E2E scheduler container: already done in bootstrap PR #6 (see Technical Notes).
 - Sweeping `GET /v1/generations` listings to discover generations we don't know about.
 - Usage reconciliation against `GET /v1/usage` (PE-018).
-- Verifying Cloud's scheduler and the reconciler health signal (PE-015).
+- Verifying the production scheduler cron and the reconciler health signal (PE-015).
 - Alerting.
 - Provider-limit and retry handling on the submit path (PE-013).
 
@@ -119,7 +119,7 @@ Serves grading #1 correct money (a charge or a release always happens, and exact
   - PE-010-fake-pixelforge-driver: fake state and signed webhooks.
   - PE-013-provider-limits-retries-and-throttle: the shared budget, the submit bookkeeping and hand-off flag (PE-013 AC 23), and the time-bounded submit job.
   - It also builds on PE-006 (the transition action, which this story extends to stamp the last provider update) and PE-007 (the row lock, the unique ledger constraints, and provider cost stored on the generation).
-- **Prerequisite, done in bootstrap PR #6:** `.docker/entrypoint.sh` has a `scheduler` mode (supervised `schedule:work`). `docker-compose.yml` has a `scheduler` service that `make up` starts, and the CI `e2e` job runs `scheduler` and `worker` containers next to `app`, so AC 22 can run. Cloud's scheduler comes from PE-004.
+- **Prerequisite, done in bootstrap PR #6:** `.docker/entrypoint.sh` has a `scheduler` mode (supervised `schedule:work`). `docker-compose.yml` has a `scheduler` service that `make up` starts, and the CI `e2e` job runs `scheduler` and `worker` containers next to `app`, so AC 22 can run. The production scheduler cron comes from PE-004.
 - **Decisions:**
   - D-05;
   - D-06 (the poller is the third caller of the single transition action);

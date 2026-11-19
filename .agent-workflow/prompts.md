@@ -57,3 +57,16 @@ steer the work.
 **Prompt 6**
 
 > All PRs have been merged. Let's run the pipeline for each story, in order, 1 by 1, auditor included. Once I review and merge a PR, you'll start the next one. Don't forget about GIT hygiene, I need to keep up with the new code.
+
+**Prompt 7** (while PE-003 was in the pipeline)
+
+> What's the next story about? I don't want to deploy on Laravel Cloud, but on my own server at prompt.sergiupopa.dev (check deploy.php on ../yum project)
+
+**Answers to clarifying questions**
+
+| Question | Answer |
+|---|---|
+| Production database on the droplet? | Install Postgres 17 |
+| Queue, cache and sessions in production? | Database driver |
+| How do the worker and scheduler run? | systemd + cron |
+| Who deploys after each merge? | The assistant runs `dep deploy` |
