@@ -23,8 +23,10 @@ final readonly class GenerationSnapshot
 {
     /**
      * ISO-8601 in whole seconds, with `Z` or an offset, as Pixelforge sends it.
+     * The offset is range-checked here, because PHP rolls `+14:60` over to
+     * `+15:00` without a warning.
      */
-    private const string TIMESTAMP_PATTERN = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})\z/';
+    private const string TIMESTAMP_PATTERN = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)\z/';
 
     /**
      * @param  ?array<string, string>  $rates  the rate strings exactly as received

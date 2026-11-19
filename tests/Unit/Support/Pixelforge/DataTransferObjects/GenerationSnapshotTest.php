@@ -174,6 +174,8 @@ final class GenerationSnapshotTest extends TestCase
             'created_at on Feb 30' => [self::queuedWith(['created_at' => '2026-02-30T00:00:00Z']), 'created_at'],
             'created_at as a unix time' => [self::queuedWith(['created_at' => 1762265000]), 'created_at'],
             'started_at without a zone' => [self::queuedWith(['started_at' => '2026-11-04T14:03:13']), 'started_at'],
+            'started_at with offset minutes past 59' => [self::queuedWith(['started_at' => '2026-11-04T14:03:13+14:60']), 'started_at'],
+            'started_at with an offset past 14 hours' => [self::queuedWith(['started_at' => '2026-11-04T14:03:13+99:00']), 'started_at'],
             'error without a message' => [self::queuedWith(['error' => ['code' => 'internal_error']]), 'error.message'],
             'error a string' => [self::queuedWith(['error' => 'internal_error']), 'error'],
             'image_url empty' => [self::queuedWith(['image_url' => '']), 'image_url'],
