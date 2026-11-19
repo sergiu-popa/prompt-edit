@@ -136,6 +136,33 @@ final class TransitionGenerationActionConflictsTest extends TestCase
     }
 
     /**
+     * D-09: a 409 made us fail the row locally, but the generation Pixelforge
+     * already held under our key went on to succeed.
+     */
+    public function test_a_succeeded_snapshot_over_a_locally_failed_row_is_ignored_and_logged(): void
+    {
+        $generation = Generation::factory()->failedLocally()->create();
+        $snapshot = self::snapshotFor($generation, GenerationStatus::Succeeded);
+        $before = $this->rawGenerationRow($generation);
+        $this->travel(1)->minutes();
+
+        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $this->transitionGeneration($generation, $snapshot));
+
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+        $this->assertConflictLogged(
+            'Ignored a Pixelforge snapshot whose terminal status contradicts the generation\'s.',
+            [
+                'generation_id' => $generation->id,
+                'status' => 'failed',
+                'provider_id' => null,
+                'incoming_status' => 'succeeded',
+                'incoming_provider_id' => $snapshot->id,
+                'outcome' => 'ignored_conflict',
+            ],
+        );
+    }
+
+    /**
      * @return array<string, array{GenerationStatus}>
      */
     public static function rowsPixelforgeAccepted(): array

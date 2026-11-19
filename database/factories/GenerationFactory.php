@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
@@ -98,6 +99,21 @@ final class GenerationFactory extends Factory
             'error_code' => 'generation_failed',
             'error_message' => 'The model could not produce an image for this prompt.',
             'completed_at' => self::instant($attributes['started_at'])->addSeconds(16),
+        ]);
+    }
+
+    /**
+     * Failed here before Pixelforge created anything (a `400` at submit), as the
+     * transition action records it: no provider id and no provider timestamps.
+     */
+    public function failedLocally(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => GenerationStatus::Failed,
+            'local_failure_reason' => LocalFailureReason::ContentPolicyViolation,
+            'error_code' => 'content_policy_violation',
+            'error_message' => 'The prompt was rejected by the content policy.',
+            'error_param' => 'prompt',
         ]);
     }
 

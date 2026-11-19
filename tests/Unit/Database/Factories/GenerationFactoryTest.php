@@ -9,6 +9,7 @@ use App\Domain\Billing\Actions\CalculateUserChargeAction;
 use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\InteractsWithGenerations;
@@ -96,5 +97,21 @@ final class GenerationFactoryTest extends TestCase
         $this->assertNull($generation->image_url);
         $this->assertNull($generation->output_tokens);
         $this->assertNull($generation->rates);
+    }
+
+    public function test_a_locally_failed_row_has_its_reason_but_nothing_from_pixelforge(): void
+    {
+        $generation = $this->reloadedGeneration(Generation::factory()->failedLocally()->create());
+
+        $this->assertSame(GenerationStatus::Failed, $generation->status);
+        $this->assertSame(LocalFailureReason::ContentPolicyViolation, $generation->local_failure_reason);
+        $this->assertSame('content_policy_violation', $generation->error_code);
+        $this->assertNotEmpty($generation->error_message);
+        $this->assertNull($generation->provider_id);
+        $this->assertNull($generation->provider_created_at);
+        $this->assertNull($generation->started_at);
+        $this->assertNull($generation->completed_at);
+        $this->assertNull($generation->rates);
+        $this->assertNull($generation->image_url);
     }
 }
