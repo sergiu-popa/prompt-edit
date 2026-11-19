@@ -4,7 +4,7 @@
 Signature-verified, idempotent, order-independent Pixelforge webhooks
 
 ## Status
-`qa-ready`
+`qa-passed`
 
 ## Description
 Pixelforge reports each generation's progress and outcome through webhooks. Every event is delivered at least once and in any order, sometimes before our `POST /v1/generations` call has returned (requirements §2.5), and anyone on the internet can POST to the URL. Verified, idempotent, order-independent webhooks are a required feature. They protect grading criterion #1 (a charge is never recorded twice, and failed stays free) and criterion #2 (robustness).
