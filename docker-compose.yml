@@ -1,7 +1,7 @@
 services:
   traefik:
     image: traefik:v2.11
-    container_name: 'laravel-13-start-traefik'
+    container_name: 'prompt-edit-traefik'
     ports:
       - '80:80'
     volumes:
@@ -12,44 +12,43 @@ services:
       - '--providers.docker.exposedbydefault=false'
       - '--entrypoints.web.address=:80'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
-  mysql:
-    container_name: 'laravel-13-start-mysql'
-    image: 'mysql:8.0'
+  postgres:
+    container_name: 'prompt-edit-postgres'
+    image: 'postgres:17-alpine'
     ports:
-      - '3306:3306'
+      - '${FORWARD_DB_PORT:-5432}:5432'
     environment:
-      MYSQL_DATABASE: '${DB_DATABASE:-laravel}'
-      MYSQL_ROOT_HOST: '%'
-      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      POSTGRES_DB: '${DB_DATABASE:-prompt_edit}'
+      POSTGRES_USER: '${DB_USERNAME:-prompt_edit}'
+      POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
     volumes:
-      - 'laravel-13-start-mysql:/var/lib/mysql'
+      - 'prompt-edit-postgres:/var/lib/postgresql/data'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-psecret"]
+      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE:-prompt_edit}", "-U", "${DB_USERNAME:-prompt_edit}"]
       retries: 3
       timeout: 5s
 
   redis:
-    container_name: 'laravel-13-start-redis'
+    container_name: 'prompt-edit-redis'
     image: 'redis:alpine'
     ports:
       - '6379:6379'
     volumes:
-      - 'laravel-13-start-redis:/data'
+      - 'prompt-edit-redis:/data'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       retries: 3
       timeout: 5s
 
   app:
-    container_name: 'laravel-13-start-app'
-    image: laravel-13-start-app
+    container_name: 'prompt-edit-app'
+    image: prompt-edit-app
     entrypoint: ['/app/entrypoint.sh']
     command: ["web"]
     build:
@@ -61,8 +60,8 @@ services:
         WWWUSER: '${WWWUSER}'
     depends_on:
       - traefik
-      - mysql
-      - test-mysql
+      - postgres
+      - test-postgres
       - redis
       - test-redis
     extra_hosts:
@@ -72,7 +71,7 @@ services:
       - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
     labels:
       - traefik.enable=true
-      - traefik.http.routers.web.rule=Host(`laravel-13-start.localhost`)
+      - traefik.http.routers.web.rule=Host(`prompt-edit.localhost`)
       - traefik.http.routers.web.entrypoints=web
       - traefik.http.services.web.loadbalancer.server.port=8080
     environment:
@@ -85,11 +84,11 @@ services:
     volumes:
       - '.:/var/www'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
   worker:
-    container_name: 'laravel-13-start-worker'
-    image: laravel-13-start-app
+    container_name: 'prompt-edit-worker'
+    image: prompt-edit-app
     entrypoint: ['/app/entrypoint.sh']
     command: ["worker"]
     build:
@@ -112,46 +111,45 @@ services:
     volumes:
       - '.:/var/www'
     networks:
-      - laravel-13-start
+      - prompt-edit
 
-  test-mysql:
-    container_name: 'laravel-13-start-test-mysql'
-    image: 'mysql:8.0'
-    tmpfs: /var/lib/mysql
+  test-postgres:
+    container_name: 'prompt-edit-test-postgres'
+    image: 'postgres:17-alpine'
+    tmpfs: /var/lib/postgresql/data
     ports:
-      - '3307:3306'
+      - '${FORWARD_TEST_DB_PORT:-5433}:5432'
     environment:
-      MYSQL_DATABASE: '${DB_DATABASE:-laravel}'
-      MYSQL_ROOT_HOST: '%'
-      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-secret}'
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      POSTGRES_DB: 'prompt_edit_test'
+      POSTGRES_USER: 'prompt_edit'
+      POSTGRES_PASSWORD: 'secret'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-psecret"]
+      test: ["CMD", "pg_isready", "-q", "-d", "prompt_edit_test", "-U", "prompt_edit"]
       retries: 3
       timeout: 5s
 
   test-redis:
-    container_name: 'laravel-13-start-test-redis'
+    container_name: 'prompt-edit-test-redis'
     image: 'redis:alpine'
     ports:
       - '6381:6379'
     networks:
-      - laravel-13-start
+      - prompt-edit
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       retries: 3
       timeout: 5s
 
 networks:
-  laravel-13-start:
-    name: laravel-13-start
+  prompt-edit:
+    name: prompt-edit
     driver: bridge
 
 volumes:
-  laravel-13-start-mysql:
+  prompt-edit-postgres:
     driver: local
-  laravel-13-start-redis:
+  prompt-edit-redis:
     driver: local
 

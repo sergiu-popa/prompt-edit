@@ -9,73 +9,73 @@ down:
 restart: down up
 
 setup: env up composer key migrate npm-build
-	@echo "Setup complete. Visit http://laravel-13-start.localhost"
+	@echo "Setup complete. Visit http://prompt-edit.localhost"
 
 env:
 	cp .env.example .env
 
 composer:
-	docker exec laravel-13-start-app composer install
+	docker exec prompt-edit-app composer install
 
 key:
-	docker exec laravel-13-start-app php artisan key:generate
+	docker exec prompt-edit-app php artisan key:generate
 
 migrate:
-	docker exec laravel-13-start-app php artisan migrate
+	docker exec prompt-edit-app php artisan migrate
 
 migrate-test:
-	docker exec -e DB_HOST=laravel-13-start-test-mysql laravel-13-start-app php artisan migrate
+	docker exec -e DB_HOST=test-postgres -e DB_DATABASE=prompt_edit_test prompt-edit-app php artisan migrate
 
 fresh:
-	docker exec laravel-13-start-app php artisan migrate:fresh
+	docker exec prompt-edit-app php artisan migrate:fresh
 
 fresh-test:
-	docker exec -e DB_HOST=laravel-13-start-test-mysql laravel-13-start-app php artisan migrate:fresh
+	docker exec -e DB_HOST=test-postgres -e DB_DATABASE=prompt_edit_test prompt-edit-app php artisan migrate:fresh
 
 seed:
-	docker exec laravel-13-start-app php artisan db:seed
+	docker exec prompt-edit-app php artisan db:seed
 
 refresh: fresh seed
 
 refresh-test: fresh-test
 
 bash:
-	docker exec -it laravel-13-start-app /bin/bash
+	docker exec -it prompt-edit-app /bin/bash
 
 tinker:
-	docker exec -it laravel-13-start-app php artisan tinker
+	docker exec -it prompt-edit-app php artisan tinker
 
 npm:
-	docker exec laravel-13-start-app npm install
+	docker exec prompt-edit-app npm install
 
 npm-dev:
-	docker exec laravel-13-start-app bash -c "npm install && npm run dev"
+	docker exec prompt-edit-app bash -c "npm install && npm run dev"
 
 npm-build:
-	docker exec laravel-13-start-app bash -c "npm install && npm run build"
+	docker exec prompt-edit-app bash -c "npm install && npm run build"
 
 test: migrate-test
-	docker exec laravel-13-start-app php artisan test --compact $(if $(filter),--filter="$(filter)")
+	docker exec prompt-edit-app php artisan test --compact $(if $(filter),--filter="$(filter)")
 
 test-unit:
-	docker exec laravel-13-start-app php artisan test --compact --testsuite=Unit
+	docker exec prompt-edit-app php artisan test --compact --testsuite=Unit
 
 test-feature: migrate-test
-	docker exec laravel-13-start-app php artisan test --compact --testsuite=Feature
+	docker exec prompt-edit-app php artisan test --compact --testsuite=Feature
 
 lint:
-	docker exec laravel-13-start-app composer lint
+	docker exec prompt-edit-app composer lint
 
 lint-fix:
-	docker exec laravel-13-start-app composer lint-fix
+	docker exec prompt-edit-app composer lint-fix
 
 stan:
-	docker exec laravel-13-start-app composer stan
+	docker exec prompt-edit-app composer stan
 
 check: lint stan test
 
 cache:
-	docker exec laravel-13-start-app php artisan optimize:clear
+	docker exec prompt-edit-app php artisan optimize:clear
 
 app-logs:
-	docker logs --tail 500 laravel-13-start-app
+	docker logs --tail 500 prompt-edit-app

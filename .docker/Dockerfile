@@ -17,6 +17,7 @@ RUN apt-get update \
         libzip-dev \
         libpng-dev \
         libicu-dev \
+        libpq-dev \
         supervisor \
         git \
         unzip \
@@ -27,7 +28,7 @@ RUN docker-php-ext-install \
         mbstring \
         gd \
         pdo \
-        pdo_mysql \
+        pdo_pgsql \
         zip \
         pcntl \
         intl \

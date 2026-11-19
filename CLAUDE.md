@@ -171,7 +171,7 @@ This application runs in Docker. All commands (linting, static analysis, tests, 
 
 ## Local Domain
 
-The application is available at `http://laravel-13-start.localhost` when containers are running.
+The application is available at `http://prompt-edit.localhost` when containers are running.
 
 ## Running Commands
 
@@ -181,10 +181,10 @@ Always use `make` targets or `docker exec` to run commands inside the container:
 - **Static analysis:** `make stan`
 - **Tests:** `make test` or `make test filter=testName`
 - **All checks:** `make check` (lint + stan + test)
-- **Artisan:** `docker exec laravel-13-start-app php artisan <command>`
+- **Artisan:** `docker exec prompt-edit-app php artisan <command>`
 - **Shell:** `make bash`
 
-Do not run `php artisan`, `vendor/bin/pint`, `vendor/bin/phpstan`, or `php artisan test` directly on the host. Always prefix with `docker exec laravel-13-start-app` or use the corresponding `make` target.
+Do not run `php artisan`, `vendor/bin/pint`, `vendor/bin/phpstan`, or `php artisan test` directly on the host. Always prefix with `docker exec prompt-edit-app` or use the corresponding `make` target.
 
 ## Container Setup
 
