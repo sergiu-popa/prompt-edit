@@ -1,36 +1,93 @@
-# Laravel 13 Starter
+# PromptEdit × Pixelforge
 
-Opinionated starter template for Laravel 13 applications, shipped with a Docker-based development environment and a CI pipeline that enforces lint, static analysis, and test coverage.
+Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs), a simulated asynchronous AI image API. It's being built as the take-home assessment for PromptEdit's Senior Product Engineer role. Users sign in, write a prompt, see what it will cost **before** they submit, and watch the generation finish live. They pay Pixelforge's exact cost **plus 25%**, and failed generations are free.
 
-## Stack
+**Stack:** Laravel 13 · Inertia 3 · Vue 3 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · Redis · Docker · GitHub Actions.
 
-- **PHP** 8.4
-- **Laravel** 13
-- **Inertia** 3 + **Vue** 3 + **TypeScript** 6
-- **Tailwind CSS** 4 + Vite
-- **PostgreSQL** 17 and **Redis** (separate containers for app and tests)
-- **PHPUnit** 13, **Larastan/PHPStan** 3, **Laravel Pint** 1
-- **ESLint**, **Prettier**, **vue-tsc**
-- **Laravel Boost** for AI-assisted development
+## Status
 
-## Requirements
+| Area | State |
+| --- | --- |
+| Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs, to merge in order: #3 → #2 → #4 → #5 → #6 |
+| Product features | Planned as 18 stories (below); each is delivered as one reviewable PR |
+| Deployment | Laravel Cloud: walking skeleton in PE-004, real Pixelforge in PE-015 |
 
-- Docker and Docker Compose
-- `prompt-edit.localhost` resolves automatically on macOS; on Linux add an entry to `/etc/hosts`.
+### Required scope
 
-## Quick Start
+| Story | What it delivers |
+| --- | --- |
+| [PE-001](.agent-workflow/stories/PE-001-money-nanodollars-and-markup/story.md) | Money in integer nanodollars: exact provider cost and the +25% charge |
+| [PE-002](.agent-workflow/stories/PE-002-upfront-estimate-shared-fixture/story.md) | Upfront estimate in PHP and TypeScript, locked together by one shared JSON fixture |
+| [PE-003](.agent-workflow/stories/PE-003-sign-in-and-app-shell/story.md) | Sign in, sign up and sign out (Fortify + Inertia) with the app shell |
+| [PE-004](.agent-workflow/stories/PE-004-walking-skeleton-laravel-cloud/story.md) | Walking skeleton live on Laravel Cloud |
+| [PE-005](.agent-workflow/stories/PE-005-generate-page-live-estimate/story.md) | Generate page with an instant upfront cost estimate |
+| [PE-006](.agent-workflow/stories/PE-006-generation-record-and-transitions/story.md) | Generation record and the single forward-only transition action |
+| [PE-007](.agent-workflow/stories/PE-007-credit-ledger-hold-settle-release/story.md) | Append-only credit ledger: hold the max estimate, charge the actual exactly once, failed is free |
+| [PE-008](.agent-workflow/stories/PE-008-verified-idempotent-webhooks/story.md) | Signature-verified, idempotent, order-independent Pixelforge webhooks |
+| [PE-009](.agent-workflow/stories/PE-009-pixelforge-client-and-submit-job/story.md) | Pixelforge client contract and the idempotent submit job |
+| [PE-010](.agent-workflow/stories/PE-010-fake-pixelforge-driver/story.md) | In-app fake Pixelforge with signed webhooks and test keywords |
+| [PE-011](.agent-workflow/stories/PE-011-submit-generation-and-history/story.md) | Submit a generation and see it in history |
+| [PE-012](.agent-workflow/stories/PE-012-live-status-results-and-failure-copy/story.md) | Live status, image and actual cost in history; failures explained |
+| [PE-013](.agent-workflow/stories/PE-013-provider-limits-retries-and-throttle/story.md) | Provider limits, overloads and outages: bounded retries, free failures and a shared rate budget |
+| [PE-014](.agent-workflow/stories/PE-014-reconciliation-poller/story.md) | Scheduled reconciler: status and money catch up when webhooks don't arrive |
+| [PE-015](.agent-workflow/stories/PE-015-production-go-live/story.md) | Go live with real Pixelforge: live smoke, production webhooks, hardening and first real generations |
+
+### Stretch goals
+
+| Story | What it delivers |
+| --- | --- |
+| [PE-016](.agent-workflow/stories/PE-016-operator-report/story.md) | Operator report: credit spend, provider cost and profit per day and per user |
+| [PE-017](.agent-workflow/stories/PE-017-credit-balances-buy-credits/story.md) | Credit balances, fake 'Buy credits', and blocking unaffordable generations |
+| [PE-018](.agent-workflow/stories/PE-018-usage-reconciliation-and-final-signoff/story.md) | Provider costs reconcile with GET /v1/usage; final production sign-off |
+
+## How the money works
+
+- **Integer nanodollars** (1 n$ = $0.000000001), stored as `BIGINT`, never floats. Pixelforge's per-1M-token rates are whole n$ per token (`"12.50"` → 12,500 n$/token). Provider cost is therefore exact and matches the 9-decimal `cost_usd` in `GET /v1/usage` digit for digit.
+- **Billed at the generation's own rates.** Each generation is priced with the `rates` Pixelforge returns on it, never with a hard-coded table.
+- **User price = ⌈provider × 125 / 100⌉.** It rounds up to the next nanodollar, so it never under-charges and over-charges by at most 0.75 n$.
+- **The upfront estimate is an honest range.** Text tokens are ±15% of ⌈code points / 4⌉ and reasoning tokens vary by quality. One shared JSON fixture keeps the PHP and TypeScript estimators identical.
+- **Exactly once, enforced by the database.** An append-only ledger holds the maximum at submit, charges the actual once on success (a unique constraint, not a convention) and releases the hold on failure.
+- **Reconciles with Pixelforge.** The operator report buckets costs by Pixelforge's `completed_at` UTC day, the same way `/v1/usage` does.
+
+Worked examples and the full model are in [`requirements.md` §3](.agent-workflow/requirements.md#3-money-model).
+
+## How it copes with Pixelforge
+
+- **Local row first.** Its ULID is both the `Idempotency-Key` and `metadata.generation_id`. Retries are safe, and a webhook that arrives before the create response still finds its row.
+- **Webhooks are verified, deduplicated and order-independent.** The HMAC-SHA256 signature over `"<t>.<raw body>"` is checked with a 5-minute tolerance. The event id is deduplicated in the same transaction as the state change, and the state machine only moves forward: a late `processing` can never undo `succeeded`.
+- **Limits and overloads.** `429` (rate limit or concurrency) and `503` are retried, honouring `Retry-After` and reusing the same idempotency key. Definitive rejections (content policy, validation) fail free with a clear message, and so does the daily limit.
+- **Lost webhooks.** A scheduled reconciler polls stuck generations through the same transition path.
+
+Every failure mode is covered in the [robustness matrix](.agent-workflow/requirements.md#4-robustness-matrix). The reasoning behind each choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
+
+## Local development
+
+**Requirements:** Docker and Docker Compose. `prompt-edit.localhost` resolves automatically on macOS; on Linux, add it to `/etc/hosts`.
 
 ```bash
-make setup
+make setup   # .env from .env.example, containers, composer + npm, key, migrations, assets
 ```
 
-This target copies `.env.example` to `.env`, boots the containers, installs composer and npm dependencies, generates the app key, runs migrations, and builds frontend assets. The app will be available at http://prompt-edit.localhost.
+`make setup` **overwrites** an existing `.env`. Once your Pixelforge key is in it, use `make up` instead.
 
-To run Vite in dev mode instead of a one-shot build:
+The app is served at http://prompt-edit.localhost. `make npm-dev` runs Vite in dev mode.
 
-```bash
-make npm-dev
-```
+### Pixelforge (used from PE-009 onwards)
+
+- Create **one API key per environment**: local, production. Each key has its own webhook URL, signing secret and `/v1/usage` report, so the deployed app reconciles with its own key.
+- Put the key and its webhook signing secret in `.env` as `PIXELFORGE_API_KEY` and `PIXELFORGE_WEBHOOK_SECRET`, and never commit them. `PIXELFORGE_DRIVER` switches between the real API and the in-app fake (PE-010), which also drives E2E.
+- To receive real webhooks locally, expose the app through a tunnel and set `https://<tunnel>/webhooks/pixelforge` as the key's webhook URL in the Pixelforge dashboard. For example:
+  - `cloudflared tunnel --url http://localhost:80 --http-host-header prompt-edit.localhost`
+  - `ngrok http 80 --host-header=prompt-edit.localhost`
+- Prompt keywords force behaviour for testing: `[fail]`, `[slow]`, `[duplicate]`, `[blocked]`, `[overloaded]`, `[succeed]`.
+
+## How this is built
+
+- **Requirements first.** [`requirements.md`](.agent-workflow/requirements.md) distils the brief and the Pixelforge docs, checked against the live API, into facts, a money model, a robustness matrix and a decisions log.
+- **Stories, then an agent pipeline.** Each [story](.agent-workflow/stories) moves through *Architect* (`plan.md`) → *Engineer* (code and tests) → *Reviewer* (`review.md`) → *QA* (`qa.md`, including a browser pass), with an optional *Auditor* for risky stories. The whole decision trail is committed next to the code. Project rules for the agents are in [`.agent-workflow/CLAUDE.md`](.agent-workflow/CLAUDE.md).
+- **Bootstrap work has no stories.** Tooling such as the stack switch, CI and the test harness goes on `bootstrap/*` branches with `[bootstrap]` commits.
+- **Git hygiene.** One story = one PR of about 400 changed lines, short `[PE-NNN]` commits that each carry their own tests, and TDD throughout.
+- **AI tools.** Built with Claude Code. Every prompt is logged verbatim in [`.agent-workflow/prompts.md`](.agent-workflow/prompts.md).
 
 ## Make Targets
 
@@ -106,7 +163,8 @@ Required secrets: `GITHUB_TOKEN` (provided by Actions).
 ## Project Layout Notes
 
 - `.docker/` — Dockerfile (multi-stage: `development`, `ci`, etc.), entrypoint, Apache/PHP/supervisor config.
-- `CLAUDE.md` — guidelines for AI coding agents; includes Laravel Boost rules and the Docker command convention.
+- `.agent-workflow/` — requirements analysis, story backlog, agent configuration and the prompt log (see *How this is built*).
+- `CLAUDE.md` / `AGENTS.md` — guidelines for AI coding agents; Laravel Boost rules and the Docker command convention.
 - `boost.json` — Laravel Boost configuration.
 - `phpstan.neon`, `pint.json`, `phpunit.xml` — quality-tool configuration.
 
