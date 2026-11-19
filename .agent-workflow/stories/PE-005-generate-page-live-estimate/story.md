@@ -4,7 +4,7 @@
 Generate page with an instant upfront cost estimate
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 This is the first product slice. A signed-in user writes a prompt, picks a size and a quality, and optionally adds up to 4 reference image URLs. As they type, the page shows what the generation will cost:
