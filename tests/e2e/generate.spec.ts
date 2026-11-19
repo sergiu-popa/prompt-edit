@@ -2,12 +2,19 @@ import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { DEMO_USER, signIn } from './support/auth';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectInsideContentBox, expectNoHorizontalScroll } from './support/layout';
 
 const LIGHTHOUSE_PROMPT = 'A lighthouse on a cliff at dawn, in oils';
 
 function estimatePanel(page: Page): Locator {
     return page.getByRole('complementary');
+}
+
+/** Every amount, and the breakdown itself, stays inside the estimate card. */
+async function expectBreakdownInsideCard(page: Page): Promise<void> {
+    const card = estimatePanel(page).getByRole('region', { name: 'Estimated cost' });
+
+    await expectInsideContentBox(card, card.locator('table, button'));
 }
 
 /** The live headline, read as rendered, so closed exact-value tips are not part of it. */
@@ -86,5 +93,12 @@ test('estimates the cost live as the prompt, quality, size and references change
     await expect(page.getByText('Enter an http:// or https:// image URL.')).toHaveCount(0);
 
     await expectNoHorizontalScroll(page);
+    await expectBreakdownInsideCard(page);
+
+    // AC11 at the narrowest phone width, where the breakdown is tightest.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expectNoHorizontalScroll(page);
+    await expectBreakdownInsideCard(page);
+
     expect(requests, 'XHR or fetch requests while editing').toStrictEqual([]);
 });
