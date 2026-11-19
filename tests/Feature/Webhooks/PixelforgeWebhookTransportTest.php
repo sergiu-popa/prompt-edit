@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Webhooks;
 
+use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Models\Generation;
 use App\Http\Middleware\VerifyPixelforgeWebhookSignature;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -228,6 +230,81 @@ final class PixelforgeWebhookTransportTest extends TestCase
         }
 
         return $rows;
+    }
+
+    /**
+     * With a sentinel secret, no log line of any outcome carries the secret
+     * or the body, in its message or its context.
+     *
+     * @param  Closure(Generation): string  $bodyFor
+     * @param  Closure(string, int, string): ?string  $sign  the signature header, from the body, now and the secret
+     */
+    #[DataProvider('loggedOutcomes')]
+    public function test_no_log_line_carries_the_secret_or_the_body(Closure $bodyFor, Closure $sign, int $status, bool $logs): void
+    {
+        $sentinel = 'whsec_SENTINEL_9f3c1a7e5b2d8046';
+        config(['pixelforge.webhook_secret' => $sentinel]);
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $body = $bodyFor($lighthouse);
+
+        $this->deliverPixelforgeWebhook($body, ['Pixelforge-Signature' => $sign($body, now()->getTimestamp(), $sentinel)])->assertStatus($status);
+
+        $this->assertSame($logs, $this->loggedMessages() !== []);
+
+        foreach ($this->loggedMessages() as $message) {
+            $line = $message->message . ' ' . json_encode($message->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+            $this->assertStringNotContainsString($sentinel, $line);
+            $this->assertStringNotContainsString($body, $line);
+        }
+    }
+
+    /**
+     * @return array<string, array{Closure(Generation): string, Closure(string, int, string): ?string, int, bool}>
+     */
+    public static function loggedOutcomes(): array
+    {
+        $encode = static fn (array $event): string => json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $succeeded = static fn (Generation $generation): string => $encode(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($generation)));
+        $signed = static fn (string $body, int $now, string $secret): string => sprintf('t=%d,v1=%s', $now, hash_hmac('sha256', $now . '.' . $body, $secret));
+
+        return [
+            'missing' => [$succeeded, static fn (): ?string => null, 400, true],
+            'malformed' => [$succeeded, static fn (string $body, int $now): string => 't=' . $now, 400, true],
+            'mismatch' => [$succeeded, static fn (string $body, int $now): string => $signed($body, $now, 'whsec_another_secret'), 400, true],
+            'stale' => [$succeeded, static fn (string $body, int $now, string $secret): string => $signed($body, $now - 301, $secret), 400, true],
+            'an unreadable JSON body' => [static fn (): string => '{"id":"evt_1","type":"ping",', $signed, 400, true],
+            'an unreadable snapshot' => [
+                static fn (Generation $generation): string => $encode(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($generation, ['usage' => null]))),
+                $signed,
+                400,
+                true,
+            ],
+            'an unknown generation' => [
+                static fn (Generation $generation): string => $encode(self::pixelforgeEvent('generation.succeeded', self::lighthouseSucceededObjectFor($generation, ['id' => 'gen_UNKNOWN', 'metadata' => ['generation_id' => 'not-a-ulid']]))),
+                $signed,
+                200,
+                true,
+            ],
+            'an applied success' => [$succeeded, $signed, 200, false],
+            'an applied processing' => [
+                static fn (Generation $generation): string => $encode(self::pixelforgeEvent('generation.processing', self::generationObjectFor($generation, GenerationStatus::Processing))),
+                $signed,
+                200,
+                false,
+            ],
+        ];
+    }
+
+    public function test_no_critical_log_carries_the_body_when_no_secret_is_configured(): void
+    {
+        config(['pixelforge.webhook_secret' => null]);
+        $body = json_encode(self::pixelforgeEvent('ping', null), JSON_THROW_ON_ERROR);
+
+        $this->deliverPixelforgeWebhook($body)->assertStatus(500);
+
+        $this->assertCount(1, $this->loggedMessages());
+        $this->assertStringNotContainsString($body, json_encode($this->loggedMessages()[0]->context, JSON_THROW_ON_ERROR));
     }
 
     private function assertRejectionLogged(string $reason, ?string $eventId): void
