@@ -8,14 +8,20 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
+use App\Support\Pixelforge\Exceptions\OverloadedException;
+use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
+use App\Support\Pixelforge\Fake\FakeKeywords;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
 use App\Support\Pixelforge\Fake\FakeUsageGenerator;
 use Carbon\CarbonImmutable;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Support\Str;
+use LogicException;
 use SensitiveParameter;
 
 /**
@@ -30,6 +36,11 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      * The `pixelforge.driver` value that selects this client.
      */
     public const string DRIVER = 'fake';
+
+    /**
+     * The `Retry-After` the docs give a `[overloaded]` refusal.
+     */
+    private const int OVERLOADED_RETRY_AFTER_SECONDS = 2;
 
     /**
      * @param  array<string, string>  $rates  the pinned USD-per-1M rate strings
@@ -52,12 +63,21 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      * as Pixelforge refuses it.
      *
      * @throws PixelforgeNotConfiguredException when there is no secret to sign webhooks with
+     * @throws ContentPolicyViolationException for `[blocked]`
+     * @throws OverloadedException for `[overloaded]`
      * @throws IdempotencyKeyReusedException
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
         if ($this->webhookSecret === null || $this->webhookSecret === '') {
             throw PixelforgeNotConfiguredException::missingWebhookSecret();
+        }
+
+        // A rejected request stores no key, so its retry is rejected the same way.
+        $rejection = FakeKeywords::fromPrompt($payload->prompt)->rejection();
+
+        if ($rejection !== null) {
+            throw $this->refusal($rejection);
         }
 
         $id = 'gen_' . Str::ulid();
@@ -86,6 +106,26 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         }
 
         return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), true);
+    }
+
+    /**
+     * The docs-shaped error for a refused create.
+     */
+    private function refusal(PixelforgeErrorCode $code): PixelforgeApiException
+    {
+        return match ($code) {
+            PixelforgeErrorCode::ContentPolicyViolation => new ContentPolicyViolationException(
+                'invalid_request_error',
+                'The prompt was rejected by the content policy.',
+                param: 'prompt',
+            ),
+            PixelforgeErrorCode::Overloaded => new OverloadedException(
+                'api_error',
+                'Pixelforge is temporarily overloaded. Please retry with the same idempotency key.',
+                retryAfterSeconds: self::OVERLOADED_RETRY_AFTER_SECONDS,
+            ),
+            default => throw new LogicException(sprintf('The fake never refuses a create with %s.', $code->value)),
+        };
     }
 
     /**
