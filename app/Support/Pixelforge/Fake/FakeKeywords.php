@@ -12,7 +12,7 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  *
  * Precedence: a rejection comes first and stores nothing, `[blocked]` before
  * `[overloaded]`. An accepted create then ends as `[fail]` decides. The
- * modifier `[slow]` combines with any accepted outcome.
+ * modifiers `[slow]` and `[duplicate]` combine with any accepted outcome.
  */
 final readonly class FakeKeywords
 {
@@ -21,6 +21,7 @@ final readonly class FakeKeywords
         public bool $overloaded,
         public bool $fail,
         public bool $slow,
+        public bool $duplicate,
     ) {}
 
     public static function fromPrompt(string $prompt): self
@@ -30,6 +31,7 @@ final readonly class FakeKeywords
             self::has($prompt, '[overloaded]'),
             self::has($prompt, '[fail]'),
             self::has($prompt, '[slow]'),
+            self::has($prompt, '[duplicate]'),
         );
     }
 

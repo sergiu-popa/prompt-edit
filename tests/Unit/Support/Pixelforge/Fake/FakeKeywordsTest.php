@@ -20,6 +20,7 @@ final class FakeKeywordsTest extends TestCase
         'overloaded' => '[overloaded]',
         'fail' => '[fail]',
         'slow' => '[slow]',
+        'duplicate' => '[duplicate]',
     ];
 
     #[DataProvider('placements')]
@@ -116,7 +117,7 @@ final class FakeKeywordsTest extends TestCase
             'fail in upper case' => ['a [FAIL] lighthouse', FakeGenerationOutcome::GenerationFailed],
             'none' => ['a lighthouse', null],
             'a rejection alone decides no outcome' => ['a [blocked] lighthouse', null],
-            'a modifier decides no outcome' => ['a [slow] lighthouse', null],
+            'a modifier decides no outcome' => ['a [slow] [duplicate] lighthouse', null],
         ];
     }
 }

@@ -167,9 +167,36 @@ final class FakeWebhookSenderTest extends TestCase
         }
     }
 
-    private function givenAFakeGeneration(): FakePixelforgeGeneration
+    public function test_a_duplicate_generation_sends_one_event_twice_each_freshly_signed(): void
     {
-        return $this->fakeGenerationRow($this->createThroughFake(self::lighthousePayload())->snapshot->id);
+        $generation = $this->givenAFakeGeneration('A lighthouse [duplicate]');
+        $this->answerFakeWebhooksWith(function (): PromiseInterface {
+            $this->travel(1)->seconds();
+
+            return Http::response();
+        });
+
+        $this->sender()->deliver($generation, WebhookEventType::GenerationProcessing);
+
+        $requests = $this->fakeWebhookRequests();
+        $this->assertCount(2, $requests);
+        $this->assertSame($requests[0]->body(), $requests[1]->body());
+        $this->assertSame($requests[0]->header('Pixelforge-Event-Id'), $requests[1]->header('Pixelforge-Event-Id'));
+
+        $now = CarbonImmutable::now()->getTimestamp();
+        $this->assertSame(
+            [sprintf('t=%d,', $now - 2), sprintf('t=%d,', $now - 1)],
+            array_map(fn (Request $request): string => substr($request->header(WebhookSignature::HEADER)[0], 0, 13), $requests),
+        );
+
+        foreach ($requests as $request) {
+            $this->app->make(WebhookSignature::class)->verify($request->body(), $request->header(WebhookSignature::HEADER)[0]);
+        }
+    }
+
+    private function givenAFakeGeneration(?string $prompt = null): FakePixelforgeGeneration
+    {
+        return $this->fakeGenerationRow($this->createThroughFake(self::lighthousePayload(prompt: $prompt))->snapshot->id);
     }
 
     private function sender(): FakeWebhookSender

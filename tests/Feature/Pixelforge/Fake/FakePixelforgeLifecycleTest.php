@@ -204,6 +204,27 @@ final class FakePixelforgeLifecycleTest extends TestCase
         $this->assertSame('2026-11-19T12:00:11Z', $row->snapshot['completed_at']);
     }
 
+    public function test_a_duplicate_generation_delivers_every_webhook_twice(): void
+    {
+        $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [duplicate]'));
+
+        $this->runFakeLifecycle();
+
+        $requests = $this->fakeWebhookRequests();
+        $this->assertCount(4, $requests);
+        $this->assertSame(
+            ['generation.processing', 'generation.processing', 'generation.succeeded', 'generation.succeeded'],
+            array_map(fn (Request $request): mixed => self::decoded($request)['type'], $requests),
+        );
+
+        foreach ([[0, 1], [2, 3]] as [$first, $second]) {
+            $this->assertSame($requests[$first]->body(), $requests[$second]->body());
+            $this->assertSame($requests[$first]->header('Pixelforge-Event-Id'), $requests[$second]->header('Pixelforge-Event-Id'));
+        }
+
+        $this->assertNotSame($requests[0]->header('Pixelforge-Event-Id'), $requests[2]->header('Pixelforge-Event-Id'));
+    }
+
     public function test_a_job_for_a_terminal_or_missing_generation_does_nothing(): void
     {
         $created = $this->createThroughFake(self::lighthousePayload());

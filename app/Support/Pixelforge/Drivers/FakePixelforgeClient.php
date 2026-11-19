@@ -99,7 +99,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             'outcome' => $keywords->outcome() ?? FakeGenerationOutcome::Succeeded,
             'processing_seconds' => $keywords->slow ? $this->slowProcessingSeconds : $this->processingSeconds,
             'image_ttl_seconds' => $this->imageTtlSeconds,
-            'duplicates_webhooks' => false,
+            'duplicates_webhooks' => $keywords->duplicate,
         ]);
 
         if ($generation->wasRecentlyCreated) {

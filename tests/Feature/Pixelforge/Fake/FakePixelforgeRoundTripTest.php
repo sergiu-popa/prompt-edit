@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Pixelforge\Fake;
 
 use App\Domain\Generation\Actions\CreateGenerationAction;
+use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Shared\Enums\ImageQuality;
+use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,6 +70,33 @@ final class FakePixelforgeRoundTripTest extends TestCase
     }
 
     /**
+     * Both copies of each event verify and answer 2xx; the second is a
+     * recorded duplicate, so the generation is charged exactly once. The
+     * keyword counts as prompt characters: 57 code points, so e = 15, text
+     * 12–18 and this prompt's own window.
+     */
+    public function test_a_duplicate_lighthouse_is_charged_once(): void
+    {
+        $request = new NewGenerationData(self::LIGHTHOUSE_PROMPT . ' [duplicate]', ImageSize::Landscape, ImageQuality::High, ['https://example.com/style.png']);
+        $generation = $this->app->make(CreateGenerationAction::class)->execute(User::factory()->create(), $request);
+
+        $responses = $this->replayFakeWebhooks();
+
+        $this->assertCount(4, $responses);
+        $this->assertTrue(array_all($responses, fn (TestResponse $response): bool => $response->isSuccessful()));
+        $this->assertSame(GenerationStatus::Succeeded, $this->reloadedGeneration($generation)->status);
+
+        $charge = $this->chargeFromTheSucceededWebhook();
+        $this->assertSame(
+            [['hold', -457_175_000], ['release', 457_175_000], ['charge', -$charge]],
+            $this->ledgerEntriesFor($generation),
+        );
+        $this->assertGreaterThanOrEqual(347_762_500, $charge);
+        $this->assertLessThanOrEqual(457_175_000, $charge);
+        $this->assertSame(2, DB::table('pixelforge_webhook_events')->where('generation_id', $generation->id)->count());
+    }
+
+    /**
      * ceil(provider × 125 ÷ 100) of the replayed succeeded body's usage,
      * computed here from the docs' rates.
      */
@@ -76,7 +106,8 @@ final class FakePixelforgeRoundTripTest extends TestCase
             array_map(fn (Request $request): mixed => json_decode($request->body(), associative: true, flags: JSON_THROW_ON_ERROR), $this->fakeWebhookRequests()),
             fn (mixed $event): bool => is_array($event) && $event['type'] === 'generation.succeeded',
         ));
-        $this->assertCount(1, $succeeded);
+        $this->assertNotEmpty($succeeded);
+        $this->assertSame(1, count(array_unique(array_column($succeeded, 'id'))));
 
         /** @var array{input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int} $usage */
         $usage = $succeeded[0]['data']['object']['usage'];

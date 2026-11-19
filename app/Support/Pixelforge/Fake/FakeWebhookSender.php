@@ -37,7 +37,9 @@ final readonly class FakeWebhookSender
     ) {}
 
     /**
-     * One event about the generation as it is now.
+     * One event about the generation as it is now. A `[duplicate]`
+     * generation's event is sent twice: one body and one event id, each copy
+     * signed at its own send time.
      *
      * @throws WebhookSecretNotConfiguredException before anything is sent
      */
@@ -53,7 +55,11 @@ final readonly class FakeWebhookSender
             'data' => ['object' => $generation->snapshot],
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        $this->send($generation, $type, $eventId, $body);
+        $copies = $generation->duplicates_webhooks ? 2 : 1;
+
+        for ($copy = 1; $copy <= $copies; $copy++) {
+            $this->send($generation, $type, $eventId, $body);
+        }
     }
 
     /**
