@@ -15,11 +15,13 @@ final readonly class NewGenerationData
 {
     /**
      * @param  list<string>  $referenceImages  in the order given
+     * @param  ?string  $submissionToken  the Generate form submission that sent it, if any (D-38)
      */
     public function __construct(
         public string $prompt,
         public ImageSize $size,
         public ImageQuality $quality,
         public array $referenceImages,
+        public ?string $submissionToken = null,
     ) {}
 }

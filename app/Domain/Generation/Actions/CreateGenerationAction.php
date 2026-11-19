@@ -24,7 +24,13 @@ use Illuminate\Support\Facades\DB;
  *
  * The submit job is dispatched inside the transaction but pushed only after
  * the outermost commit (D-32): a caller's own transaction that rolls back
- * (PE-011's controller, for example) submits nothing.
+ * submits nothing.
+ *
+ * A request from the Generate form carries its submission token, and the
+ * unique `(user_id, submission_token)` makes one generation per submission
+ * (D-38): a double click, a resent request or a concurrent duplicate gets the
+ * first generation back, with no second hold and no second job. The first
+ * request wins, even when a replay carries other fields.
  */
 final class CreateGenerationAction
 {
@@ -49,8 +55,7 @@ final class CreateGenerationAction
         )->userPrice;
 
         return DB::transaction(function () use ($user, $data, $userPrice): Generation {
-            $generation = Generation::query()->create([
-                'user_id' => $user->getKey(),
+            $attributes = [
                 'status' => GenerationStatus::Pending,
                 'prompt' => $data->prompt,
                 'size' => $data->size,
@@ -59,7 +64,22 @@ final class CreateGenerationAction
                 'user_estimate_min_nanodollars' => $userPrice->min->amount,
                 'user_estimate_typical_nanodollars' => $userPrice->typical->amount,
                 'user_estimate_max_nanodollars' => $userPrice->max->amount,
-            ]);
+            ];
+
+            /*
+             * Inside this transaction, createOrFirst inserts under a savepoint, so a
+             * conflict rolls back only the insert and the stored row is read instead.
+             */
+            $generation = $data->submissionToken === null
+                ? Generation::query()->create(['user_id' => $user->getKey(), ...$attributes])
+                : Generation::query()->createOrFirst(
+                    ['user_id' => $user->getKey(), 'submission_token' => $data->submissionToken],
+                    $attributes,
+                );
+
+            if (! $generation->wasRecentlyCreated) {
+                return $generation;
+            }
 
             $this->holdGenerationCredits->execute(
                 $generation->user_id,

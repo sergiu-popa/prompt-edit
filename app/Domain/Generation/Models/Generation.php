@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Model;
  *
  * @property string $id
  * @property int $user_id
+ * @property ?string $submission_token
  * @property GenerationStatus $status
  * @property string $prompt
  * @property ImageSize $size
@@ -64,6 +65,7 @@ use Illuminate\Database\Eloquent\Model;
 #[DateFormat('Y-m-d H:i:sP')]
 #[Fillable([
     'user_id',
+    'submission_token',
     'status',
     'prompt',
     'size',
