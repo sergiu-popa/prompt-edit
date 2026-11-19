@@ -11,15 +11,17 @@ use App\Domain\Billing\ValueObjects\TokenUsage;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 final class GenerationFactoryTest extends TestCase
 {
+    use InteractsWithGenerations;
     use RefreshDatabase;
 
     public function test_the_definition_is_a_pending_row_with_no_provider_fields(): void
     {
-        $generation = $this->reloaded(Generation::factory()->create());
+        $generation = $this->reloadedGeneration(Generation::factory()->create());
 
         $this->assertSame(GenerationStatus::Pending, $generation->status);
         $this->assertNull($generation->provider_id);
@@ -34,7 +36,7 @@ final class GenerationFactoryTest extends TestCase
     public function test_a_queued_row_has_a_unique_provider_id_and_its_creation_time(): void
     {
         [$first, $second] = Generation::factory()->count(2)->queued()->create()->all();
-        $first = $this->reloaded($first);
+        $first = $this->reloadedGeneration($first);
 
         $this->assertSame(GenerationStatus::Queued, $first->status);
         $this->assertMatchesRegularExpression('/^gen_[0-9A-Z]{26}$/', (string) $first->provider_id);
@@ -45,7 +47,7 @@ final class GenerationFactoryTest extends TestCase
 
     public function test_a_processing_row_has_started_after_it_was_created(): void
     {
-        $generation = $this->reloaded(Generation::factory()->processing()->create());
+        $generation = $this->reloadedGeneration(Generation::factory()->processing()->create());
 
         $this->assertSame(GenerationStatus::Processing, $generation->status);
         $this->assertNotNull($generation->provider_id);
@@ -57,7 +59,7 @@ final class GenerationFactoryTest extends TestCase
 
     public function test_a_succeeded_row_has_its_usage_rates_image_and_completion(): void
     {
-        $generation = $this->reloaded(Generation::factory()->succeeded()->create());
+        $generation = $this->reloadedGeneration(Generation::factory()->succeeded()->create());
 
         $this->assertSame(GenerationStatus::Succeeded, $generation->status);
         $this->assertNotNull($generation->provider_id);
@@ -85,7 +87,7 @@ final class GenerationFactoryTest extends TestCase
 
     public function test_a_failed_row_has_its_error_and_completion_but_no_result(): void
     {
-        $generation = $this->reloaded(Generation::factory()->failed()->create());
+        $generation = $this->reloadedGeneration(Generation::factory()->failed()->create());
 
         $this->assertSame(GenerationStatus::Failed, $generation->status);
         $this->assertSame('generation_failed', $generation->error_code);
@@ -94,10 +96,5 @@ final class GenerationFactoryTest extends TestCase
         $this->assertNull($generation->image_url);
         $this->assertNull($generation->output_tokens);
         $this->assertNull($generation->rates);
-    }
-
-    private function reloaded(Generation $generation): Generation
-    {
-        return Generation::query()->whereKey($generation->getKey())->firstOrFail();
     }
 }

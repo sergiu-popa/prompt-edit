@@ -4,24 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Actions;
 
-use App\Domain\Generation\Actions\TransitionGenerationAction;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
-use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
 
 final class TransitionGenerationActionTest extends TestCase
 {
+    use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
     use RefreshDatabase;
 
@@ -82,22 +81,22 @@ final class TransitionGenerationActionTest extends TestCase
         GenerationStatus $incomingStatus,
         GenerationTransitionOutcome $expected,
     ): void {
-        $generation = $this->givenAGeneration($rowStatus);
+        $generation = $this->givenAGenerationIn($rowStatus);
         $snapshot = self::snapshotFor($generation, $incomingStatus);
-        $before = $this->rawRow($generation);
+        $before = $this->rawGenerationRow($generation);
         $this->travel(1)->minutes();
 
-        $outcome = $this->transition($generation, $snapshot);
+        $outcome = $this->transitionGeneration($generation, $snapshot);
 
         $this->assertSame($expected, $outcome);
 
         if ($expected === GenerationTransitionOutcome::Applied) {
-            $this->assertSame($incomingStatus->value, $this->rawRow($generation)['status']);
+            $this->assertSame($incomingStatus->value, $this->rawGenerationRow($generation)['status']);
 
             return;
         }
 
-        $this->assertSame($before, $this->rawRow($generation));
+        $this->assertSame($before, $this->rawGenerationRow($generation));
     }
 
     /**
@@ -122,35 +121,35 @@ final class TransitionGenerationActionTest extends TestCase
         GenerationStatus $rowStatus,
         GenerationTransitionOutcome $expected,
     ): void {
-        $generation = $this->givenAGeneration($rowStatus);
-        $before = $this->rawRow($generation);
+        $generation = $this->givenAGenerationIn($rowStatus);
+        $before = $this->rawGenerationRow($generation);
         $this->travel(1)->minutes();
 
-        $outcome = $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $outcome = $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
 
         $this->assertSame($expected, $outcome);
 
         if ($expected === GenerationTransitionOutcome::Applied) {
-            $this->assertSame('failed', $this->rawRow($generation)['status']);
+            $this->assertSame('failed', $this->rawGenerationRow($generation)['status']);
 
             return;
         }
 
-        $this->assertSame($before, $this->rawRow($generation));
+        $this->assertSame($before, $this->rawGenerationRow($generation));
     }
 
     public function test_an_applied_local_failure_records_the_reason_and_the_providers_error(): void
     {
         $generation = Generation::factory()->create();
 
-        $outcome = $this->transition($generation, new LocalGenerationFailureData(
+        $outcome = $this->transitionGeneration($generation, new LocalGenerationFailureData(
             LocalFailureReason::ContentPolicyViolation,
             'content_policy_violation',
             'The prompt was rejected by the content policy.',
             'prompt',
         ));
 
-        $row = $this->reloaded($generation);
+        $row = $this->reloadedGeneration($generation);
         $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
         $this->assertSame(GenerationStatus::Failed, $row->status);
         $this->assertSame(LocalFailureReason::ContentPolicyViolation, $row->local_failure_reason);
@@ -164,9 +163,9 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->create();
 
-        $outcome = $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $outcome = $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
 
-        $row = $this->rawRow($generation);
+        $row = $this->rawGenerationRow($generation);
         $this->assertSame(GenerationTransitionOutcome::Applied, $outcome);
         $this->assertSame('content_policy_violation', $row['local_failure_reason']);
         $this->assertNull($row['error_code']);
@@ -178,12 +177,12 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->create();
 
-        $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Queued));
+        $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Queued));
 
-        $row = $this->reloaded($generation);
+        $row = $this->reloadedGeneration($generation);
         $this->assertSame(GenerationStatus::Queued, $row->status);
         $this->assertSame('gen_' . strtoupper($generation->id), $row->provider_id);
-        $this->assertInstant('2026-11-18T23:59:40Z', $row->provider_created_at);
+        $this->assertSameInstant('2026-11-18T23:59:40Z', $row->provider_created_at);
         $this->assertNull($row->started_at);
         $this->assertNull($row->completed_at);
         $this->assertNull($row->output_tokens);
@@ -194,12 +193,12 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->queued()->create();
 
-        $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Processing));
+        $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Processing));
 
-        $row = $this->reloaded($generation);
+        $row = $this->reloadedGeneration($generation);
         $this->assertSame(GenerationStatus::Processing, $row->status);
         $this->assertSame($generation->provider_id, $row->provider_id);
-        $this->assertInstant('2026-11-18T23:59:42Z', $row->started_at);
+        $this->assertSameInstant('2026-11-18T23:59:42Z', $row->started_at);
         $this->assertNull($row->completed_at);
     }
 
@@ -207,9 +206,9 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->processing()->create();
 
-        $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
+        $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
 
-        $row = $this->reloaded($generation);
+        $row = $this->reloadedGeneration($generation);
         $this->assertSame(GenerationStatus::Succeeded, $row->status);
         $this->assertSame(
             [10, 765, 1_650, 1_100],
@@ -223,10 +222,10 @@ final class TransitionGenerationActionTest extends TestCase
             sprintf('https://pixelforge.promptedit.dev/images/%s.png?expires=1763596799&signature=test', $generation->provider_id),
             $row->image_url,
         );
-        $this->assertInstant('2026-11-19T23:59:59Z', $row->image_url_expires_at);
-        $this->assertInstant('2026-11-18T23:59:40Z', $row->provider_created_at);
-        $this->assertInstant('2026-11-18T23:59:42Z', $row->started_at);
-        $this->assertInstant('2026-11-18T23:59:59Z', $row->completed_at);
+        $this->assertSameInstant('2026-11-19T23:59:59Z', $row->image_url_expires_at);
+        $this->assertSameInstant('2026-11-18T23:59:40Z', $row->provider_created_at);
+        $this->assertSameInstant('2026-11-18T23:59:42Z', $row->started_at);
+        $this->assertSameInstant('2026-11-18T23:59:59Z', $row->completed_at);
         $this->assertNull($row->error_code);
         $this->assertNull($row->error_message);
     }
@@ -235,13 +234,13 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->processing()->create();
 
-        $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Failed));
+        $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Failed));
 
-        $row = $this->reloaded($generation);
+        $row = $this->reloadedGeneration($generation);
         $this->assertSame(GenerationStatus::Failed, $row->status);
         $this->assertSame('generation_failed', $row->error_code);
         $this->assertSame('The model could not produce an image for this prompt.', $row->error_message);
-        $this->assertInstant('2026-11-18T23:59:59Z', $row->completed_at);
+        $this->assertSameInstant('2026-11-18T23:59:59Z', $row->completed_at);
         $this->assertNull($row->output_tokens);
         $this->assertNull($row->rates);
         $this->assertNull($row->image_url);
@@ -252,7 +251,7 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->create();
 
-        $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Queued));
+        $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Queued));
 
         $this->assertSame(GenerationStatus::Pending, $generation->status);
         $this->assertNull($generation->provider_id);
@@ -267,9 +266,9 @@ final class TransitionGenerationActionTest extends TestCase
             date_default_timezone_set('Europe/Bucharest');
             DB::statement("SET TIME ZONE 'Europe/Bucharest'");
 
-            $this->transition($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
+            $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
 
-            $this->assertInstant('2026-11-18T23:59:59Z', $this->reloaded($generation)->completed_at);
+            $this->assertSameInstant('2026-11-18T23:59:59Z', $this->reloadedGeneration($generation)->completed_at);
             $this->assertSame(
                 '2026-11-18',
                 DB::scalar("select (completed_at at time zone 'UTC')::date from generations where id = ?", [$generation->id]),
@@ -287,7 +286,7 @@ final class TransitionGenerationActionTest extends TestCase
     {
         $generation = Generation::factory()->processing()->create();
         $snapshot = self::snapshotFor($generation, GenerationStatus::Succeeded);
-        $before = $this->rawRow($generation);
+        $before = $this->rawGenerationRow($generation);
         $changedUnderTheLock = false;
 
         DB::listen(function (QueryExecuted $query) use ($generation, &$changedUnderTheLock): void {
@@ -300,7 +299,7 @@ final class TransitionGenerationActionTest extends TestCase
         });
 
         try {
-            $this->transition($generation, $snapshot);
+            $this->transitionGeneration($generation, $snapshot);
             $this->fail('The transition overwrote a row that changed under it.');
         } catch (ConcurrentGenerationTransitionException $exception) {
             $this->assertStringContainsString($generation->id, $exception->getMessage());
@@ -309,43 +308,6 @@ final class TransitionGenerationActionTest extends TestCase
         }
 
         $this->assertTrue($changedUnderTheLock);
-        $this->assertSame($before, $this->rawRow($generation));
-    }
-
-    private function givenAGeneration(GenerationStatus $status): Generation
-    {
-        $factory = Generation::factory();
-
-        return match ($status) {
-            GenerationStatus::Pending => $factory->create(),
-            GenerationStatus::Queued => $factory->queued()->create(),
-            GenerationStatus::Processing => $factory->processing()->create(),
-            GenerationStatus::Succeeded => $factory->succeeded()->create(),
-            GenerationStatus::Failed => $factory->failed()->create(),
-        };
-    }
-
-    private function transition(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
-    {
-        return $this->app->make(TransitionGenerationAction::class)->execute($generation, $change);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function rawRow(Generation $generation): array
-    {
-        return (array) DB::table('generations')->where('id', $generation->id)->first();
-    }
-
-    private function reloaded(Generation $generation): Generation
-    {
-        return Generation::query()->whereKey($generation->id)->firstOrFail();
-    }
-
-    private function assertInstant(string $expected, mixed $actual): void
-    {
-        $this->assertInstanceOf(CarbonImmutable::class, $actual);
-        $this->assertSame($expected, $actual->utc()->format('Y-m-d\TH:i:s\Z'));
+        $this->assertSame($before, $this->rawGenerationRow($generation));
     }
 }

@@ -4,18 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Actions;
 
-use App\Domain\Generation\Actions\TransitionGenerationAction;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
-use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
 
@@ -25,6 +23,7 @@ use Tests\TestCase;
  */
 final class TransitionGenerationActionConflictsTest extends TestCase
 {
+    use InteractsWithGenerations;
     use InteractsWithGenerationSnapshots;
     use RefreshDatabase;
 
@@ -73,20 +72,20 @@ final class TransitionGenerationActionConflictsTest extends TestCase
     #[DataProvider('identityConflicts')]
     public function test_a_snapshot_of_another_generation_is_refused_and_logged(GenerationStatus $rowStatus, string $cause): void
     {
-        $generation = $this->givenAGeneration($rowStatus);
+        $generation = $this->givenAGenerationIn($rowStatus);
         $incomingStatus = $rowStatus->isTerminal() ? GenerationStatus::Processing : GenerationStatus::Succeeded;
         $snapshot = self::snapshotFor($generation, $incomingStatus, match ($cause) {
             self::MISSING_GENERATION_ID => ['metadata' => ['order_id' => '1042']],
             self::OTHER_GENERATION_ID => ['metadata' => ['generation_id' => Generation::factory()->create()->id]],
             default => ['id' => self::FOREIGN_PROVIDER_ID],
         });
-        $before = $this->rawRow($generation);
+        $before = $this->rawGenerationRow($generation);
         $this->travel(1)->minutes();
 
-        $outcome = $this->transition($generation, $snapshot);
+        $outcome = $this->transitionGeneration($generation, $snapshot);
 
         $this->assertSame(GenerationTransitionOutcome::RefusedConflict, $outcome);
-        $this->assertSame($before, $this->rawRow($generation));
+        $this->assertSame($before, $this->rawGenerationRow($generation));
         $this->assertConflictLogged(
             match ($cause) {
                 self::MISSING_GENERATION_ID => 'Refused a Pixelforge snapshot without our generation id.',
@@ -118,10 +117,10 @@ final class TransitionGenerationActionConflictsTest extends TestCase
     #[DataProvider('oppositeTerminalStatuses')]
     public function test_the_opposite_terminal_status_is_ignored_and_logged(GenerationStatus $rowStatus, GenerationStatus $incomingStatus): void
     {
-        $generation = $this->givenAGeneration($rowStatus);
+        $generation = $this->givenAGenerationIn($rowStatus);
         $snapshot = self::snapshotFor($generation, $incomingStatus);
 
-        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $this->transition($generation, $snapshot));
+        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $this->transitionGeneration($generation, $snapshot));
 
         $this->assertConflictLogged(
             'Ignored a Pixelforge snapshot whose terminal status contradicts the generation\'s.',
@@ -150,9 +149,9 @@ final class TransitionGenerationActionConflictsTest extends TestCase
     #[DataProvider('rowsPixelforgeAccepted')]
     public function test_a_local_failure_after_pixelforge_accepted_the_row_is_refused_and_logged(GenerationStatus $rowStatus): void
     {
-        $generation = $this->givenAGeneration($rowStatus);
+        $generation = $this->givenAGenerationIn($rowStatus);
 
-        $outcome = $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $outcome = $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
 
         $this->assertSame(GenerationTransitionOutcome::RefusedConflict, $outcome);
         $this->assertConflictLogged(
@@ -170,21 +169,21 @@ final class TransitionGenerationActionConflictsTest extends TestCase
 
     public function test_a_local_failure_on_a_terminal_row_is_not_logged(): void
     {
-        $generation = $this->givenAGeneration(GenerationStatus::Succeeded);
+        $generation = $this->givenAGenerationIn(GenerationStatus::Succeeded);
 
-        $this->transition($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
 
         $this->assertSame([], $this->loggedMessages);
     }
 
     public function test_duplicate_stale_and_terminal_snapshots_are_not_logged(): void
     {
-        $processing = $this->givenAGeneration(GenerationStatus::Processing);
-        $succeeded = $this->givenAGeneration(GenerationStatus::Succeeded);
+        $processing = $this->givenAGenerationIn(GenerationStatus::Processing);
+        $succeeded = $this->givenAGenerationIn(GenerationStatus::Succeeded);
 
-        $this->transition($processing, self::snapshotFor($processing, GenerationStatus::Processing));
-        $this->transition($processing, self::snapshotFor($processing, GenerationStatus::Queued));
-        $this->transition($succeeded, self::snapshotFor($succeeded, GenerationStatus::Processing));
+        $this->transitionGeneration($processing, self::snapshotFor($processing, GenerationStatus::Processing));
+        $this->transitionGeneration($processing, self::snapshotFor($processing, GenerationStatus::Queued));
+        $this->transitionGeneration($succeeded, self::snapshotFor($succeeded, GenerationStatus::Processing));
 
         $this->assertSame([], $this->loggedMessages);
     }
@@ -198,31 +197,5 @@ final class TransitionGenerationActionConflictsTest extends TestCase
         $this->assertSame('error', $this->loggedMessages[0]->level);
         $this->assertSame($message, $this->loggedMessages[0]->message);
         $this->assertSame($context, $this->loggedMessages[0]->context);
-    }
-
-    private function givenAGeneration(GenerationStatus $status): Generation
-    {
-        $factory = Generation::factory();
-
-        return match ($status) {
-            GenerationStatus::Pending => $factory->create(),
-            GenerationStatus::Queued => $factory->queued()->create(),
-            GenerationStatus::Processing => $factory->processing()->create(),
-            GenerationStatus::Succeeded => $factory->succeeded()->create(),
-            GenerationStatus::Failed => $factory->failed()->create(),
-        };
-    }
-
-    private function transition(Generation $generation, GenerationSnapshot|LocalGenerationFailureData $change): GenerationTransitionOutcome
-    {
-        return $this->app->make(TransitionGenerationAction::class)->execute($generation, $change);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function rawRow(Generation $generation): array
-    {
-        return (array) DB::table('generations')->where('id', $generation->id)->first();
     }
 }

@@ -16,10 +16,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 final class CreateGenerationActionTest extends TestCase
 {
+    use InteractsWithGenerations;
     use RefreshDatabase;
 
     private const string WORKED_EXAMPLE_PROMPT = 'A lighthouse on a cliff at dawn, in oils';
@@ -127,7 +129,7 @@ final class CreateGenerationActionTest extends TestCase
         ));
 
         $this->assertSame($prompt, DB::table('generations')->where('id', $generation->getKey())->value('prompt'));
-        $this->assertSame($prompt, $this->reloaded($generation)->prompt);
+        $this->assertSame($prompt, $this->reloadedGeneration($generation)->prompt);
     }
 
     /**
@@ -154,7 +156,7 @@ final class CreateGenerationActionTest extends TestCase
             $referenceImages,
         ));
 
-        $reloaded = $this->reloaded($generation);
+        $reloaded = $this->reloadedGeneration($generation);
 
         $this->assertSame($referenceImages, $reloaded->reference_images);
         $this->assertSame(ImageSize::Portrait, $reloaded->size);
@@ -164,10 +166,5 @@ final class CreateGenerationActionTest extends TestCase
     private function createGeneration(User $user, NewGenerationData $data): Generation
     {
         return $this->app->make(CreateGenerationAction::class)->execute($user, $data);
-    }
-
-    private function reloaded(Generation $generation): Generation
-    {
-        return Generation::query()->whereKey($generation->getKey())->firstOrFail();
     }
 }

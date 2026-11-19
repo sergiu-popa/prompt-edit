@@ -10,13 +10,14 @@ use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
-use Carbon\CarbonImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Tests\Concerns\AssertsInstants;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 
 final class GenerationSnapshotTest extends TestCase
 {
+    use AssertsInstants;
     use InteractsWithGenerationSnapshots;
 
     private string $phpTimezone;
@@ -50,7 +51,7 @@ final class GenerationSnapshotTest extends TestCase
         $this->assertSame(self::docsRates(), $snapshot->rates);
         $this->assertNull($snapshot->imageUrl);
         $this->assertNull($snapshot->imageUrlExpiresAt);
-        $this->assertInstant('2026-11-04T14:03:11Z', $snapshot->createdAt);
+        $this->assertSameInstant('2026-11-04T14:03:11Z', $snapshot->createdAt);
         $this->assertNull($snapshot->startedAt);
         $this->assertNull($snapshot->completedAt);
     }
@@ -92,10 +93,10 @@ final class GenerationSnapshotTest extends TestCase
             'https://pixelforge.promptedit.dev/images/gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K.png?expires=1762351409&signature=…',
             $snapshot->imageUrl,
         );
-        $this->assertInstant('2026-11-05T14:03:29Z', $snapshot->imageUrlExpiresAt);
-        $this->assertInstant('2026-11-04T14:03:11Z', $snapshot->createdAt);
-        $this->assertInstant('2026-11-04T14:03:13Z', $snapshot->startedAt);
-        $this->assertInstant('2026-11-04T14:03:29Z', $snapshot->completedAt);
+        $this->assertSameInstant('2026-11-05T14:03:29Z', $snapshot->imageUrlExpiresAt);
+        $this->assertSameInstant('2026-11-04T14:03:11Z', $snapshot->createdAt);
+        $this->assertSameInstant('2026-11-04T14:03:13Z', $snapshot->startedAt);
+        $this->assertSameInstant('2026-11-04T14:03:29Z', $snapshot->completedAt);
     }
 
     public function test_metadata_generation_id_is_read_and_an_empty_metadata_gives_none(): void
@@ -369,12 +370,5 @@ final class GenerationSnapshotTest extends TestCase
         unset($generation[$field]);
 
         return $generation;
-    }
-
-    private function assertInstant(string $expected, ?CarbonImmutable $actual): void
-    {
-        $this->assertNotNull($actual);
-        $this->assertSame('UTC', $actual->getTimezone()->getName());
-        $this->assertSame($expected, $actual->format('Y-m-d\TH:i:s\Z'));
     }
 }
