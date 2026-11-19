@@ -6,19 +6,19 @@ Pin `/v1/pricing` as plain data in `config/pricing.php`, and build one validated
 ## Tasks
 Each task is one TDD commit: write the failing test first, then the code, and run `make check` green before committing. Tasks 1–11 are PHP and tasks 12–13 are TypeScript, so the PR can be cut after task 11 if asked (see Risks).
 
-- [ ] 1. Add `ImageQuality` and `ImageSize` in `app/Domain/Shared/Enums`, test-first for their exact Pixelforge values and the rejected strings below. Commit: `[PE-002] Add image quality and size enums`
-- [ ] 2. Add `TokenBounds` (`exact`, and `between` with the round-up midpoint), test-first for AC7 and the bounds rows below, and record decision D-16. Commit: `[PE-002] Add token bounds with a round-up typical midpoint`
-- [ ] 3. Pin the snapshot in `config/pricing.php`. Replace both `PUBLISHED_RATES` copies (`TokenRatesTest`, `CalculateProviderCostActionTest`) with `publishedRates()` from the new `tests/Concerns/InteractsWithPricing` trait, and record decision D-15. Commit: `[PE-002] Pin the Pixelforge pricing snapshot in config`
-- [ ] 4. Build `PricingTable::fromSnapshot()` for the rates and the text and reference-image rules, with `InvalidPricingException`, test-first for AC3's rate row and the scalar rows below. Commit: `[PE-002] Build the pricing table's rates and text rules`
-- [ ] 5. Add the output and reasoning tables and the `outputTokens()` / `reasoningTokens()` lookups, test-first for AC3's missing-entry and min > max rows and the transposition row. Commit: `[PE-002] Add output and reasoning tables to the pricing table`
-- [ ] 6. Expose `PricingTable::toArray()` and bind the table as a singleton. Add the fixture with only its `pricing` block, and `PinnedPricingTableTest` for AC1–2. Commit: `[PE-002] Bind the pricing table and pin its array form in a fixture`
-- [ ] 7. Add `EstimateGenerationCostAction` and its result types, test-first through the fixture data-provider suite, with the AC9 case as the fixture's first case. Commit: `[PE-002] Estimate a generation's cost against the shared fixture`
-- [ ] 8. Add the task-8 cases to the fixture, with no code change. Commit: `[PE-002] Cover every quality and size in the estimate fixture`
-- [ ] 9. Add the task-9 code-point counting cases to the fixture, with no code change. Commit: `[PE-002] Pin code-point counting in the estimate fixture`
-- [ ] 10. Support `pricing_overrides` in the PHP suite, including the per-case table parity check, and add the two AC11 cases. Commit: `[PE-002] Pin the markup round-up with synthetic pricing cases`
-- [ ] 11. Reject a negative reference count in the action, and add the AC14 beyond-the-limits case. Commit: `[PE-002] Price inputs beyond the limits and reject negative references`
-- [ ] 12. Mirror the estimator in `lib/estimate.ts` with its types, test-first through a Vitest suite over every fixture case plus the safe-integer walk. Commit: `[PE-002] Mirror the estimate in TypeScript against the shared fixture`
-- [ ] 13. Guard every TS input, test-first for the TS rejection rows below (AC13–14). Commit: `[PE-002] Reject malformed or unsafe estimate inputs in TypeScript`
+- [x] 1. Add `ImageQuality` and `ImageSize` in `app/Domain/Shared/Enums`, test-first for their exact Pixelforge values and the rejected strings below. Commit: `[PE-002] Add image quality and size enums`
+- [x] 2. Add `TokenBounds` (`exact`, and `between` with the round-up midpoint), test-first for AC7 and the bounds rows below, and record decision D-16. Commit: `[PE-002] Add token bounds with a round-up typical midpoint`
+- [x] 3. Pin the snapshot in `config/pricing.php`. Replace both `PUBLISHED_RATES` copies (`TokenRatesTest`, `CalculateProviderCostActionTest`) with `publishedRates()` from the new `tests/Concerns/InteractsWithPricing` trait, and record decision D-15. Commit: `[PE-002] Pin the Pixelforge pricing snapshot in config`
+- [x] 4. Build `PricingTable::fromSnapshot()` for the rates and the text and reference-image rules, with `InvalidPricingException`, test-first for AC3's rate row and the scalar rows below. Commit: `[PE-002] Build the pricing table's rates and text rules`
+- [x] 5. Add the output and reasoning tables and the `outputTokens()` / `reasoningTokens()` lookups, test-first for AC3's missing-entry and min > max rows and the transposition row. Commit: `[PE-002] Add output and reasoning tables to the pricing table`
+- [x] 6. Expose `PricingTable::toArray()` and bind the table as a singleton. Add the fixture with only its `pricing` block, and `PinnedPricingTableTest` for AC1–2. Commit: `[PE-002] Bind the pricing table and pin its array form in a fixture`
+- [x] 7. Add `EstimateGenerationCostAction` and its result types, test-first through the fixture data-provider suite, with the AC9 case as the fixture's first case. Commit: `[PE-002] Estimate a generation's cost against the shared fixture`
+- [x] 8. Add the task-8 cases to the fixture, with no code change. Commit: `[PE-002] Cover every quality and size in the estimate fixture`
+- [x] 9. Add the task-9 code-point counting cases to the fixture, with no code change. Commit: `[PE-002] Pin code-point counting in the estimate fixture`
+- [x] 10. Support `pricing_overrides` in the PHP suite, including the per-case table parity check, and add the two AC11 cases. Commit: `[PE-002] Pin the markup round-up with synthetic pricing cases`
+- [x] 11. Reject a negative reference count in the action, and add the AC14 beyond-the-limits case. Commit: `[PE-002] Price inputs beyond the limits and reject negative references`
+- [x] 12. Mirror the estimator in `lib/estimate.ts` with its types, test-first through a Vitest suite over every fixture case plus the safe-integer walk. Commit: `[PE-002] Mirror the estimate in TypeScript against the shared fixture`
+- [x] 13. Guard every TS input, test-first for the TS rejection rows below (AC13–14). Commit: `[PE-002] Reject malformed or unsafe estimate inputs in TypeScript`
 
 ## Domain
 All PHP classes are `final`. Value objects and DTOs are `readonly`. Billing arithmetic goes through `BigInteger` or `Nanodollars`, as in PE-001: no `/`, `intdiv`, `ceil`, `floor` or `round`.
