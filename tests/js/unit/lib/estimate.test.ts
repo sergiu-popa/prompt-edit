@@ -88,3 +88,52 @@ describe('estimateGenerationCost against the shared fixture', () => {
         expect(numbers.filter((value) => !Number.isSafeInteger(value))).toStrictEqual([]);
     });
 });
+
+describe('estimateGenerationCost rejects what it cannot price exactly', () => {
+    const validInput: EstimateInput = { prompt: 'a cat', quality: 'low', size: '1024x1024', reference_image_count: 0 };
+
+    function pricingWith(change: (pricing: PricingTable) => void): PricingTable {
+        const pricing = structuredClone(fixture.pricing);
+
+        change(pricing);
+
+        return pricing;
+    }
+
+    it.each<[string, (pricing: PricingTable) => void, string]>([
+        ['a fractional rate', (pricing) => (pricing.nanodollars_per_token.output_tokens = 0.5), 'nanodollars_per_token.output_tokens'],
+        ['an unsafe rate', (pricing) => (pricing.nanodollars_per_token.output_tokens = 2 ** 53), 'nanodollars_per_token.output_tokens'],
+        ['a negative rate', (pricing) => (pricing.nanodollars_per_token.output_tokens = -1), 'nanodollars_per_token.output_tokens'],
+        ['a NaN rate', (pricing) => (pricing.nanodollars_per_token.input_text_tokens = NaN), 'nanodollars_per_token.input_text_tokens'],
+        ['a fractional output count', (pricing) => (pricing.tokens.output.low['1024x1024'] = 280.5), 'tokens.output.low.1024x1024'],
+        ['a reasoning min above its max', (pricing) => (pricing.tokens.reasoning.low = { min: 600, max: 500 }), 'tokens.reasoning.low'],
+        ['zero characters per token', (pricing) => (pricing.tokens.characters_per_text_token = 0), 'tokens.characters_per_text_token'],
+        ['the live float variance', (pricing) => (pricing.tokens.text_token_variance_percent = 0.15), 'tokens.text_token_variance_percent'],
+        ['a variance above 100', (pricing) => (pricing.tokens.text_token_variance_percent = 101), 'tokens.text_token_variance_percent'],
+        ['a fractional reference image size', (pricing) => (pricing.tokens.per_reference_image = 765.5), 'tokens.per_reference_image'],
+    ])('rejects %s and names the field', (_label, change, field) => {
+        expect(() => estimateGenerationCost(pricingWith(change), validInput)).toThrow(field);
+    });
+
+    it.each([1.5, -1, NaN, 2 ** 53])('rejects a reference image count of %s', (count) => {
+        expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, reference_image_count: count })).toThrow(
+            'reference_image_count',
+        );
+    });
+
+    it.each(['ultra', 'LOW', '__proto__', 'constructor'])('rejects the quality "%s"', (quality) => {
+        expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, quality: quality as EstimateInput['quality'] })).toThrow(
+            'quality',
+        );
+    });
+
+    it.each(['512x512', '1024X1024', 'toString', '__proto__'])('rejects the size "%s"', (size) => {
+        expect(() => estimateGenerationCost(fixture.pricing, { ...validInput, size: size as EstimateInput['size'] })).toThrow('size');
+    });
+
+    it('throws instead of returning an imprecise total', () => {
+        const pricing = pricingWith((table) => (table.nanodollars_per_token.output_tokens = Number.MAX_SAFE_INTEGER));
+
+        expect(() => estimateGenerationCost(pricing, validInput)).toThrow('Number.MAX_SAFE_INTEGER');
+    });
+});
