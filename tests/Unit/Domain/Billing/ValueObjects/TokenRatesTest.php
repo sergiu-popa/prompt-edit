@@ -4,28 +4,35 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Billing\ValueObjects;
 
+use App\Domain\Billing\Enums\TokenType;
 use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Billing\ValueObjects\TokenRates;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Tests\Concerns\InteractsWithPricing;
 
 final class TokenRatesTest extends TestCase
 {
-    private const array PUBLISHED_RATES = [
-        'input_text_tokens' => '5.00',
-        'input_image_tokens' => '10.00',
-        'output_tokens' => '40.00',
-        'reasoning_tokens' => '12.50',
-    ];
+    use InteractsWithPricing;
 
     public function test_published_rates_convert_to_whole_nanodollars_per_token(): void
     {
-        $rates = TokenRates::from(self::PUBLISHED_RATES);
+        $rates = TokenRates::from(self::publishedRates());
 
         $this->assertSame(5_000, $rates->inputTextToken->amount);
         $this->assertSame(10_000, $rates->inputImageToken->amount);
         $this->assertSame(40_000, $rates->outputToken->amount);
         $this->assertSame(12_500, $rates->reasoningToken->amount);
+    }
+
+    public function test_each_token_types_rate_can_be_looked_up_by_type(): void
+    {
+        $rates = TokenRates::from(self::publishedRates());
+
+        $this->assertSame(
+            [5_000, 10_000, 40_000, 12_500],
+            array_map(fn (TokenType $type): int => $rates->forType($type)->amount, TokenType::cases()),
+        );
     }
 
     /**
@@ -51,7 +58,7 @@ final class TokenRatesTest extends TestCase
     #[DataProvider('convertibleRates')]
     public function test_rate_strings_convert_exactly(string $rate, int $expectedNanodollarsPerToken): void
     {
-        $rates = TokenRates::from([...self::PUBLISHED_RATES, 'output_tokens' => $rate]);
+        $rates = TokenRates::from([...self::publishedRates(), 'output_tokens' => $rate]);
 
         $this->assertSame($expectedNanodollarsPerToken, $rates->outputToken->amount);
     }
@@ -90,7 +97,7 @@ final class TokenRatesTest extends TestCase
         $this->expectException(InvalidRateException::class);
         $this->expectExceptionMessage('output_tokens');
 
-        TokenRates::from([...self::PUBLISHED_RATES, 'output_tokens' => $rate]);
+        TokenRates::from([...self::publishedRates(), 'output_tokens' => $rate]);
     }
 
     /**
@@ -110,7 +117,7 @@ final class TokenRatesTest extends TestCase
         $this->expectException(InvalidRateException::class);
         $this->expectExceptionMessage('"' . $rate . '"');
 
-        TokenRates::from([...self::PUBLISHED_RATES, 'reasoning_tokens' => $rate]);
+        TokenRates::from([...self::publishedRates(), 'reasoning_tokens' => $rate]);
     }
 
     /**
@@ -129,7 +136,7 @@ final class TokenRatesTest extends TestCase
     #[DataProvider('requiredKeys')]
     public function test_rejects_rates_missing_a_token_type(string $missingKey): void
     {
-        $rates = self::PUBLISHED_RATES;
+        $rates = self::publishedRates();
         unset($rates[$missingKey]);
 
         $this->expectException(InvalidRateException::class);
@@ -143,6 +150,6 @@ final class TokenRatesTest extends TestCase
         $this->expectException(InvalidRateException::class);
         $this->expectExceptionMessage('cached_tokens');
 
-        TokenRates::from([...self::PUBLISHED_RATES, 'cached_tokens' => '1.00']);
+        TokenRates::from([...self::publishedRates(), 'cached_tokens' => '1.00']);
     }
 }

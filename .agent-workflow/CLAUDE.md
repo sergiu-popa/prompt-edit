@@ -66,7 +66,8 @@ Money logic that exists in both PHP and TS is tested against the **same JSON fix
 - Stage explicit paths. Never `git add -A`.
 
 ### Prompt log
-Append every user prompt, verbatim, to `.agent-workflow/prompts.md` with the date and story/context. Long pasted documents may be summarised with a pointer to where they are captured.
+Log, verbatim, the user prompts that tell a reviewer how the project was built: prompts that set or change direction, scope, a decision or the process, and answers to clarifying questions. Append them to `.agent-workflow/prompts.md` with the date and story/context. Long pasted documents may be summarised with a pointer to where they are captured.
+Do **not** log operational messages ("Merged", "Continue with 002", acknowledgements) or instructions about the log itself, and don't raise their absence as a review finding.
 
 ## Commands
 ```bash

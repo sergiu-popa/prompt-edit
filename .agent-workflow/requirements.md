@@ -224,6 +224,8 @@ Short, interview-ready rationale. Add rows as stories make new decisions.
 | D-12 | In-app fake Pixelforge driver (signed webhooks, keywords) for local + E2E; opt-in live smoke against the real API | Deterministic CI; real behaviour still verified. |
 | D-13 | Deploy on Laravel Cloud (web + queue worker + scheduler, Postgres) | Fastest path the brief suggests; needs workers/scheduler, which Cloud has. |
 | D-14 | Upfront hold = **max** estimate; settle actual on success, release on failure | Users can never overspend; actual ≤ max by construction. |
+| D-15 | Estimates read a pinned `/v1/pricing` snapshot (`config/pricing.php`, checked 2026-11-18), never fetched at runtime. Live `text_token_variance: 0.15` is held as the integer `text_token_variance_percent: 15` | Keeps PHP, TS and the shared fixture deterministic. Only the estimate depends on it: settlement uses each generation's own `rates`, so a stale snapshot cannot mis-charge. PE-015's live smoke detects drift. A deliberate deviation from the docs' advice to read `/v1/pricing`. |
+| D-16 | An estimate's typical count per token type is the midpoint of its min and max, rounded **up** to a whole token; typical is priced like the bounds, with the markup applied once to each total | One integer rule both languages share. With today's tables every midpoint is whole, and the text midpoint is always exactly `e`. |
 
 ## 6. Open questions / known unknowns
 

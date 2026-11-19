@@ -17,4 +17,15 @@ final class NanodollarOverflowException extends OverflowException
             $result->toString(),
         ), previous: $previous);
     }
+
+    /**
+     * A token count too large for a native int, so its price cannot be represented either.
+     */
+    public static function forTokenCount(BigInteger $tokens, ?Throwable $previous = null): self
+    {
+        return new self(sprintf(
+            'Token count %s is outside the signed 64-bit range.',
+            $tokens->toString(),
+        ), previous: $previous);
+    }
 }
