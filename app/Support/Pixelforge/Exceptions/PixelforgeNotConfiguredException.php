@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Exceptions;
 
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use RuntimeException;
 
 /**
  * The Pixelforge client cannot be used as configured, so nothing is sent.
  */
-final class PixelforgeNotConfiguredException extends RuntimeException
+final class PixelforgeNotConfiguredException extends RuntimeException implements ReportsPixelforgeContext
 {
     /**
      * Merged into the log entry whenever the exception is reported.

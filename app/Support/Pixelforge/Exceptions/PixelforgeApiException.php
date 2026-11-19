@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Exceptions;
 
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use JsonException;
 use RuntimeException;
@@ -13,7 +14,7 @@ use RuntimeException;
  * param?, errors?}}`, with one subclass per code. Only an envelope that is
  * documented exactly becomes one; anything else is ambiguous (D-31).
  */
-abstract class PixelforgeApiException extends RuntimeException
+abstract class PixelforgeApiException extends RuntimeException implements ReportsPixelforgeContext
 {
     /**
      * `error_param` is a varchar(255).

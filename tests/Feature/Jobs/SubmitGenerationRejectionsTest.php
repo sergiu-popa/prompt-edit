@@ -141,6 +141,7 @@ final class SubmitGenerationRejectionsTest extends TestCase
     {
         yield 'overloaded' => [new OverloadedException('api_error', 'Pixelforge is overloaded.', retryAfterSeconds: 2), 'overloaded'];
         yield 'ambiguous' => [AmbiguousPixelforgeOutcomeException::transportFailed(new ConnectionException('cURL error 28')), 'ambiguous'];
+        yield 'not configured' => [PixelforgeNotConfiguredException::missingApiKey(), 'not_configured'];
     }
 
     #[DataProvider('exhaustedFailures')]

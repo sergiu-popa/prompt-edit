@@ -11,6 +11,7 @@ use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
@@ -69,7 +70,7 @@ final class SubmitGenerationAction
             $this->failLocally($generation, $reason, $exception);
 
             return;
-        } catch (AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException $exception) {
+        } catch (ReportsPixelforgeContext $exception) {
             throw self::loggedForRetry($generation, $exception);
         }
 
@@ -115,10 +116,8 @@ final class SubmitGenerationAction
      * The generation stays non-terminal with its hold, and the job retries
      * with the same key. PE-013 owns the policy for these codes.
      */
-    private static function loggedForRetry(
-        Generation $generation,
-        PixelforgeApiException|AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException $exception,
-    ): PixelforgeApiException|AmbiguousPixelforgeOutcomeException|PixelforgeNotConfiguredException {
+    private static function loggedForRetry(Generation $generation, ReportsPixelforgeContext $exception): ReportsPixelforgeContext
+    {
         Log::warning('Pixelforge did not take a generation create; it will be retried with the same key.', [
             'generation_id' => $generation->id,
             ...$exception->context(),

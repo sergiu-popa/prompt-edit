@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Domain\Generation\Actions\SubmitGenerationAction;
-use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
-use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
-use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Attributes\Backoff;
@@ -48,14 +46,10 @@ final class SubmitGenerationJob implements ShouldQueueAfterCommit
      */
     public function failed(Throwable $exception): void
     {
-        $isPixelforgeFailure = $exception instanceof PixelforgeApiException
-            || $exception instanceof AmbiguousPixelforgeOutcomeException
-            || $exception instanceof PixelforgeNotConfiguredException;
-
         Log::error('Gave up submitting a generation; it stays non-terminal with its hold.', [
             'generation_id' => $this->generationId,
             'exception' => $exception::class,
-            ...($isPixelforgeFailure ? $exception->context() : []),
+            ...($exception instanceof ReportsPixelforgeContext ? $exception->context() : []),
         ]);
     }
 }

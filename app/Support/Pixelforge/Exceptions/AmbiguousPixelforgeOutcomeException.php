@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Exceptions;
 
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\RequestException;
 use RuntimeException;
@@ -15,7 +16,7 @@ use Throwable;
  * caller retries with the same idempotency key, and a replay is free. No
  * message carries the response body; the previous exception keeps its detail.
  */
-final class AmbiguousPixelforgeOutcomeException extends RuntimeException
+final class AmbiguousPixelforgeOutcomeException extends RuntimeException implements ReportsPixelforgeContext
 {
     /**
      * @param  ?int  $status  the HTTP status, or null when no status line arrived
