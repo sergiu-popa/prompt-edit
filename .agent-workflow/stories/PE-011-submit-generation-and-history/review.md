@@ -43,16 +43,17 @@ The constant-field check: `GenerationResource` returns no field that is constant
 
 ### Warnings
 
-- [ ] **W1. `isConfigured()` was inserted between an existing docblock and its method, in both drivers.**
+- [x] **W1. `isConfigured()` was inserted between an existing docblock and its method, in both drivers.**
   - `app/Support/Pixelforge/Drivers/FakePixelforgeClient.php:132-141`: `refusal()`'s docblock ("The docs-shaped error for a refused create.") now sits above `isConfigured()`'s own docblock, so it documents nothing, and `refusal()` at :143 has lost its doc.
   - `app/Support/Pixelforge/Drivers/HttpPixelforgeClient.php:85-96`: `generationFrom()`'s `@throws AmbiguousPixelforgeOutcomeException` (:86) is now a dead docblock above `isConfigured()`'s. `generationFrom()` at :98 no longer declares the exception it throws, so IDEs and Larastan's throws analysis lose it.
   - Why it matters: PHP attaches only the last docblock before a declaration. The first block in each pair is dead, and it reads as if it described `isConfigured()`. These are the provider integration's own contracts.
   - Fix: in each file, move `isConfigured()` with its docblock above the orphaned block, for example right after `createGeneration()`'s closing brace, so `refusal()` and `generationFrom()` get their docblocks back. This is a doc-only change, so `make check` is enough. Commit it on its own, for example `[PE-011] Keep the drivers' docblocks on their own methods`.
+  - Resolved in `1d940a7` `[PE-011] Keep the drivers' docblocks on their own methods`: `isConfigured()` now sits above the orphaned blocks, so `refusal()` and `generationFrom()` have their docblocks back.
 
 ### Suggestions
 
 Optional; none blocks QA.
 
-- **S1.** `resources/js/components/generation/SubmitGenerationArea.vue:7-12`: the docblock was extended in place, and line 9 runs to about 130 characters while the rest wrap at about 90. Rewrap it when W1's commit is made, or leave it.
+- **S1.** `resources/js/components/generation/SubmitGenerationArea.vue:7-12`: the docblock was extended in place, and line 9 runs to about 130 characters while the rest wrap at about 90. Rewrap it when W1's commit is made, or leave it. Done in `4f8fc55` `[PE-011] Rewrap the submit area's docblock`.
 - **S2.** `resources/js/components/history/HistoryItem.vue:64`: `group-first:rounded-t-[11px]` / `group-last:rounded-b-[11px]` hard-code "the list's `rounded-xl` minus its 1 px border". `rounded-t-[calc(var(--radius-xl)-1px)]` would say that and follow a theme change. Alternatively, `overflow-hidden` on the `<ul>` in `Index.vue` would make the item's rounding unnecessary.
 - **S3.** `resources/js/pages/Generations/Create.vue:53`: the form-level alert (throttle or closed) stays until the next submit, even after the user edits a field, while field errors clear on change. That is reasonable, because the wait still applies. Clearing `submission` only when the throttle's seconds have passed would need a timer, and isn't worth it now. It is recorded here so QA doesn't file it as a bug.
