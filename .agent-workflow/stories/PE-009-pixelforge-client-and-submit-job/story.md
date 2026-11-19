@@ -4,7 +4,7 @@
 Pixelforge client contract and the idempotent submit job
 
 ## Status
-`draft`
+`done`
 
 ## Description
 Until now, generations exist only locally. This story sends them to Pixelforge safely. It serves three grading criteria:

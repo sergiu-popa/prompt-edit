@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Domain\Generation\Enums\GenerationStatus;
+use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
+use App\Support\Pixelforge\Contracts\PixelforgeClient;
+use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
+use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\InteractsWithCreditLedger;
+use Tests\Concerns\InteractsWithGenerations;
 use Tests\TestCase;
 
 /**
@@ -22,6 +30,8 @@ use Tests\TestCase;
  */
 final class BootsWithoutPixelforgeTest extends TestCase
 {
+    use InteractsWithCreditLedger;
+    use InteractsWithGenerations;
     use RefreshDatabase;
 
     /**
@@ -55,6 +65,41 @@ final class BootsWithoutPixelforgeTest extends TestCase
         $this->assertSame([], self::pixelforgeNames(getenv()), 'getenv()');
         $this->assertSame([], self::pixelforgeNames($_ENV), '$_ENV');
         $this->assertSame([], self::pixelforgeNames($_SERVER), '$_SERVER');
+    }
+
+    public function test_the_client_settings_are_the_defaults_with_no_key(): void
+    {
+        $this->assertSame('http', config('pixelforge.driver'));
+        $this->assertSame('https://pixelforge.promptedit.dev/v1', config('pixelforge.base_url'));
+        $this->assertNull(config('pixelforge.api_key'));
+        $this->assertSame(5, config('pixelforge.connect_timeout_seconds'));
+        $this->assertSame(30, config('pixelforge.request_timeout_seconds'));
+    }
+
+    public function test_the_pixelforge_client_resolves_to_the_http_driver(): void
+    {
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $this->app->make(PixelforgeClient::class));
+    }
+
+    /**
+     * Without a key nothing is submitted: the job retries, and the generation
+     * waits, pending with its hold, until PE-015 sets one.
+     */
+    public function test_without_a_key_the_submit_job_sends_nothing_and_the_generation_waits(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake();
+
+        try {
+            $this->app->call([new SubmitGenerationJob($lighthouse->id), 'handle']);
+            $this->fail('Expected the submit job to find no key.');
+        } catch (PixelforgeNotConfiguredException $exception) {
+            $this->assertStringContainsString('PIXELFORGE_API_KEY', $exception->getMessage());
+        }
+
+        Http::assertNothingSent();
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
     }
 
     #[DataProvider('guestPages')]
