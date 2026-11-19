@@ -45,6 +45,9 @@ describe('Generate page', () => {
 
         expect(wrapper.findComponent({ name: 'InertiaHead' }).props('title')).toBe('Generate');
         expect(wrapper.get('h1').text()).toBe('New image');
+        expect(wrapper.get('main header p').text()).toBe(
+            'Describe the image, choose a size and quality, and see the price before you generate.',
+        );
     });
 
     it("starts from Pixelforge's defaults and estimates them at once", () => {

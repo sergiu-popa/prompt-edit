@@ -40,13 +40,14 @@ function signOut(): void {
         <header class="border-b border-zinc-200 bg-white">
             <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 sm:px-6">
                 <Link :href="paths.dashboard" class="order-1 text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
-                <nav aria-label="Main" class="order-3 flex w-full items-center gap-4 text-sm sm:order-2 sm:w-auto">
+                <!-- On a phone the nav starts its own row, pulled left so the first label lines up with the brand. -->
+                <nav aria-label="Main" class="order-3 -ml-2.5 flex w-full items-center gap-1 text-sm sm:order-2 sm:ml-0 sm:w-auto">
                     <Link
                         v-for="item in navItems"
                         :key="item.href"
                         :href="item.href"
                         :aria-current="currentPath === item.href ? 'page' : undefined"
-                        class="rounded-sm text-zinc-600 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 aria-[current=page]:font-medium aria-[current=page]:text-zinc-900"
+                        class="rounded-md px-2.5 py-1.5 text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 aria-[current=page]:bg-zinc-100 aria-[current=page]:font-medium aria-[current=page]:text-zinc-900"
                         >{{ item.label }}</Link
                     >
                 </nav>

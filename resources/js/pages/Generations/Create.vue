@@ -5,6 +5,7 @@ import { reactive } from 'vue';
 import EstimatePanel from '@/components/estimate/EstimatePanel.vue';
 import PromptField from '@/components/generation/PromptField.vue';
 import ReferenceImagesField from '@/components/generation/ReferenceImagesField.vue';
+import PageHeader from '@/components/ui/PageHeader.vue';
 import RadioGroup from '@/components/ui/RadioGroup.vue';
 import { useEstimate } from '@/composables/useEstimate';
 import { DEFAULT_QUALITY, DEFAULT_SIZE, QUALITY_OPTIONS, SIZE_OPTIONS } from '@/lib/imageOptions';
@@ -26,29 +27,35 @@ const { estimate, referenceImageCount, perReferenceNanodollars } = useEstimate((
     <Head title="Generate" />
 
     <AppLayout>
-        <!-- Mobile: one column, the estimate after the form. From `lg`: two columns, the estimate kept in view. -->
-        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:items-start">
-            <!-- PE-011 wires the submit; until then Enter in a field must not reload the page. -->
-            <form novalidate class="flex min-w-0 flex-col gap-6" @submit.prevent>
-                <h1 class="text-xl font-semibold tracking-tight">New image</h1>
-                <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" />
-                <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" />
-                <RadioGroup v-model="form.quality" legend="Quality" :options="QUALITY_OPTIONS" />
-                <ReferenceImagesField
-                    v-model="form.reference_images"
-                    :max="limits.max_reference_images"
-                    :per-reference-nanodollars="perReferenceNanodollars"
-                />
-            </form>
+        <div class="flex flex-col gap-8">
+            <PageHeader
+                title="New image"
+                description="Describe the image, choose a size and quality, and see the price before you generate."
+            />
 
-            <aside class="min-w-0 lg:sticky lg:top-6">
-                <EstimatePanel
-                    :estimate="estimate"
-                    :quality="form.quality"
-                    :size="form.size"
-                    :reference-image-count="referenceImageCount"
-                />
-            </aside>
+            <!-- Mobile: one column, the estimate after the form. From `lg`: two columns, the estimate kept in view. -->
+            <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:items-start">
+                <!-- PE-011 wires the submit; until then Enter in a field must not reload the page. -->
+                <form novalidate class="flex min-w-0 flex-col gap-8" @submit.prevent>
+                    <PromptField v-model="form.prompt" :max-characters="limits.max_prompt_characters" />
+                    <RadioGroup v-model="form.size" legend="Size" :options="SIZE_OPTIONS" />
+                    <RadioGroup v-model="form.quality" legend="Quality" :options="QUALITY_OPTIONS" />
+                    <ReferenceImagesField
+                        v-model="form.reference_images"
+                        :max="limits.max_reference_images"
+                        :per-reference-nanodollars="perReferenceNanodollars"
+                    />
+                </form>
+
+                <aside class="min-w-0 lg:sticky lg:top-6">
+                    <EstimatePanel
+                        :estimate="estimate"
+                        :quality="form.quality"
+                        :size="form.size"
+                        :reference-image-count="referenceImageCount"
+                    />
+                </aside>
+            </div>
         </div>
     </AppLayout>
 </template>
