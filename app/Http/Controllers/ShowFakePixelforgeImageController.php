@@ -24,6 +24,11 @@ final class ShowFakePixelforgeImageController extends Controller
         abort_unless(config('pixelforge.driver') === FakePixelforgeClient::DRIVER, 404);
         abort_unless($request->hasValidRelativeSignature(), 403);
 
-        return response()->file(resource_path(self::PLACEHOLDER), ['Content-Type' => 'image/png']);
+        $response = response()->file(resource_path(self::PLACEHOLDER), ['Content-Type' => 'image/png']);
+
+        // Set after the file response marks itself public, so a browser asks again on every load.
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return $response;
     }
 }

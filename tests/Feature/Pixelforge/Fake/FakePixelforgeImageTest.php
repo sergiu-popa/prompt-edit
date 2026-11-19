@@ -83,6 +83,18 @@ final class FakePixelforgeImageTest extends TestCase
         $this->get($url)->assertForbidden();
     }
 
+    /**
+     * A browser must ask again on every load, so it never shows an expired
+     * image from its own cache.
+     */
+    public function test_the_image_is_never_cached(): void
+    {
+        $cacheControl = (string) $this->get($this->signedImageUrl())->assertOk()->headers->get('Cache-Control');
+
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringNotContainsString('public', $cacheControl);
+    }
+
     public function test_a_missing_signature_is_refused(): void
     {
         $this->get('/fake-pixelforge/images/' . $this->providerId . '.png')->assertForbidden();
