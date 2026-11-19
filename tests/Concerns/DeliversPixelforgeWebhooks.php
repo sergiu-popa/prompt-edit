@@ -7,6 +7,7 @@ namespace Tests\Concerns;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -105,6 +106,20 @@ trait DeliversPixelforgeWebhooks
     protected function pixelforgeSignatureFor(string $body, int $timestamp, ?string $secret = null): string
     {
         return sprintf('t=%d,v1=%s', $timestamp, hash_hmac('sha256', $timestamp . '.' . $body, $secret ?? self::WEBHOOK_SECRET));
+    }
+
+    /**
+     * Every recorded event as stored, without casts, in write order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function storedWebhookEvents(): array
+    {
+        return array_values(DB::table('pixelforge_webhook_events')
+            ->orderBy('id')
+            ->get(['event_id', 'type', 'delivery_attempt', 'generation_id', 'received_at'])
+            ->map(fn (object $event): array => (array) $event)
+            ->all());
     }
 
     /**

@@ -52,6 +52,8 @@ final class PixelforgeWebhookTransportTest extends TestCase
         for ($ping = 1; $ping <= 100; $ping++) {
             $this->deliverPixelforgeEvent(self::pixelforgeEvent('ping', null))->assertOk();
         }
+
+        $this->assertCount(100, $this->storedWebhookEvents());
     }
 
     /**
@@ -72,6 +74,7 @@ final class PixelforgeWebhookTransportTest extends TestCase
         ]);
 
         $response->assertStatus(400);
+        $this->assertSame([], $this->storedWebhookEvents());
         $this->assertRejectionLogged('mismatch', $this->stringField($event, 'id'));
     }
 
@@ -113,6 +116,7 @@ final class PixelforgeWebhookTransportTest extends TestCase
 
         $response->assertStatus(400);
         $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame([], $this->storedWebhookEvents());
         $this->assertRejectionLogged($reason, $this->stringField($event, 'id'));
     }
 
@@ -154,6 +158,7 @@ final class PixelforgeWebhookTransportTest extends TestCase
         ]);
 
         $response->assertStatus($status);
+        $this->assertCount($status === 200 ? 1 : 0, $this->storedWebhookEvents());
 
         if ($status === 400) {
             $this->assertRejectionLogged('stale', $this->stringField($event, 'id'));
@@ -196,6 +201,7 @@ final class PixelforgeWebhookTransportTest extends TestCase
 
         $response->assertStatus(500);
         $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame([], $this->storedWebhookEvents());
 
         $critical = array_values(array_filter($this->loggedMessages(), fn (MessageLogged $message): bool => $message->level === 'critical'));
         $this->assertCount(1, $critical);
