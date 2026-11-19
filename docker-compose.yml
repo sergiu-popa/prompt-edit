@@ -32,20 +32,6 @@ services:
       retries: 3
       timeout: 5s
 
-  redis:
-    container_name: 'prompt-edit-redis'
-    image: 'redis:alpine'
-    ports:
-      - '6379:6379'
-    volumes:
-      - 'prompt-edit-redis:/data'
-    networks:
-      - prompt-edit
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      retries: 3
-      timeout: 5s
-
   app:
     container_name: 'prompt-edit-app'
     image: prompt-edit-app
@@ -62,8 +48,6 @@ services:
       - traefik
       - postgres
       - test-postgres
-      - redis
-      - test-redis
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
@@ -157,18 +141,6 @@ services:
       retries: 3
       timeout: 5s
 
-  test-redis:
-    container_name: 'prompt-edit-test-redis'
-    image: 'redis:alpine'
-    ports:
-      - '6381:6379'
-    networks:
-      - prompt-edit
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      retries: 3
-      timeout: 5s
-
   playwright:
     container_name: 'prompt-edit-playwright'
     image: 'mcr.microsoft.com/playwright:v1.65.1-noble'
@@ -192,7 +164,5 @@ networks:
 
 volumes:
   prompt-edit-postgres:
-    driver: local
-  prompt-edit-redis:
     driver: local
 

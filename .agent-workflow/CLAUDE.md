@@ -4,7 +4,7 @@
 
 ## Project
 - **Name:** PromptEdit — Pixelforge image generation (take-home assessment)
-- **Stack:** Laravel 13, PHP 8.4, Inertia + Vue 3 + TypeScript, Tailwind CSS 4, PostgreSQL 17, Redis, Laravel Fortify (auth)
+- **Stack:** Laravel 13, PHP 8.4, Inertia + Vue 3 + TypeScript, Tailwind CSS 4, PostgreSQL 17 (also the queue, cache and session store; no Redis), Laravel Fortify (auth)
 - **Requirements + Pixelforge facts + decisions log:** `.agent-workflow/requirements.md` — read it before planning any story.
 
 ## Stories
