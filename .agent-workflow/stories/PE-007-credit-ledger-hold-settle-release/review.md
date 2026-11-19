@@ -56,7 +56,7 @@ The implementation matches the plan class for class: `CreditLedgerEntryType`, `C
 
 ### Warnings
 
-- [ ] **W1. AC18's "logs the generation id" for a succeeded object without `usage` is handed off only inside this story's own artifacts, so it would be lost.**
+- [x] **W1. AC18's "logs the generation id" for a succeeded object without `usage` is handed off only inside this story's own artifacts, so it would be lost.**
   - The plan (`plan.md:107`) and the test docblock (`tests/Unit/Domain/Generation/Actions/TransitionGenerationActionExactlyOnceTest.php:223-227`) say PE-008, PE-009 and PE-014 must log `metadata.generation_id` when `GenerationSnapshot::from()` throws.
   - PE-014 already covers it: its AC4 logs any per-row exception with the generation id.
   - PE-009 only parses create responses, which are never `succeeded`.
@@ -65,11 +65,11 @@ The implementation matches the plan class for class: `CreditLedgerEntryType`, `C
 
 ### Suggestions
 
-- [ ] **S1. The hold negates with a native `-` while the settlement negates through `Nanodollars`.**
+- [x] **S1. The hold negates with a native `-` while the settlement negates through `Nanodollars`.**
   - Hold: `app/Domain/Billing/Actions/HoldGenerationCreditsAction.php:25` (`-$maxUserPrice->amount`).
   - Settlement: `SettleGenerationCreditsAction.php:37` and `:45` (`Nanodollars::zero()->minus(…)`).
   - The input is a stored non-negative max, so the result is always safe today. Still, `-PHP_INT_MIN` would silently become a float, and the `Nanodollars` docblock promises that never happens.
   - Fix: use `Nanodollars::zero()->minus($maxUserPrice)->amount` for one consistent, overflow-checked negation.
-- [ ] **S2. The Lighthouse request is spelled out twice.**
+- [x] **S2. The Lighthouse request is spelled out twice.**
   - `givenTheLighthouseGeneration()` (`tests/Concerns/InteractsWithGenerations.php:45-53`) and the `settlements()` data provider (`tests/Unit/Domain/Generation/Actions/TransitionGenerationActionSettlementTest.php:73`) each build it, with the same reference URL.
   - Fix: add a `protected static function lighthouseRequest(): NewGenerationData` to the trait. The static data provider and `givenTheLighthouseGeneration()` can then both use it.

@@ -98,6 +98,7 @@ Inbound exactly-once is proven against the ledger before any outbound call exist
 - Several `v1` signatures in one header, and secret rotation. Pixelforge does not document either.
 
 ## Technical Notes
+- **Unparseable snapshot (PE-007 AC18):** a validly signed `generation.*` event whose `data.object` makes `GenerationSnapshot::from()` throw, e.g. a succeeded object without `usage`, is logged at error level with `data.object.metadata.generation_id` and the event id, and its response is decided explicitly (400 = no retry, or 500 = retry).
 - **Depends on:** PE-007-credit-ledger-hold-settle-release, and through it PE-006's transition action and PE-001's money.
 - **Decisions and sources:** D-05, D-06, D-07 and D-09; requirements §2.5 (webhook facts) and §4 (the duplicate and out-of-order rows).
 - **Pixelforge facts:**
