@@ -104,6 +104,31 @@ describe('EstimatePanel', () => {
         expect(breakdownRow(wrapper, 'Reference images')).toStrictEqual(['765 × 3 = 2,295 exact', '$0.0230']);
     });
 
+    it("takes each line's exact or estimated flag from the estimate", () => {
+        const estimate = estimateGenerationCost(fixturePricing, {
+            prompt: LIGHTHOUSE_PROMPT,
+            quality: 'high',
+            size: '1536x1024',
+            reference_image_count: 1,
+        });
+        const flipped = {
+            ...estimate,
+            lines: {
+                input_text_tokens: { ...estimate.lines.input_text_tokens, exact: true },
+                input_image_tokens: { ...estimate.lines.input_image_tokens, exact: false },
+                output_tokens: { ...estimate.lines.output_tokens, exact: false },
+                reasoning_tokens: { ...estimate.lines.reasoning_tokens, exact: true },
+            },
+        };
+
+        const wrapper = mount(EstimatePanel, { props: { estimate: flipped, quality: 'high', size: '1536x1024', referenceImageCount: 1 } });
+
+        expect(breakdownRow(wrapper, 'Prompt text')[0]).toBe('≈ 8–12 exact');
+        expect(breakdownRow(wrapper, 'Reference images')[0]).toBe('765 × 1 = 765 estimated');
+        expect(breakdownRow(wrapper, 'Output')[0]).toBe('6,450 estimated High · 1536×1024');
+        expect(breakdownRow(wrapper, 'Reasoning')[0]).toBe('1,000–8,000 exact');
+    });
+
     it('reveals the exact value of every amount it shows', () => {
         const wrapper = mountPanel(LIGHTHOUSE_PROMPT, 'high', '1536x1024');
 

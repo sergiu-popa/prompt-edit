@@ -4,7 +4,7 @@ import { computed } from 'vue';
 import AmountRange from '@/components/estimate/AmountRange.vue';
 import { formatCount } from '@/lib/counting';
 import { describeImage } from '@/lib/imageOptions';
-import type { EstimateBounds, GenerationCostEstimate } from '@/types/estimate';
+import type { EstimateBounds, EstimateLine, GenerationCostEstimate } from '@/types/estimate';
 import type { ImageQuality, ImageSize } from '@/types/pricing';
 
 /**
@@ -34,6 +34,11 @@ interface TotalLine {
     emphasis: boolean;
 }
 
+/** The flag comes from the estimate, so the panel can never label a line differently from how it is priced. */
+function flagOf(line: EstimateLine): 'exact' | 'estimated' {
+    return line.exact ? 'exact' : 'estimated';
+}
+
 function tokenRange(bounds: EstimateBounds): string {
     return bounds.min === bounds.max ? formatCount(bounds.min) : `${formatCount(bounds.min)}–${formatCount(bounds.max)}`;
 }
@@ -56,7 +61,7 @@ const tokenLines = computed<TokenLine[]>(() => {
             : {
                   label: 'Prompt text',
                   tokens: `≈ ${tokenRange(text.tokens)}`,
-                  flag: 'estimated',
+                  flag: flagOf(text),
                   detail: null,
                   cost: text.provider_nanodollars,
               };
@@ -68,7 +73,7 @@ const tokenLines = computed<TokenLine[]>(() => {
                   {
                       label: 'Reference images',
                       tokens: `${formatCount(images.tokens.max / referenceCount)} × ${formatCount(referenceCount)} = ${formatCount(images.tokens.max)}`,
-                      flag: 'exact',
+                      flag: flagOf(images),
                       detail: null,
                       cost: images.provider_nanodollars,
                   },
@@ -81,14 +86,14 @@ const tokenLines = computed<TokenLine[]>(() => {
         {
             label: 'Output',
             tokens: tokenRange(lines.output_tokens.tokens),
-            flag: 'exact',
+            flag: flagOf(lines.output_tokens),
             detail: describeImage(props.quality, props.size),
             cost: lines.output_tokens.provider_nanodollars,
         },
         {
             label: 'Reasoning',
             tokens: tokenRange(lines.reasoning_tokens.tokens),
-            flag: 'estimated',
+            flag: flagOf(lines.reasoning_tokens),
             detail: null,
             cost: lines.reasoning_tokens.provider_nanodollars,
         },
