@@ -186,6 +186,132 @@
                 "provider_nanodollars": { "min": 305350000, "typical": 349850000, "max": 394350000 },
                 "user_nanodollars": { "min": 381687500, "typical": 437312500, "max": 492937500 }
             }
+        },
+        {
+            "name": "8 code points: four thumbs up with a skin tone (16 UTF-16 units, 32 bytes)",
+            "prompt": "👍🏽👍🏽👍🏽👍🏽",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 8,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 5000, "typical": 10000, "max": 15000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11205000, "typical": 14335000, "max": 17465000 },
+                "user_nanodollars": { "min": 14006250, "typical": 17918750, "max": 21831250 }
+            }
+        },
+        {
+            "name": "5 code points: Japanese (15 bytes)",
+            "prompt": "東京の夜景",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 5,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 5000, "typical": 10000, "max": 15000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11205000, "typical": 14335000, "max": 17465000 },
+                "user_nanodollars": { "min": 14006250, "typical": 17918750, "max": 21831250 }
+            }
+        },
+        {
+            "name": "5 code points: decomposed café (e + combining acute accent)",
+            "prompt": "cafe\u0301",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 5,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 5000, "typical": 10000, "max": 15000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11205000, "typical": 14335000, "max": 17465000 },
+                "user_nanodollars": { "min": 14006250, "typical": 17918750, "max": 21831250 }
+            }
+        },
+        {
+            "name": "4 code points: precomposed café",
+            "prompt": "caf\u00e9",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 4,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 0, "typical": 1, "max": 2 }, "provider_nanodollars": { "min": 0, "typical": 5000, "max": 10000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11200000, "typical": 14330000, "max": 17460000 },
+                "user_nanodollars": { "min": 14000000, "typical": 17912500, "max": 21825000 }
+            }
+        },
+        {
+            "name": "12 code points: a test keyword counts like any other characters",
+            "prompt": "[fail] a cat",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 12,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 2, "typical": 3, "max": 4 }, "provider_nanodollars": { "min": 10000, "typical": 15000, "max": 20000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11210000, "typical": 14340000, "max": 17470000 },
+                "user_nanodollars": { "min": 14012500, "typical": 17925000, "max": 21837500 }
+            }
+        },
+        {
+            "name": "5 code points: leading and trailing spaces count",
+            "prompt": " cat ",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 5,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 1, "typical": 2, "max": 3 }, "provider_nanodollars": { "min": 5000, "typical": 10000, "max": 15000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11205000, "typical": 14335000, "max": 17465000 },
+                "user_nanodollars": { "min": 14006250, "typical": 17918750, "max": 21831250 }
+            }
+        },
+        {
+            "name": "3 code points: a newline is one code point",
+            "prompt": "a\nb",
+            "quality": "low",
+            "size": "1024x1024",
+            "reference_image_count": 0,
+            "expected": {
+                "prompt_characters": 3,
+                "lines": {
+                    "input_text_tokens": { "exact": false, "tokens": { "min": 0, "typical": 1, "max": 2 }, "provider_nanodollars": { "min": 0, "typical": 5000, "max": 10000 } },
+                    "input_image_tokens": { "exact": true, "tokens": { "min": 0, "typical": 0, "max": 0 }, "provider_nanodollars": { "min": 0, "typical": 0, "max": 0 } },
+                    "output_tokens": { "exact": true, "tokens": { "min": 280, "typical": 280, "max": 280 }, "provider_nanodollars": { "min": 11200000, "typical": 11200000, "max": 11200000 } },
+                    "reasoning_tokens": { "exact": false, "tokens": { "min": 0, "typical": 250, "max": 500 }, "provider_nanodollars": { "min": 0, "typical": 3125000, "max": 6250000 } }
+                },
+                "provider_nanodollars": { "min": 11200000, "typical": 14330000, "max": 17460000 },
+                "user_nanodollars": { "min": 14000000, "typical": 17912500, "max": 21825000 }
+            }
         }
     ]
 }
