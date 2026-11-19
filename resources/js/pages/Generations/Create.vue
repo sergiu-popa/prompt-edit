@@ -16,7 +16,7 @@ const props = defineProps<{
     limits: GenerationInputLimits;
 }>();
 
-const form = reactive<GenerationFormInput>({ prompt: '', size: DEFAULT_SIZE, quality: DEFAULT_QUALITY });
+const form = reactive<GenerationFormInput>({ prompt: '', size: DEFAULT_SIZE, quality: DEFAULT_QUALITY, reference_images: [] });
 
 const { estimate } = useEstimate(() => props.pricing, form);
 </script>

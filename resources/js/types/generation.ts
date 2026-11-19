@@ -15,4 +15,6 @@ export interface GenerationFormInput {
     prompt: string;
     size: ImageSize;
     quality: ImageQuality;
+    /** One entry per URL row, blank rows included; only non-blank rows are counted or sent. */
+    reference_images: string[];
 }

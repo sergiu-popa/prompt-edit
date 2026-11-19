@@ -8,7 +8,7 @@ import type { GenerationFormInput } from '@/types/generation';
 import type { PricingTable } from '@/types/pricing';
 
 function defaultForm(): GenerationFormInput {
-    return reactive<GenerationFormInput>({ prompt: '', size: '1024x1024', quality: 'medium' });
+    return reactive<GenerationFormInput>({ prompt: '', size: '1024x1024', quality: 'medium', reference_images: [] });
 }
 
 describe('useEstimate', () => {
@@ -61,5 +61,68 @@ describe('useEstimate', () => {
 
         expect(() => estimate.value).not.toThrow();
         expect(estimate.value).toBeNull();
+    });
+
+    describe('reference images', () => {
+        function landscapeHighLighthouse(): GenerationFormInput {
+            const form = defaultForm();
+
+            form.prompt = LIGHTHOUSE_PROMPT;
+            form.quality = 'high';
+            form.size = '1536x1024';
+
+            return form;
+        }
+
+        it('adds one counted reference to the estimate', () => {
+            const form = landscapeHighLighthouse();
+            const { estimate, referenceImageCount } = useEstimate(fixturePricing, form);
+
+            form.reference_images.push('https://example.com/style.png');
+
+            expect(referenceImageCount.value).toBe(1);
+            expect(estimate.value?.lines.input_image_tokens.tokens.max).toBe(765);
+            expect(estimate.value?.user_nanodollars).toStrictEqual({ min: 347_737_500, typical: 402_437_500, max: 457_137_500 });
+        });
+
+        it.each([[['']], [['   ']], [['', '\t']]])('ignores blank rows %j', (rows) => {
+            const form = landscapeHighLighthouse();
+            const { estimate, referenceImageCount } = useEstimate(fixturePricing, form);
+
+            form.reference_images = rows;
+
+            expect(referenceImageCount.value).toBe(0);
+            expect(estimate.value?.user_nanodollars).toStrictEqual({ min: 338_175_000, typical: 392_875_000, max: 447_575_000 });
+        });
+
+        it('counts a row that is not a valid URL yet', () => {
+            const form = landscapeHighLighthouse();
+            const { estimate, referenceImageCount } = useEstimate(fixturePricing, form);
+
+            form.reference_images = ['example.com/cat.png'];
+
+            expect(referenceImageCount.value).toBe(1);
+            expect(estimate.value?.user_nanodollars.max).toBe(457_137_500);
+        });
+
+        it('says what one more reference adds to every exact figure', () => {
+            const form = landscapeHighLighthouse();
+            const { perReferenceNanodollars } = useEstimate(fixturePricing, form);
+
+            expect(perReferenceNanodollars.value).toBe(9_562_500);
+
+            form.reference_images = ['https://a.test/a.png', 'https://b.test/b.png'];
+
+            expect(perReferenceNanodollars.value).toBe(9_562_500);
+        });
+
+        it('has no per-reference figure while the estimate is unavailable', () => {
+            const { perReferenceNanodollars } = useEstimate(
+                fixturePricingWith((pricing) => (pricing.nanodollars_per_token.output_tokens = 1.5)),
+                defaultForm(),
+            );
+
+            expect(perReferenceNanodollars.value).toBeNull();
+        });
     });
 });
