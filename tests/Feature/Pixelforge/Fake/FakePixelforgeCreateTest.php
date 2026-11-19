@@ -8,6 +8,8 @@ use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
 use App\Support\Pixelforge\Fake\FakeUsageGenerator;
@@ -23,7 +25,8 @@ use Tests\TestCase;
 
 /**
  * A create through the fake stores a generation shaped like the docs' object
- * and answers with it, queued.
+ * and answers with it, queued. A repeated key replays it, and a reused key
+ * with other params is refused.
  */
 final class FakePixelforgeCreateTest extends TestCase
 {
@@ -31,6 +34,8 @@ final class FakePixelforgeCreateTest extends TestCase
     use RefreshDatabase;
 
     private const string FROZEN_NOW = '2026-11-19T12:00:00Z';
+
+    private const string REUSED_KEY = '01kaf0reused00000000000000';
 
     private const array DOCS_FIELD_ORDER = [
         'id',
@@ -130,6 +135,56 @@ final class FakePixelforgeCreateTest extends TestCase
         );
     }
 
+    public function test_the_same_key_and_body_replays_the_stored_generation(): void
+    {
+        $payload = self::lighthousePayload();
+        $first = $this->createThroughFake($payload);
+        $stored = $this->rawFakeRow($first->snapshot->id);
+
+        $replay = $this->createThroughFake($payload);
+
+        $this->assertSame($first->snapshot->id, $replay->snapshot->id);
+        $this->assertTrue($replay->replayed);
+        $this->assertEquals($first->snapshot, $replay->snapshot);
+        $this->assertSame(1, FakePixelforgeGeneration::query()->count());
+        $this->assertSame($stored, $this->rawFakeRow($first->snapshot->id));
+    }
+
+    #[DataProvider('changedParams')]
+    public function test_the_same_key_with_other_params_is_refused(CreateGenerationPayloadData $changed): void
+    {
+        $original = self::lighthousePayload(self::REUSED_KEY);
+        $first = $this->createThroughFake($original);
+        $stored = $this->rawFakeRow($first->snapshot->id);
+
+        try {
+            $this->createThroughFake($changed);
+            $this->fail('Expected the fake to refuse a reused key.');
+        } catch (IdempotencyKeyReusedException $exception) {
+            $this->assertSame(PixelforgeErrorCode::IdempotencyKeyReused, $exception->errorCode());
+            $this->assertSame(409, $exception->status());
+            $this->assertSame('idempotency_error', $exception->type);
+        }
+
+        $this->assertSame(1, FakePixelforgeGeneration::query()->count());
+        $this->assertSame($stored, $this->rawFakeRow($first->snapshot->id));
+    }
+
+    /**
+     * @return array<string, array{CreateGenerationPayloadData}>
+     */
+    public static function changedParams(): array
+    {
+        $lighthouse = self::lighthousePayload(self::REUSED_KEY);
+
+        return [
+            'prompt' => [self::lighthousePayload(self::REUSED_KEY, 'A lighthouse at night')],
+            'size' => [new CreateGenerationPayloadData(self::REUSED_KEY, $lighthouse->prompt, ImageSize::Square, $lighthouse->quality, $lighthouse->referenceImages)],
+            'quality' => [new CreateGenerationPayloadData(self::REUSED_KEY, $lighthouse->prompt, $lighthouse->size, ImageQuality::Low, $lighthouse->referenceImages)],
+            'references' => [new CreateGenerationPayloadData(self::REUSED_KEY, $lighthouse->prompt, $lighthouse->size, $lighthouse->quality, [])],
+        ];
+    }
+
     #[DataProvider('missingSecrets')]
     public function test_without_a_webhook_secret_nothing_is_created(?string $secret): void
     {
@@ -156,6 +211,14 @@ final class FakePixelforgeCreateTest extends TestCase
             'null' => [null],
             'empty' => [''],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function rawFakeRow(string $providerId): array
+    {
+        return (array) DB::table('fake_pixelforge_generations')->where('id', $providerId)->first();
     }
 
     /**

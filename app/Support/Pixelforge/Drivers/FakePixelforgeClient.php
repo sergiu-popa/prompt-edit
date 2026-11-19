@@ -8,6 +8,7 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
@@ -46,7 +47,12 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
     ) {}
 
     /**
+     * A key it has seen with the same body replays the generation as it is
+     * now, and starts nothing. The same key with another body is refused,
+     * as Pixelforge refuses it.
+     *
      * @throws PixelforgeNotConfiguredException when there is no secret to sign webhooks with
+     * @throws IdempotencyKeyReusedException
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
@@ -55,11 +61,11 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         }
 
         $id = 'gen_' . Str::ulid();
+        $requestHash = hash('sha256', $payload->toJson());
 
-        $generation = FakePixelforgeGeneration::query()->create([
+        $generation = FakePixelforgeGeneration::query()->firstOrCreate(['idempotency_key' => $payload->idempotencyKey()], [
             'id' => $id,
-            'idempotency_key' => $payload->idempotencyKey(),
-            'request_hash' => hash('sha256', $payload->toJson()),
+            'request_hash' => $requestHash,
             'snapshot' => $this->creationSnapshot($id, $payload),
             'usage' => $this->usageGenerator->generate($payload),
             'outcome' => FakeGenerationOutcome::Succeeded,
@@ -68,7 +74,18 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             'duplicates_webhooks' => false,
         ]);
 
-        return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), false);
+        if ($generation->wasRecentlyCreated) {
+            return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), false);
+        }
+
+        if (! hash_equals($generation->request_hash, $requestHash)) {
+            throw new IdempotencyKeyReusedException(
+                'idempotency_error',
+                'This idempotency key was already used with different parameters.',
+            );
+        }
+
+        return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), true);
     }
 
     /**
