@@ -35,6 +35,8 @@
         "vite.config.ts",
         "vitest.config.ts",
         "tests/e2e/**/*.ts",
-        "playwright.config.ts"
+        "tests/smoke/**/*.ts",
+        "playwright.config.ts",
+        "playwright.production.config.ts"
     ]
 }

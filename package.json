@@ -12,8 +12,8 @@
         "e2e": "playwright test",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write resources/js tests/js tests/e2e",
-        "format:check": "prettier --check resources/js tests/js tests/e2e",
+        "format": "prettier --write resources/js tests/js tests/e2e tests/smoke",
+        "format:check": "prettier --check resources/js tests/js tests/e2e tests/smoke",
         "types": "vue-tsc --noEmit"
     },
     "devDependencies": {
