@@ -102,3 +102,30 @@ test('estimates the cost live as the prompt, quality, size and references change
 
     expect(requests, 'XHR or fetch requests while editing').toStrictEqual([]);
 });
+
+test('a tap toggles the exact value, and a tap elsewhere closes it', async ({ page, hasTouch }) => {
+    test.skip(!hasTouch, 'touch only: the mobile project emulates a touch screen');
+
+    await signIn(page, DEMO_USER.email, DEMO_USER.password);
+    await expect(page).toHaveURL('/dashboard');
+    await expectEstimate(page, '$0.0581 – $0.0863', '$0.0722');
+
+    const max = estimatePanel(page).locator('[aria-live="polite"]').getByRole('button', { name: '$0.0863' });
+    const exactMax = page.getByRole('tooltip', { name: '$0.086250000' });
+
+    await max.tap();
+    await expect(exactMax).toBeVisible();
+    // Touch emulation fires `mouseleave` about 14ms after a tap; the tip must outlast it.
+    await page.waitForTimeout(500);
+    await expect(exactMax).toBeVisible();
+    await expect(max).toHaveAccessibleDescription('$0.086250000');
+
+    await max.tap();
+    await expect(exactMax).toBeHidden();
+    await expect(max, 'closed, the exact value still describes the amount').toHaveAccessibleDescription('$0.086250000');
+
+    await max.tap();
+    await expect(exactMax).toBeVisible();
+    await page.getByRole('heading', { level: 1, name: 'New image' }).tap();
+    await expect(exactMax).toBeHidden();
+});
