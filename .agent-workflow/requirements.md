@@ -224,6 +224,7 @@ Short, interview-ready rationale. Add rows as stories make new decisions.
 | D-12 | In-app fake Pixelforge driver (signed webhooks, keywords) for local + E2E; opt-in live smoke against the real API | Deterministic CI; real behaviour still verified. |
 | D-13 | Deploy on Laravel Cloud (web + queue worker + scheduler, Postgres) | Fastest path the brief suggests; needs workers/scheduler, which Cloud has. |
 | D-14 | Upfront hold = **max** estimate; settle actual on success, release on failure | Users can never overspend; actual ≤ max by construction. |
+| D-16 | An estimate's typical count per token type is the midpoint of its min and max, rounded **up** to a whole token; typical is priced like the bounds, with the markup applied once to each total | One integer rule both languages share. With today's tables every midpoint is whole, and the text midpoint is always exactly `e`. |
 
 ## 6. Open questions / known unknowns
 
