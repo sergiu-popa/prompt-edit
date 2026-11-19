@@ -6,18 +6,18 @@ A `generations` table keyed by a ULID holds the request exactly as given, the se
 ## Tasks
 Each task is one TDD commit: write the failing test first, then the code, and run `chain-make.sh chain check` green before committing. Tasks 1–6 are the record, the create action and the snapshot parser. Tasks 7–12 are the transition action. The cut point is after task 6 (see Risks).
 
-- [ ] 1. Add `GenerationStatus` with `rank()`, `isTerminal()` and `label()`, test-first for AC8's rank order, the terminal set and the labels. Commit: `[PE-006] Add the generation status enum with its forward-only rank`
-- [ ] 2. Add the `generations` migration (every column below), the `Generation` model, `LocalFailureReason` and the factory's pending definition. Test-first for AC4, AC5 and the storage half of AC15. Commit: `[PE-006] Add the generations table and model`
-- [ ] 3. Add the factory's `queued`, `processing`, `succeeded` and `failed` states, test-first for AC16's invariants. Commit: `[PE-006] Add per-status generation factory states`
-- [ ] 4. Add `NewGenerationData` and `CreateGenerationAction`, test-first for AC1 (worked example), AC2 (rollback) and AC3 (byte-identical round trip). Commit: `[PE-006] Create the pending generation row with its server-side estimate`
-- [ ] 5. Add `GenerationSnapshot::from()` with the shape and type rules, plus `InvalidGenerationSnapshotException`, the three docs fixtures and the `InteractsWithGenerationSnapshots` trait with `pixelforgeFixture()`. Test-first for AC6, the shape rows of AC7 and the parsing half of AC15. Commit: `[PE-006] Parse Pixelforge's generation object into a typed snapshot`
-- [ ] 6. Add the status-dependent rules: a complete succeeded snapshot, usage and rates keys under PE-001's rules, and a failed snapshot with a null error. Test-first for the remaining AC7 rows. Commit: `[PE-006] Reject incomplete succeeded snapshots and unpriced token keys`
-- [ ] 7. Add `TransitionGenerationAction` for snapshot input and `GenerationTransitionOutcome`: lock, rank classification, and the AC9 write. Add `generationObjectFor()` and `snapshotFor()` to the trait. Test-first with the AC8 table over the four provider-status columns and AC9, and record decision D-24. Commit: `[PE-006] Apply generation snapshots forward-only under a row lock`
-- [ ] 8. Pin the AC10 webhook-first sequences and the AC11 replays. No code change is expected; if a sequence fails, fix it in this commit. Commit: `[PE-006] Pin webhook-first and replayed snapshot sequences`
-- [ ] 9. Refuse AC12 identity mismatches before any rank check, and log every conflict at error level, test-first. Commit: `[PE-006] Refuse and log snapshots that conflict with the generation`
-- [ ] 10. Accept `LocalGenerationFailureData` as the action's second input kind, test-first for the AC8 local-failure column and AC13, including the logged refusal. Commit: `[PE-006] Fail pending generations locally and refuse once accepted`
-- [ ] 11. Make the write conditional on the status read under the lock, and add `ConcurrentGenerationTransitionException`, test-first with the simulated missed lock. Commit: `[PE-006] Guard the status write against a missed row lock`
-- [ ] 12. Add the child script `tests/scripts/transition-generation.php` and the AC14 two-process test. Commit: `[PE-006] Prove concurrent appliers of one snapshot write once`
+- [x] 1. Add `GenerationStatus` with `rank()`, `isTerminal()` and `label()`, test-first for AC8's rank order, the terminal set and the labels. Commit: `[PE-006] Add the generation status enum with its forward-only rank`
+- [x] 2. Add the `generations` migration (every column below), the `Generation` model, `LocalFailureReason` and the factory's pending definition. Test-first for AC4, AC5 and the storage half of AC15. Commit: `[PE-006] Add the generations table and model`
+- [x] 3. Add the factory's `queued`, `processing`, `succeeded` and `failed` states, test-first for AC16's invariants. Commit: `[PE-006] Add per-status generation factory states`
+- [x] 4. Add `NewGenerationData` and `CreateGenerationAction`, test-first for AC1 (worked example), AC2 (rollback) and AC3 (byte-identical round trip). Commit: `[PE-006] Create the pending generation row with its server-side estimate`
+- [x] 5. Add `GenerationSnapshot::from()` with the shape and type rules, plus `InvalidGenerationSnapshotException`, the three docs fixtures and the `InteractsWithGenerationSnapshots` trait with `pixelforgeFixture()`. Test-first for AC6, the shape rows of AC7 and the parsing half of AC15. Commit: `[PE-006] Parse Pixelforge's generation object into a typed snapshot`
+- [x] 6. Add the status-dependent rules: a complete succeeded snapshot, usage and rates keys under PE-001's rules, and a failed snapshot with a null error. Test-first for the remaining AC7 rows. Commit: `[PE-006] Reject incomplete succeeded snapshots and unpriced token keys`
+- [x] 7. Add `TransitionGenerationAction` for snapshot input and `GenerationTransitionOutcome`: lock, rank classification, and the AC9 write. Add `generationObjectFor()` and `snapshotFor()` to the trait. Test-first with the AC8 table over the four provider-status columns and AC9, and record decision D-24. Commit: `[PE-006] Apply generation snapshots forward-only under a row lock`
+- [x] 8. Pin the AC10 webhook-first sequences and the AC11 replays. No code change is expected; if a sequence fails, fix it in this commit. Commit: `[PE-006] Pin webhook-first and replayed snapshot sequences`
+- [x] 9. Refuse AC12 identity mismatches before any rank check, and log every conflict at error level, test-first. Commit: `[PE-006] Refuse and log snapshots that conflict with the generation`
+- [x] 10. Accept `LocalGenerationFailureData` as the action's second input kind, test-first for the AC8 local-failure column and AC13, including the logged refusal. Commit: `[PE-006] Fail pending generations locally and refuse once accepted`
+- [x] 11. Make the write conditional on the status read under the lock, and add `ConcurrentGenerationTransitionException`, test-first with the simulated missed lock. Commit: `[PE-006] Guard the status write against a missed row lock`
+- [x] 12. Add the child script `tests/scripts/transition-generation.php` and the AC14 two-process test. Commit: `[PE-006] Prove concurrent appliers of one snapshot write once`
 
 ## Domain
 All PHP classes are `final`, and DTOs are `readonly`. Namespaces: `App\Domain\Generation\…` and `App\Support\Pixelforge\…`.
@@ -154,3 +154,12 @@ Boundary rows to add beyond the ACs:
   - PE-007 writes money inside this action's transaction on a terminal `Applied`, and on an `IgnoredConflict` over a row with `local_failure_reason`.
   - PE-014 stamps its last-provider-update column on `Applied` only.
   - Neither may write on ignored or refused outcomes (AC9).
+
+## Engineer notes
+Where the implementation differs from the plan, and why:
+- **Child input (task 12).** The child script takes the generation object as its second argument, not on stdin. Symfony's Process only feeds a string stdin while the parent waits on the child, and the parent has to see both children wait on the lock first.
+- **Lock-wait poll (task 12).** Inside the lock-holding transaction, Postgres keeps one snapshot of `pg_stat_activity` from the first read. Each poll therefore calls `pg_stat_clear_snapshot()` first.
+- **Model properties (task 3).** `Generation` declares `@property` types. Larastan read the `timestampTz` columns as strings and ignored the `immutable_datetime` casts.
+- **Usage errors (task 6).** `InvalidGenerationSnapshotException::invalidUsage()` wraps PE-001's exception as `previous`. Its message names the token key PE-001 reports (e.g. `reasoning_tokens`), not a `usage.` path, because PE-001's exception does not expose the key. An extra or missing rate key names its `rates.` path.
+- **Extra test (task 11).** `TransitionGenerationActionTest` also checks that the conditional UPDATE keeps `completed_at` exact under a `Europe/Bucharest` session. This covers the "raw writes bypass `DateFormat`" risk.
+- **Local failure and `completed_at`.** A local failure leaves `completed_at` null. No AC asks for it, and Pixelforge never completed anything.
