@@ -10,15 +10,19 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
 - php - 8.4
+- inertiajs/inertia-laravel (INERTIA_LARAVEL) - v3
 - laravel/framework (LARAVEL) - v13
 - laravel/prompts (PROMPTS) - v0
 - larastan/larastan (LARASTAN) - v3
 - laravel/boost (BOOST) - v2
-- laravel/mcp (MCP) - v0
+- laravel/mcp (MCP) - v1
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1
-- phpunit/phpunit (PHPUNIT) - v12
+- phpunit/phpunit (PHPUNIT) - v13
+- @inertiajs/vue3 (INERTIA_VUE) - v3
 - tailwindcss (TAILWINDCSS) - v4
+- typescript (TYPESCRIPT) - v6
+- vue (VUE) - v3
 
 ## Skills Activation
 
@@ -104,6 +108,28 @@ This project has domain-specific skills available. You MUST activate the relevan
 - Prefer PHPDoc blocks over inline comments. Only add inline comments for exceptionally complex logic.
 - Use array shape type definitions in PHPDoc blocks.
 
+=== inertia-laravel/core rules ===
+
+# Inertia
+
+- Inertia creates fully client-side rendered SPAs without modern SPA complexity, leveraging existing server-side patterns.
+- Components live in `resources/js/pages` (lowercase; resolved in `resources/js/app.ts`, Vite config is `vite.config.ts`). Use `Inertia::render()` for server-side routing instead of Blade views.
+- ALWAYS use `search-docs` tool for version-specific Inertia documentation and updated code examples.
+
+# Inertia v3
+
+- Use all Inertia features from v1, v2, and v3. Check the documentation before making changes to ensure the correct approach.
+- New v3 features: standalone HTTP requests (`useHttp` hook), optimistic updates with automatic rollback, layout props (`useLayoutProps` hook), instant visits, simplified SSR via `@inertiajs/vite` plugin, custom exception handling for error pages.
+- Carried over from v2: deferred props, infinite scroll, merging props, polling, prefetching, once props, flash data.
+- When using deferred props, add an empty state with a pulsing or animated skeleton.
+- Axios has been removed. Use the built-in XHR client with interceptors, or install Axios separately if needed.
+- `Inertia::lazy()` / `LazyProp` has been removed. Use `Inertia::optional()` instead.
+- Prop types (`Inertia::optional()`, `Inertia::defer()`, `Inertia::merge()`) work inside nested arrays with dot-notation paths.
+- SSR works automatically in Vite dev mode with `@inertiajs/vite` - no separate Node.js server needed during development.
+- Event renames: `invalid` is now `httpException`, `exception` is now `networkError`.
+- `router.cancel()` replaced by `router.cancelAll()`.
+- The `future` configuration namespace has been removed - all v2 future options are now always enabled.
+
 === laravel/core rules ===
 
 # Do Things the Laravel Way
@@ -180,7 +206,10 @@ Always use `make` targets or `docker exec` to run commands inside the container:
 - **Linting:** `make lint` (check) / `make lint-fix` (auto-fix)
 - **Static analysis:** `make stan`
 - **Tests:** `make test` or `make test filter=testName`
-- **All checks:** `make check` (lint + stan + test)
+- **Frontend checks:** `make js-check` (ESLint + Prettier check + vue-tsc) / `make js-fix`
+- **JS tests:** `make js-test` (Vitest unit + integration)
+- **E2E:** `make e2e` (build + Playwright in the `playwright` service; `make e2e filter=name`)
+- **All checks:** `make check` (lint + stan + test + js-check + js-test)
 - **Artisan:** `docker exec prompt-edit-app php artisan <command>`
 - **Shell:** `make bash`
 

@@ -72,7 +72,23 @@ lint-fix:
 stan:
 	docker exec prompt-edit-app composer stan
 
-check: lint stan test
+js-check:
+	docker exec prompt-edit-app npm run lint
+	docker exec prompt-edit-app npm run format:check
+	docker exec prompt-edit-app npm run types
+
+js-fix:
+	docker exec prompt-edit-app npm run lint:fix
+	docker exec prompt-edit-app npm run format
+
+js-test:
+	docker exec prompt-edit-app npm test
+
+e2e:
+	docker exec prompt-edit-app npm run build
+	docker compose run --rm playwright npx playwright test $(if $(filter),--grep "$(filter)")
+
+check: lint stan test js-check js-test
 
 cache:
 	docker exec prompt-edit-app php artisan optimize:clear
