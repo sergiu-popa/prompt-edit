@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
@@ -79,11 +80,15 @@ final class BootsWithoutPixelforgeTest extends TestCase
         $this->assertNull(config('pixelforge.api_key'));
         $this->assertSame(5, config('pixelforge.connect_timeout_seconds'));
         $this->assertSame(30, config('pixelforge.request_timeout_seconds'));
+        $this->assertSame(50, config('pixelforge.rate_limit_per_minute'));
     }
 
     public function test_the_pixelforge_client_resolves_to_the_http_driver(): void
     {
-        $this->assertInstanceOf(HttpPixelforgeClient::class, $this->app->make(PixelforgeClient::class));
+        $client = $this->app->make(PixelforgeClient::class);
+
+        $this->assertInstanceOf(ThrottledPixelforgeClient::class, $client);
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $client->client);
     }
 
     /**

@@ -38,6 +38,19 @@ return [
     'request_timeout_seconds' => filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 30]]),
 
     /**
+     * The account-wide budget every call through the client takes from (D-44),
+     * below Pixelforge's 60 requests a minute, which dev and production keys
+     * share. Anything but a positive integer means the default.
+     */
+    'rate_limit_per_minute' => filter_var(env('PIXELFORGE_RATE_LIMIT_PER_MINUTE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 50]]),
+
+    /**
+     * The cache store that counts the budget: one every process shares (D-20),
+     * pinned here, whatever CACHE_STORE says.
+     */
+    'rate_limit_store' => 'database',
+
+    /**
      * The `whsec_…` secret of the API key whose webhook URL points here. Each
      * key has its own, so local and production differ. Never logged or committed.
      */

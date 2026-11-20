@@ -24,6 +24,7 @@ use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use App\Support\Pixelforge\Exceptions\ValidationFailedException;
+use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use GuzzleHttp\Exception\ResponseTimeoutException;
 use GuzzleHttp\Exception\ResponseTransferException;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -56,16 +57,19 @@ final class HttpPixelforgeClientTest extends TestCase
 
     private const string CREATE_URL = 'https://pixelforge.promptedit.dev/v1/generations';
 
-    public function test_the_http_driver_resolves_the_http_client_afresh_each_time(): void
+    public function test_the_http_driver_resolves_the_http_client_afresh_each_time_behind_the_rate_budget(): void
     {
         config(['pixelforge.driver' => 'http']);
 
         $first = $this->app->make(PixelforgeClient::class);
         $second = $this->app->make(PixelforgeClient::class);
 
-        $this->assertInstanceOf(HttpPixelforgeClient::class, $first);
-        $this->assertInstanceOf(HttpPixelforgeClient::class, $second);
+        $this->assertInstanceOf(ThrottledPixelforgeClient::class, $first);
+        $this->assertInstanceOf(ThrottledPixelforgeClient::class, $second);
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $first->client);
+        $this->assertInstanceOf(HttpPixelforgeClient::class, $second->client);
         $this->assertNotSame($first, $second);
+        $this->assertNotSame($first->client, $second->client);
     }
 
     public function test_an_unknown_driver_fails_naming_it(): void
@@ -487,9 +491,13 @@ final class HttpPixelforgeClientTest extends TestCase
         $this->assertNotSame([], $parameter->getAttributes(SensitiveParameter::class));
     }
 
-    private function client(): PixelforgeClient
+    /**
+     * The driver itself, not the binding: this class has no RefreshDatabase, and
+     * the binding's budget would leave `cache` rows behind.
+     */
+    private function client(): HttpPixelforgeClient
     {
-        return $this->app->make(PixelforgeClient::class);
+        return $this->app->make(HttpPixelforgeClient::class);
     }
 
     private function createExpectingAmbiguous(CreateGenerationPayloadData $payload): AmbiguousPixelforgeOutcomeException

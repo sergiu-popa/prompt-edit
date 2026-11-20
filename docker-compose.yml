@@ -1,3 +1,8 @@
+# Dev and E2E bounds for the Pixelforge client (D-48). An existing `.env` lacks these names,
+# so each is defaulted here to `.env.example`'s value; a value in `.env` still wins.
+x-pixelforge-dev-bounds: &pixelforge-dev-bounds
+  PIXELFORGE_RATE_LIMIT_PER_MINUTE: ${PIXELFORGE_RATE_LIMIT_PER_MINUTE:-600}
+
 services:
   traefik:
     image: traefik:v2.11
@@ -65,6 +70,7 @@ services:
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
       ENABLE_NPM_FRONTEND: '${ENABLE_NPM_FRONTEND:-true}'
+      <<: *pixelforge-dev-bounds
     volumes:
       - '.:/var/www'
     networks:
@@ -92,6 +98,7 @@ services:
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
+      <<: *pixelforge-dev-bounds
     volumes:
       - '.:/var/www'
     networks:
@@ -119,6 +126,7 @@ services:
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
+      <<: *pixelforge-dev-bounds
     volumes:
       - '.:/var/www'
     networks:
