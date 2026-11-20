@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Generation;
 
+use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\Concerns\ReadsGenerationHistory;
@@ -15,7 +17,8 @@ use Tests\TestCase;
 
 /**
  * What History's resource says about each status: the times, the actual charge,
- * and nothing of the provider's cost.
+ * the image and whether it has expired by the server's clock, and nothing of the
+ * provider's cost.
  */
 final class GenerationHistoryStatusTest extends TestCase
 {
@@ -94,6 +97,94 @@ final class GenerationHistoryStatusTest extends TestCase
         $this->assertSame(0, $failed->user_charge_nanodollars);
         $this->assertNull($item['user_charge_nanodollars']);
         $this->assertSame($failed->completed_at?->utc()->format('Y-m-d\TH:i:s\Z'), $item['completed_at']);
+    }
+
+    public function test_one_second_before_its_expiry_the_lighthouse_image_is_sent(): void
+    {
+        $user = User::factory()->create();
+        $lighthouse = $this->givenTheSucceededLighthouseFor($user);
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertSame($lighthouse->image_url, $item['image_url']);
+        $this->assertStringStartsWith('https://pixelforge.promptedit.dev/images/', (string) $item['image_url']);
+        $this->assertSame('2026-11-19T23:59:59Z', $item['image_url_expires_at']);
+        $this->assertFalse($item['image_expired']);
+    }
+
+    public function test_exactly_at_its_expiry_the_lighthouse_image_is_expired_and_its_url_withheld(): void
+    {
+        $user = User::factory()->create();
+        $this->givenTheSucceededLighthouseFor($user);
+        $this->travelTo(CarbonImmutable::parse('2026-11-19T23:59:59Z'));
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertNull($item['image_url']);
+        $this->assertSame('2026-11-19T23:59:59Z', $item['image_url_expires_at']);
+        $this->assertTrue($item['image_expired']);
+    }
+
+    /**
+     * @return array<string, array{string, ?string}>
+     */
+    public static function imageUrls(): array
+    {
+        return [
+            'https' => ['https://images.example.com/a.png?signature=x', 'https://images.example.com/a.png?signature=x'],
+            'root-relative, as the fake signs it' => ['/fake-pixelforge/images/01jc?expires=1&signature=x', '/fake-pixelforge/images/01jc?expires=1&signature=x'],
+            'javascript' => ['javascript:alert(1)', null],
+            'protocol-relative' => ['//evil.example.com/a.png', null],
+            'plain http' => ['http://images.example.com/a.png', null],
+            'relative without a slash' => ['images/a.png', null],
+        ];
+    }
+
+    #[DataProvider('imageUrls')]
+    public function test_only_an_https_or_root_relative_image_url_is_sent(string $stored, ?string $sent): void
+    {
+        $user = User::factory()->create();
+        Generation::factory()->succeeded()->create([
+            'user_id' => $user->id,
+            'image_url' => $stored,
+            'image_url_expires_at' => CarbonImmutable::parse('2026-11-20T12:00:00Z'),
+        ]);
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertSame($sent, $item['image_url']);
+        $this->assertFalse($item['image_expired']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unfinishedOrFailedStates(): array
+    {
+        return [
+            'pending' => ['pending'],
+            'queued' => ['queued'],
+            'processing' => ['processing'],
+            'failed' => ['failed'],
+        ];
+    }
+
+    #[DataProvider('unfinishedOrFailedStates')]
+    public function test_a_generation_that_has_not_succeeded_has_no_image(string $status): void
+    {
+        $user = User::factory()->create();
+        $generation = $this->givenAGenerationIn(GenerationStatus::from($status));
+        $generation->forceFill([
+            'user_id' => $user->id,
+            'image_url' => 'https://images.example.com/a.png',
+            'image_url_expires_at' => CarbonImmutable::parse('2026-11-19T23:59:00Z'),
+        ])->save();
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertNull($item['image_url']);
+        $this->assertNull($item['image_url_expires_at']);
+        $this->assertFalse($item['image_expired']);
     }
 
     public function test_history_carries_the_servers_time_to_the_millisecond(): void

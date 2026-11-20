@@ -34,6 +34,9 @@ final class GenerationHistoryPageTest extends TestCase
         'started_at',
         'completed_at',
         'user_charge_nanodollars',
+        'image_url',
+        'image_url_expires_at',
+        'image_expired',
     ];
 
     public function test_a_guest_is_sent_to_sign_in(): void
@@ -76,6 +79,9 @@ final class GenerationHistoryPageTest extends TestCase
             'started_at' => null,
             'completed_at' => null,
             'user_charge_nanodollars' => null,
+            'image_url' => null,
+            'image_url_expires_at' => null,
+            'image_expired' => false,
         ], $item);
     }
 

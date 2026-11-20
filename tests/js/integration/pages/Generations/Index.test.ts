@@ -24,6 +24,9 @@ function generation(id: string, prompt: string): Generation {
         started_at: null,
         completed_at: null,
         user_charge_nanodollars: null,
+        image_url: null,
+        image_url_expires_at: null,
+        image_expired: false,
     };
 }
 

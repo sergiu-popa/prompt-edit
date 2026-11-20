@@ -58,6 +58,15 @@ export interface Generation {
     completed_at: string | null;
     /** What the user was actually charged; null unless it succeeded, so a failure reads as free. */
     user_charge_nanodollars: number | null;
+    /**
+     * The image, `https://` or root-relative; null unless it succeeded, once it has
+     * expired by the server's clock, or when the provider sent another kind of URL.
+     */
+    image_url: string | null;
+    /** When the image URL stops working, in UTC; null unless it succeeded. */
+    image_url_expires_at: string | null;
+    /** Whether the server's clock had reached `image_url_expires_at` when the page was read. */
+    image_expired: boolean;
 }
 
 /**

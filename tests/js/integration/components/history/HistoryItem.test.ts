@@ -21,6 +21,9 @@ const LIGHTHOUSE: Generation = {
     started_at: null,
     completed_at: null,
     user_charge_nanodollars: null,
+    image_url: null,
+    image_url_expires_at: null,
+    image_expired: false,
 };
 
 function mountItem(changes: Partial<Generation> = {}, highlighted = false): VueWrapper {
