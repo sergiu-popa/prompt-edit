@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import ReportAmount from '@/components/report/ReportAmount.vue';
-import { formatCount } from '@/lib/counting';
 import { useId } from 'vue';
 
+import ReportAmount from '@/components/report/ReportAmount.vue';
+import { formatCount } from '@/lib/counting';
 import type { ReportFigures, ReportTableRow } from '@/types/report';
 
 /**
