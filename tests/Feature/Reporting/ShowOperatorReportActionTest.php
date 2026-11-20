@@ -189,12 +189,22 @@ final class ShowOperatorReportActionTest extends TestCase
 
     /**
      * Spend is the generation's own `charge` entry only (D-64): the user's top-ups, the
-     * factory's starter grant and a purchase (D-67), are never spend.
+     * factory's starter grant and a purchase (D-67), are never spend. Both are written on
+     * the report's one day, so a report summing the user's entries by date would count them.
      */
     public function test_spend_reads_only_the_generations_charge_entry(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-11-16T09:00:01Z'));
         $generation = $this->givenASucceededGeneration('2026-11-16T09:00:00Z');
-        $this->assertDatabaseHas('credit_ledger_entries', ['user_id' => $generation->user_id, 'type' => 'grant']);
+        $this->travelBack();
+        $this->assertSame(
+            '2026-11-16 09:00:01+00',
+            DB::scalar(
+                "select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '+00' from credit_ledger_entries where user_id = ? and type = 'grant'",
+                [$generation->user_id],
+            ),
+            'Precondition: the starter grant is written inside the range.',
+        );
         DB::table('credit_ledger_entries')->insert([
             ['user_id' => $generation->user_id, 'type' => 'purchase', 'amount_nanodollars' => 1_000_000_000, 'purchase_token' => '0b6d6b6e-4a35-4c6e-9d0a-6f1c2e3d4b5a', 'created_at' => '2026-11-16 09:00:03+00:00'],
         ]);
