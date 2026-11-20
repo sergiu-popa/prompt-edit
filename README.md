@@ -35,8 +35,8 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 
 | Area | State |
 | --- | --- |
-| Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs, to merge in order: #3 → #2 → #4 → #5 → #6 |
-| Product features | Planned as 18 stories (below); each is delivered as one reviewable PR |
+| Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs #3, #2, #4, #5 and #6, all merged |
+| Product features | Delivered as 18 stories (below), each as one reviewable PR |
 | Deployment | Live at https://prompt.sergiupopa.dev (Deployer, see [Production](#production)) since PE-004, on the real Pixelforge API since PE-015 |
 
 ### Required scope
