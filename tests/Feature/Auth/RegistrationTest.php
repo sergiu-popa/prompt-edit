@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Actions\Fortify\CreateNewUser;
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\Concerns\InteractsWithAuthentication;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\TestCase;
 
 final class RegistrationTest extends TestCase
 {
     use InteractsWithAuthentication;
+    use InteractsWithCreditLedger;
     use RefreshDatabase;
 
     public function test_registering_creates_the_account_signs_in_and_lands_on_the_signed_in_home(): void
@@ -28,6 +35,46 @@ final class RegistrationTest extends TestCase
         $this->assertSame('ada.new@example.com', $user->email);
         $this->assertTrue(Hash::check('correct-password', $user->password));
         $this->assertAuthenticatedAs($user);
+    }
+
+    /**
+     * AC 2: a new account starts with exactly one starter grant.
+     */
+    public function test_registering_grants_the_starter_credit_once(): void
+    {
+        $this->register()->assertRedirect(route('dashboard'));
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->sole()));
+    }
+
+    public function test_a_failed_registration_grants_nothing(): void
+    {
+        $this->register(['password_confirmation' => 'other-password'])->assertSessionHasErrors('password');
+
+        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
+    }
+
+    /**
+     * The account and its grant commit together, so a failing grant leaves no account
+     * and uses up none of the network's registrations.
+     */
+    public function test_a_failing_grant_creates_no_account(): void
+    {
+        CreditLedgerEntry::created(function (): void {
+            throw new RuntimeException('The grant write failed.');
+        });
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->register();
+            $this->fail('The registration did not fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The grant write failed.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, User::query()->count());
+        $this->assertSame(0, RateLimiter::attempts(CreateNewUser::REGISTRATION_LIMIT_KEY_PREFIX . '127.0.0.1'));
+        $this->assertGuest();
     }
 
     /**

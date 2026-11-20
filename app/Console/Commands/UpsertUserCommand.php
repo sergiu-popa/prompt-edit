@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Domain\Billing\Actions\GrantStarterCreditsAction;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -19,13 +21,14 @@ use Symfony\Component\Console\Input\StreamableInputInterface;
  * Creates or updates a user by email, for the reviewer account on production. The password is
  * the first line of standard input, never an argument, so other users of the droplet can't
  * read it from argv and it never lands in a shell history (D-23). It is validated like a
- * registration, and it never appears in the output or the logs.
+ * registration, and it never appears in the output or the logs. A new account gets its
+ * starter grant in the same transaction (D-70); an update grants nothing.
  */
 #[Signature('app:upsert-user {email : The account email (trimmed and lowercased)} {name : The display name}')]
 #[Description('Create or update a user by email; the password is the first line of stdin')]
 final class UpsertUserCommand extends Command
 {
-    public function handle(): int
+    public function handle(GrantStarterCreditsAction $grantStarterCredits): int
     {
         $passwordSource = $this->passwordSource();
 
@@ -58,7 +61,7 @@ final class UpsertUserCommand extends Command
         /** @var array{name: string, email: string, password: string} $validated */
         $validated = $validator->validated();
 
-        $user = $this->upsert($validated['email'], $validated['name'], $validated['password']);
+        $user = $this->upsert($grantStarterCredits, $validated['email'], $validated['name'], $validated['password']);
 
         $action = $user->wasRecentlyCreated ? 'created' : 'updated';
 
@@ -68,12 +71,20 @@ final class UpsertUserCommand extends Command
         return self::SUCCESS;
     }
 
-    private function upsert(string $email, string $name, #[SensitiveParameter] string $password): User
+    private function upsert(GrantStarterCreditsAction $grantStarterCredits, string $email, string $name, #[SensitiveParameter] string $password): User
     {
-        return User::query()->updateOrCreate(
-            ['email' => $email],
-            ['name' => $name, 'password' => $password],
-        );
+        return DB::transaction(function () use ($grantStarterCredits, $email, $name, $password): User {
+            $user = User::query()->updateOrCreate(
+                ['email' => $email],
+                ['name' => $name, 'password' => $password],
+            );
+
+            if ($user->wasRecentlyCreated) {
+                $grantStarterCredits->execute($user);
+            }
+
+            return $user;
+        });
     }
 
     /**

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Actions\Fortify;
 
+use App\Domain\Billing\Actions\GrantStarterCreditsAction;
 use App\Domain\Shared\Rules\StorableTextRule;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -27,6 +29,8 @@ final class CreateNewUser implements CreatesNewUsers
 
     private const int REGISTRATION_LIMIT_DECAY_SECONDS = 3_600;
 
+    public function __construct(private readonly GrantStarterCreditsAction $grantStarterCredits) {}
+
     /**
      * Validate and create a newly registered user.
      *
@@ -38,6 +42,9 @@ final class CreateNewUser implements CreatesNewUsers
      * become two accounts (D-18). Only a string is lowercased: anything else is left for
      * the `string` rule to reject. A name Postgres can't store (invalid UTF-8 or a NUL)
      * is a field error, not a 500.
+     *
+     * The account and its starter grant commit together (D-70), so no account exists
+     * without its credit.
      *
      * @param  array<string, mixed>  $input
      *
@@ -64,11 +71,17 @@ final class CreateNewUser implements CreatesNewUsers
             'password' => ['required', 'string', Password::default(), 'confirmed'],
         ])->validate();
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-        ]);
+        $user = DB::transaction(function () use ($validated): User {
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+            ]);
+
+            $this->grantStarterCredits->execute($user);
+
+            return $user;
+        });
 
         RateLimiter::hit($limitKey, self::REGISTRATION_LIMIT_DECAY_SECONDS);
 

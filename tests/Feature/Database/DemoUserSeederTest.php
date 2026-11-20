@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Database;
 
+use App\Domain\Billing\Actions\GrantStarterCreditsAction;
 use App\Models\User;
 use Database\Seeders\DemoUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 use Tests\Concerns\InteractsWithAuthentication;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\TestCase;
 
 final class DemoUserSeederTest extends TestCase
 {
     use InteractsWithAuthentication;
+    use InteractsWithCreditLedger;
     use RefreshDatabase;
 
     public function test_seeding_twice_leaves_one_demo_user_who_can_sign_in(): void
@@ -47,12 +50,32 @@ final class DemoUserSeederTest extends TestCase
         $this->app['env'] = 'production';
 
         try {
-            (new DemoUserSeeder)->run();
+            (new DemoUserSeeder)->run($this->app->make(GrantStarterCreditsAction::class));
             $this->fail('The demo user seeder ran in production.');
         } catch (RuntimeException $exception) {
             $this->assertSame('The demo user is local-only and is never seeded in production.', $exception->getMessage());
         }
 
         $this->assertSame(0, User::query()->count());
+    }
+
+    /**
+     * AC 2: the seeded account has exactly one starter grant, however often it is seeded.
+     */
+    public function test_seeding_twice_leaves_one_starter_grant(): void
+    {
+        $this->seed();
+        $this->seed();
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->where('email', DemoUserSeeder::EMAIL)->sole()));
+    }
+
+    public function test_reseeding_grants_a_demo_account_from_before_balances(): void
+    {
+        $legacy = User::factory()->withoutCredits()->create(['email' => DemoUserSeeder::EMAIL]);
+
+        $this->seed(DemoUserSeeder::class);
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor($legacy));
     }
 }
