@@ -66,6 +66,11 @@ return [
         'overloaded_deadline_seconds' => filter_var(env('PIXELFORGE_OVERLOADED_DEADLINE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 120]]),
 
         /**
+         * From the first `429 concurrency_limit_exceeded`; then it fails free.
+         */
+        'concurrency_max_wait_seconds' => filter_var(env('PIXELFORGE_CONCURRENCY_MAX_WAIT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 600]]),
+
+        /**
          * Above the request timeout and below the queue's `retry_after` (90),
          * so one job never runs twice at once (AC 19).
          */

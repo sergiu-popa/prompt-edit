@@ -50,6 +50,11 @@ final readonly class SubmitRetryPolicy
     public const int AMBIGUOUS_MAX_WAIT_SECONDS = 60;
 
     /**
+     * The `Retry-After` the docs give `429 concurrency_limit_exceeded`.
+     */
+    public const int CONCURRENCY_LIMITED_WAIT_SECONDS = 5;
+
+    /**
      * Nothing can be sent until a key (or the fake's secret) is configured.
      */
     public const int NOT_CONFIGURED_WAIT_SECONDS = 60;
@@ -59,6 +64,8 @@ final readonly class SubmitRetryPolicy
         private int $windowSeconds,
         #[Config('pixelforge.submit.overloaded_deadline_seconds')]
         private int $overloadedDeadlineSeconds,
+        #[Config('pixelforge.submit.concurrency_max_wait_seconds')]
+        private int $concurrencyMaxWaitSeconds,
     ) {}
 
     /**
@@ -104,10 +111,10 @@ final readonly class SubmitRetryPolicy
         return match ($outcome) {
             SubmitAttemptOutcome::Overloaded => $this->afterOverload($bookkeeping, $retryAfterSeconds, $now),
             SubmitAttemptOutcome::Ambiguous => SubmitDecision::retryIn(self::ambiguousWait($bookkeeping, $now)),
+            SubmitAttemptOutcome::ConcurrencyLimited => $this->afterConcurrencyLimit($bookkeeping, $retryAfterSeconds, $now),
             SubmitAttemptOutcome::NotConfigured => SubmitDecision::retryIn(self::NOT_CONFIGURED_WAIT_SECONDS),
             SubmitAttemptOutcome::BudgetExhausted,
             SubmitAttemptOutcome::RateLimited,
-            SubmitAttemptOutcome::ConcurrencyLimited,
             SubmitAttemptOutcome::DailyLimited,
             SubmitAttemptOutcome::InvalidApiKey => SubmitDecision::retryIn($retryAfterSeconds ?? self::RATE_LIMITED_WAIT_SECONDS),
             SubmitAttemptOutcome::Accepted, SubmitAttemptOutcome::Rejected, null => throw new LogicException(sprintf(
@@ -138,6 +145,21 @@ final readonly class SubmitRetryPolicy
         }
 
         return SubmitDecision::retryIn(max($retryAfterSeconds ?? self::OVERLOADED_WAIT_SECONDS, $backoff));
+    }
+
+    /**
+     * Pixelforge already runs 3 of ours. It waits for a slot, and, unless latched,
+     * fails free once the slot has not come for the max wait (AC 7).
+     */
+    private function afterConcurrencyLimit(SubmitBookkeeping $bookkeeping, ?int $retryAfterSeconds, CarbonImmutable $now): SubmitDecision
+    {
+        $firstLimitedAt = $bookkeeping->firstConcurrencyLimitedAt ?? $now;
+
+        if (! $bookkeeping->isAmbiguous() && $now->greaterThanOrEqualTo($firstLimitedAt->addSeconds($this->concurrencyMaxWaitSeconds))) {
+            return SubmitDecision::failFree(LocalFailureReason::ProviderBusy);
+        }
+
+        return SubmitDecision::retryIn($retryAfterSeconds ?? self::CONCURRENCY_LIMITED_WAIT_SECONDS);
     }
 
     private static function ambiguousWait(SubmitBookkeeping $bookkeeping, CarbonImmutable $now): int

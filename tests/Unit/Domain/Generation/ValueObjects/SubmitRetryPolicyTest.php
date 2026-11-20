@@ -16,13 +16,16 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The retry decision for each outcome, from the generation's attempt history, with
- * production's bounds: a 30 min window and a 2 min overload deadline.
+ * production's bounds: a 30 min window, a 2 min overload deadline and a 10 min
+ * wait for a free slot.
  */
 final class SubmitRetryPolicyTest extends TestCase
 {
     private const int WINDOW = 1_800;
 
     private const int OVERLOADED_DEADLINE = 120;
+
+    private const int CONCURRENCY_MAX_WAIT = 600;
 
     private const string FIRST_ATTEMPT = '2026-11-20T10:00:00Z';
 
@@ -32,7 +35,7 @@ final class SubmitRetryPolicyTest extends TestCase
     {
         parent::setUp();
 
-        $this->policy = new SubmitRetryPolicy(self::WINDOW, self::OVERLOADED_DEADLINE);
+        $this->policy = new SubmitRetryPolicy(self::WINDOW, self::OVERLOADED_DEADLINE, self::CONCURRENCY_MAX_WAIT);
     }
 
     /**
@@ -47,7 +50,8 @@ final class SubmitRetryPolicyTest extends TestCase
             'the spent budget, freeing up in 37 s' => [SubmitAttemptOutcome::BudgetExhausted, 37, 37],
             'the spent budget without a wait' => [SubmitAttemptOutcome::BudgetExhausted, null, 60],
             'no key, whatever was sent' => [SubmitAttemptOutcome::NotConfigured, null, 60],
-            'a concurrency limit, as a rate limit until PE-013b' => [SubmitAttemptOutcome::ConcurrencyLimited, 5, 5],
+            'a concurrency limit with Retry-After 5' => [SubmitAttemptOutcome::ConcurrencyLimited, 5, 5],
+            'a concurrency limit without Retry-After' => [SubmitAttemptOutcome::ConcurrencyLimited, null, 5],
             'a daily limit, as a rate limit until PE-013b' => [SubmitAttemptOutcome::DailyLimited, null, 60],
             'a refused key, as a rate limit until PE-013b' => [SubmitAttemptOutcome::InvalidApiKey, null, 60],
         ];
@@ -138,6 +142,46 @@ final class SubmitRetryPolicyTest extends TestCase
         $now = $firstOverloadedAt->addSeconds(110);
 
         $this->assertRetriesIn(30, $this->policy->decide(self::overloaded($firstOverloadedAt, $now, ambiguousAt: $firstOverloadedAt), 2, $now));
+    }
+
+    /**
+     * @return array<string, array{int, bool, ?LocalFailureReason}>
+     */
+    public static function concurrencyWaits(): array
+    {
+        return [
+            'just limited' => [0, false, null],
+            'a second before the max wait' => [self::CONCURRENCY_MAX_WAIT - 1, false, null],
+            'at the max wait' => [self::CONCURRENCY_MAX_WAIT, false, LocalFailureReason::ProviderBusy],
+            'at the max wait, latched' => [self::CONCURRENCY_MAX_WAIT, true, null],
+        ];
+    }
+
+    /**
+     * AC 7: a slot that never comes for 10 min after the first concurrency 429.
+     */
+    #[DataProvider('concurrencyWaits')]
+    public function test_a_concurrency_limit_waits_for_a_slot_until_the_max_wait(int $sinceFirstLimit, bool $latched, ?LocalFailureReason $failure): void
+    {
+        $firstLimitedAt = self::at(self::FIRST_ATTEMPT);
+        $now = $firstLimitedAt->addSeconds($sinceFirstLimit);
+        $bookkeeping = new SubmitBookkeeping(
+            $firstLimitedAt,
+            $now,
+            SubmitAttemptOutcome::ConcurrencyLimited,
+            ambiguousAt: $latched ? $firstLimitedAt : null,
+            firstConcurrencyLimitedAt: $firstLimitedAt,
+        );
+
+        $decision = $this->policy->decide($bookkeeping, 5, $now);
+
+        if ($failure === null) {
+            $this->assertRetriesIn(5, $decision);
+
+            return;
+        }
+
+        $this->assertSame($failure, $decision->failureReason);
     }
 
     /**

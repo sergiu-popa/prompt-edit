@@ -25,6 +25,7 @@ final class PixelforgeConfigTest extends TestCase
         'CACHE_STORE',
         'PIXELFORGE_SUBMIT_WINDOW',
         'PIXELFORGE_OVERLOADED_DEADLINE',
+        'PIXELFORGE_CONCURRENCY_MAX_WAIT',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -169,16 +170,16 @@ final class PixelforgeConfigTest extends TestCase
     public function test_empty_submit_bounds_mean_the_production_defaults(): void
     {
         $this->assertSame(
-            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'job_timeout_seconds' => 60],
-            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '', 'PIXELFORGE_OVERLOADED_DEADLINE' => ''])['submit'],
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '', 'PIXELFORGE_OVERLOADED_DEADLINE' => '', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => ''])['submit'],
         );
     }
 
     public function test_set_submit_bounds_apply(): void
     {
         $this->assertSame(
-            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15, 'job_timeout_seconds' => 60],
-            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '600', 'PIXELFORGE_OVERLOADED_DEADLINE' => '15'])['submit'],
+            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15, 'concurrency_max_wait_seconds' => 300, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '600', 'PIXELFORGE_OVERLOADED_DEADLINE' => '15', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => '300'])['submit'],
         );
     }
 
@@ -189,8 +190,8 @@ final class PixelforgeConfigTest extends TestCase
     public function test_a_submit_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
     {
         $this->assertSame(
-            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'job_timeout_seconds' => 60],
-            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => $value, 'PIXELFORGE_OVERLOADED_DEADLINE' => $value])['submit'],
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => $value, 'PIXELFORGE_OVERLOADED_DEADLINE' => $value, 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => $value])['submit'],
         );
     }
 
