@@ -241,6 +241,15 @@ describe('HistoryItem', () => {
         expect(message.find('b').exists()).toBe(false);
     });
 
+    it('breaks a failure message with a long unbroken token inside the card, as it does the prompt', () => {
+        const message = mountItem({
+            ...FAILED,
+            failure_message: `Pixelforge rejected the request: reference_images: https://example.com/${'a'.repeat(200)}.png is not reachable.`,
+        }).get('[data-failure-message]');
+
+        expect(message.classes()).toContain('wrap-break-word');
+    });
+
     it('shows a local failure that later succeeded at Pixelforge (D-09) as failed and free', () => {
         const wrapper = mountItem({
             ...FAILED,

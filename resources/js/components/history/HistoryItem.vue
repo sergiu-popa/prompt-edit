@@ -156,7 +156,7 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
                 <time :datetime="completedAt" :title="completedExactly">{{ completedClock }}</time>
             </p>
             <p v-if="isExpired" data-image-note class="text-sm text-zinc-600">Images are kept for 24 h after completion.</p>
-            <p v-if="isFailed && generation.failure_message" data-failure-message class="text-sm text-red-700">
+            <p v-if="isFailed && generation.failure_message" data-failure-message class="text-sm wrap-break-word text-red-700">
                 {{ generation.failure_message }}
             </p>
         </div>
