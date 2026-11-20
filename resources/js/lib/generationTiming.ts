@@ -10,3 +10,11 @@
 export function elapsedSeconds(startedAt: string, nowMs: number): number {
     return Math.max(0, Math.floor((nowMs - Date.parse(startedAt)) / 1000));
 }
+
+/**
+ * Whether an image URL has stopped working: from exactly `expiresAt` on, as the
+ * server decides `image_expired`. With no expiry it never expires.
+ */
+export function isImageExpired(expiresAt: string | null, nowMs: number): boolean {
+    return expiresAt !== null && nowMs >= Date.parse(expiresAt);
+}

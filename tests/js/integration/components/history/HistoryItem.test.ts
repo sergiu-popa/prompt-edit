@@ -171,7 +171,33 @@ describe('HistoryItem', () => {
     it('shows the image of a succeeded generation, described by its prompt', () => {
         const image = mountItem(SUCCEEDED).getComponent(ResultImage);
 
-        expect(image.props()).toStrictEqual({ src: IMAGE_URL, alt: LIGHTHOUSE.prompt });
+        expect(image.props()).toStrictEqual({ src: IMAGE_URL, alt: LIGHTHOUSE.prompt, expired: false });
+        expect(mountItem(SUCCEEDED).find('[data-image-note]').exists()).toBe(false);
+    });
+
+    it('shows an image the server found expired as expired, with how long images are kept', () => {
+        const wrapper = mountItem({ ...SUCCEEDED, image_url: null, image_url_expires_at: '2026-11-19T11:59:00Z', image_expired: true });
+
+        expect(wrapper.getComponent(ResultImage).props()).toMatchObject({ src: null, expired: true });
+        expect(visibleText(wrapper.getComponent(ResultImage))).toBe('Image expired');
+        expect(visibleText(wrapper.get('[data-image-note]'))).toBe('Images are kept for 24 h after completion.');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Charged $0.3819');
+    });
+
+    it("flips to expired without a remount once the server's clock reaches the expiry", async () => {
+        const expiresAt = '2026-11-19T12:00:05Z';
+        const wrapper = mountItem({ ...SUCCEEDED, image_url_expires_at: expiresAt });
+        const root = wrapper.element;
+
+        await wrapper.setProps({ now: Date.parse(expiresAt) - 1 });
+        expect(wrapper.find('img').exists()).toBe(true);
+
+        await wrapper.setProps({ now: Date.parse(expiresAt) });
+
+        expect(wrapper.element).toBe(root);
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(visibleText(wrapper.getComponent(ResultImage))).toBe('Image expired');
+        expect(wrapper.find('[data-image-note]').exists()).toBe(true);
     });
 
     it.each<[GenerationStatus, string]>([

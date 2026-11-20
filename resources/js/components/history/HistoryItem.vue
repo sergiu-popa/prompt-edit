@@ -7,14 +7,15 @@ import Badge from '@/components/ui/Badge.vue';
 import MoneyAmount from '@/components/ui/MoneyAmount.vue';
 import { countCodePoints } from '@/lib/counting';
 import { describeImage } from '@/lib/imageOptions';
-import { elapsedSeconds } from '@/lib/generationTiming';
+import { elapsedSeconds, isImageExpired } from '@/lib/generationTiming';
 import { formatClockTime, formatElapsed, formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
 import type { Generation, GenerationStatus } from '@/types/generation';
 
 /**
  * One generation on History: its status, the prompt (clamped to two lines), what was
- * asked for, the estimate the user saw and when; once it succeeded, its image, what it
- * was actually charged and when it completed; once it failed, that it was free and the
+ * asked for, the estimate the user saw and when; once it succeeded, its image (or, from
+ * its expiry on the server's clock, a placeholder), what it was actually charged and
+ * when it completed; once it failed, that it was free and the
  * server's one message saying why, rendered as text. Every time is read on `now`, the
  * server-aligned clock History ticks, so a processing badge counts up live. From `sm`
  * the badge has its own column, with the image under it, and the time sits on the
@@ -78,6 +79,11 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
 const isSucceeded = computed(() => props.generation.status === 'succeeded');
 const isFailed = computed(() => props.generation.status === 'failed');
 
+/** The server's flag, or its clock passing the expiry while the page is open (D-42). */
+const isExpired = computed(
+    () => isSucceeded.value && (props.generation.image_expired || isImageExpired(props.generation.image_url_expires_at, props.now)),
+);
+
 /** What the user paid; the server sends it for a succeeded generation only. */
 const charge = computed(() => (isSucceeded.value ? props.generation.user_charge_nanodollars : null));
 
@@ -95,9 +101,10 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
         ]"
     >
         <ResultImage
-            v-if="isSucceeded && generation.image_url !== null"
-            :src="generation.image_url"
+            v-if="isSucceeded && (generation.image_url !== null || isExpired)"
+            :src="isExpired ? null : generation.image_url"
             :alt="generation.prompt"
+            :expired="isExpired"
             class="mb-1 sm:col-start-1 sm:row-start-2 sm:mb-0"
         />
 
@@ -148,6 +155,7 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
                 Completed
                 <time :datetime="completedAt" :title="completedExactly">{{ completedClock }}</time>
             </p>
+            <p v-if="isExpired" data-image-note class="text-sm text-zinc-600">Images are kept for 24 h after completion.</p>
             <p v-if="isFailed && generation.failure_message" data-failure-message class="text-sm text-red-700">
                 {{ generation.failure_message }}
             </p>

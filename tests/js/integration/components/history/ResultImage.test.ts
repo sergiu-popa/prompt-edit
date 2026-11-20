@@ -9,8 +9,8 @@ import ResultImage from '@/components/history/ResultImage.vue';
 const SRC = 'https://pixelforge.promptedit.dev/images/gen_01.png?expires=1763596799&signature=test';
 const PROMPT = 'A lighthouse on a cliff at dawn, oil painting';
 
-function mountImage(props: Partial<{ src: string; alt: string }> = {}): VueWrapper {
-    return mount(ResultImage, { props: { src: SRC, alt: PROMPT, ...props } });
+function mountImage(props: Partial<{ src: string | null; alt: string; expired: boolean }> = {}): VueWrapper {
+    return mount(ResultImage, { props: { src: SRC, alt: PROMPT, expired: false, ...props } });
 }
 
 describe('ResultImage', () => {
@@ -39,5 +39,27 @@ describe('ResultImage', () => {
         expect(wrapper.attributes('data-state')).toBe('image');
         expect(wrapper.classes()).toEqual(expect.arrayContaining(['aspect-3/2', 'w-full', 'sm:size-34', 'sm:aspect-square']));
         expect(visibleText(wrapper)).toBe('(opens in a new tab)');
+    });
+
+    it.each([
+        ['with its URL still given', SRC],
+        ['with its URL withheld by the server', null],
+    ])('shows an expired image as a placeholder, never requesting it, %s', (_case, src) => {
+        const wrapper = mountImage({ src, expired: true });
+
+        expect(wrapper.attributes('data-state')).toBe('expired');
+        expect(visibleText(wrapper)).toBe('Image expired');
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(wrapper.find('a').exists()).toBe(false);
+        expect(wrapper.classes()).toEqual(expect.arrayContaining(['aspect-3/2', 'sm:size-34']));
+    });
+
+    it('drops a showing image once it expires', async () => {
+        const wrapper = mountImage();
+
+        await wrapper.setProps({ expired: true });
+
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(visibleText(wrapper)).toBe('Image expired');
     });
 });
