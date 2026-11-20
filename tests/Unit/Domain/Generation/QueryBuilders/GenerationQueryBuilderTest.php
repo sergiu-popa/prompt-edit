@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\QueryBuilders;
 
+use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Generation\QueryBuilders\GenerationQueryBuilder;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class GenerationQueryBuilderTest extends TestCase
@@ -65,6 +68,120 @@ final class GenerationQueryBuilderTest extends TestCase
         $expected = collect([$first->id, $second->id, $third->id])->sortDesc()->values()->all();
 
         $this->assertSame($expected, Generation::query()->ownedBy($owner)->newestFirst()->pluck('id')->all());
+    }
+
+    /**
+     * AC 5's example: a processing row last updated 2 min 50 s ago is skipped, and
+     * at 3 min 10 s it is polled; a queued row likewise around 2 min.
+     *
+     * @return array<string, array{GenerationStatus, int, bool}>
+     */
+    public static function staleness(): array
+    {
+        return [
+            'processing, 2:50' => [GenerationStatus::Processing, 170, false],
+            'processing, exactly 3:00' => [GenerationStatus::Processing, 180, false],
+            'processing, 3:10' => [GenerationStatus::Processing, 190, true],
+            'queued, 1:50' => [GenerationStatus::Queued, 110, false],
+            'queued, 2:10' => [GenerationStatus::Queued, 130, true],
+        ];
+    }
+
+    #[DataProvider('staleness')]
+    public function test_stale_at_pixelforge_selects_a_row_by_its_last_provider_update(GenerationStatus $status, int $secondsAgo, bool $selected): void
+    {
+        $generation = $this->givenAConfirmedGeneration($status, self::now()->subSeconds($secondsAgo));
+
+        $this->assertSame($selected ? [$generation->id] : [], $this->staleIds());
+    }
+
+    /**
+     * Only `updated_at` moved, as PE-013's markers and the reconciler's bookkeeping
+     * move it: the row is still fresh.
+     */
+    public function test_stale_at_pixelforge_never_reads_updated_at(): void
+    {
+        $generation = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subSeconds(30));
+        DB::table('generations')->where('id', $generation->id)->update(['updated_at' => self::now()->subHour()]);
+
+        $this->assertSame([], $this->staleIds());
+    }
+
+    public function test_pending_and_terminal_rows_are_never_stale_at_pixelforge(): void
+    {
+        $longAgo = self::now()->subDay();
+        Generation::factory()->create(['last_provider_update_at' => $longAgo]);
+        Generation::factory()->succeeded()->create(['last_provider_update_at' => $longAgo]);
+        Generation::factory()->failed()->create(['last_provider_update_at' => $longAgo]);
+        Generation::factory()->failedLocally()->create();
+
+        $this->assertSame([], $this->staleIds());
+    }
+
+    public function test_due_for_recheck_keeps_rows_never_checked_or_due_now(): void
+    {
+        $never = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subHour());
+        $due = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subHour(), self::now());
+        $overdue = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subHour(), self::now()->subMinute());
+        $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subHour(), self::now()->addSecond());
+
+        $ids = Generation::query()->dueForRecheck(self::now())->pluck('id')->sort()->values()->all();
+
+        $this->assertSame(collect([$never->id, $due->id, $overdue->id])->sort()->values()->all(), $ids);
+    }
+
+    public function test_oldest_provider_update_first_breaks_a_tie_by_id(): void
+    {
+        $newest = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subMinutes(4));
+        $tiedA = $this->givenAConfirmedGeneration(GenerationStatus::Queued, self::now()->subMinutes(10));
+        $oldest = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subMinutes(30));
+        $tiedB = $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subMinutes(10));
+        $tied = collect([$tiedA->id, $tiedB->id])->sort()->values()->all();
+
+        $this->assertSame([$oldest->id, ...$tied, $newest->id], $this->staleIds());
+    }
+
+    /**
+     * The poll selection is one range scan of the partial index, however many
+     * terminal rows the table holds.
+     */
+    public function test_the_poll_selection_reads_the_partial_poll_index(): void
+    {
+        $this->givenAConfirmedGeneration(GenerationStatus::Processing, self::now()->subHour());
+        DB::statement('SET LOCAL enable_seqscan = off');
+        $query = $this->staleSelection()->limit(20);
+
+        $plan = implode("\n", array_map(fn (object $line): string => (string) current((array) $line), DB::select('explain ' . $query->toSql(), $query->getBindings())));
+
+        $this->assertStringContainsString('generations_reconcile_poll_index', $plan);
+    }
+
+    private static function now(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('2026-11-20T12:00:00Z');
+    }
+
+    private function givenAConfirmedGeneration(GenerationStatus $status, CarbonImmutable $lastProviderUpdateAt, ?CarbonImmutable $recheckAt = null): Generation
+    {
+        $factory = $status === GenerationStatus::Queued ? Generation::factory()->queued() : Generation::factory()->processing();
+
+        return $factory->create(['last_provider_update_at' => $lastProviderUpdateAt, 'reconcile_recheck_at' => $recheckAt]);
+    }
+
+    private function staleSelection(): GenerationQueryBuilder
+    {
+        return Generation::query()
+            ->staleAtPixelforge(self::now()->subSeconds(120), self::now()->subSeconds(180))
+            ->dueForRecheck(self::now())
+            ->oldestProviderUpdateFirst();
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function staleIds(): array
+    {
+        return array_values($this->staleSelection()->pluck('id')->all());
     }
 
     private function givenAGenerationCreatedAt(User $owner, string $instant): Generation

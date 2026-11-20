@@ -36,7 +36,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * The `submit_*` columns are the submit job's record of its attempts (D-45). Only
  * the submit path writes them, never the transition action, and they are not
- * fillable.
+ * fillable. Likewise the `reconcile_*` columns are the reconciler's own record
+ * (PE-014), written only by its actions.
  *
  * @property string $id
  * @property int $user_id
@@ -76,6 +77,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?CarbonImmutable $submit_first_concurrency_limited_at
  * @property int $submit_invalid_api_key_count
  * @property ?SubmitRetryNote $submit_retry_note
+ * @property ?CarbonImmutable $reconcile_recheck_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  *
@@ -174,6 +176,7 @@ final class Generation extends Model
             'submit_first_concurrency_limited_at' => 'immutable_datetime',
             'submit_invalid_api_key_count' => 'integer',
             'submit_retry_note' => SubmitRetryNote::class,
+            'reconcile_recheck_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
