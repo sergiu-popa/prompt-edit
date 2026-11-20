@@ -23,6 +23,8 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_REQUEST_TIMEOUT',
         'PIXELFORGE_RATE_LIMIT_PER_MINUTE',
         'CACHE_STORE',
+        'PIXELFORGE_SUBMIT_WINDOW',
+        'PIXELFORGE_OVERLOADED_DEADLINE',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -162,6 +164,34 @@ final class PixelforgeConfigTest extends TestCase
     public function test_a_rate_limit_that_is_not_a_positive_integer_means_the_default(string $value): void
     {
         $this->assertSame(50, $this->pixelforgeConfigWith(['PIXELFORGE_RATE_LIMIT_PER_MINUTE' => $value])['rate_limit_per_minute']);
+    }
+
+    public function test_empty_submit_bounds_mean_the_production_defaults(): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '', 'PIXELFORGE_OVERLOADED_DEADLINE' => ''])['submit'],
+        );
+    }
+
+    public function test_set_submit_bounds_apply(): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '600', 'PIXELFORGE_OVERLOADED_DEADLINE' => '15'])['submit'],
+        );
+    }
+
+    /**
+     * A bound of 0 would fail every generation at its first wait.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_submit_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => $value, 'PIXELFORGE_OVERLOADED_DEADLINE' => $value])['submit'],
+        );
     }
 
     /**

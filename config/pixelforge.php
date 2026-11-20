@@ -51,6 +51,22 @@ return [
     'rate_limit_store' => 'database',
 
     /**
+     * How long the submit job keeps trying (D-46, D-47), in seconds. Every
+     * default is production's; anything but a positive integer means it.
+     */
+    'submit' => [
+        /**
+         * From the first attempt; the worker's `--tries` cannot end it sooner.
+         */
+        'window_seconds' => filter_var(env('PIXELFORGE_SUBMIT_WINDOW'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1_800]]),
+
+        /**
+         * From the first `503 overloaded`; then the generation fails free.
+         */
+        'overloaded_deadline_seconds' => filter_var(env('PIXELFORGE_OVERLOADED_DEADLINE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 120]]),
+    ],
+
+    /**
      * The `whsec_…` secret of the API key whose webhook URL points here. Each
      * key has its own, so local and production differ. Never logged or committed.
      */
