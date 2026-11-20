@@ -143,3 +143,29 @@ The branch had not been pushed, so the orchestrator squashed both fix-up pairs, 
 - The final tree is byte-identical to the tip before the squash.
 - At `dbe4333` and at `c71478e`, `make test`, `stan`, `lint`, `js-check` and `js-test` all pass. The checks ran in the dev container with this branch's environment.
 - `42f348a` points this file's other SHAs at the rewritten history.
+
+## Round 4
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..e32e5a2`, 32 commits), with a close look at the two squashed commits `dbe4333` and `c71478e` and the bookkeeping commits `42f348a` and `e32e5a2`.
+
+Checks run:
+- `git diff pe-015-backup-before-squash HEAD -- . ':!.agent-workflow'` is empty, so the code is byte-identical to the tree that rounds 1–3 checked. Only `review.md` differs, through `42f348a` and `e32e5a2`.
+- At `dbe4333`, `app/Domain/Shared/Rules/StorableTextRule.php` declares `namespace App\Domain\Shared\Rules`, and `CreateGenerationRequest` imports `App\Domain\Shared\Rules\StorableTextRule`. `git grep` finds no reference to `App\Domain\Generation\Rules\StorableTextRule` at that commit. The commit is the rename plus those two lines, and its body says the namespace and the import move with the file.
+- At `c71478e`, the `live-smoke` recipe is `docker exec -e CI prompt-edit-app …`, and `LiveSmokeGuardTest` reads `$matches['recipe'] ?? ''`, the line Larastan flagged in round 2. That file and the `Makefile` are identical at `c71478e` and at HEAD, so round 3's clean `make stan` covers them. The orchestrator also ran `make test`, `stan`, `lint`, `js-check` and `js-test` at both commits.
+- `make check`, `make e2e` and `make live-smoke` were not re-run, because no code changed since round 3. Round 3's `make check` and round 1's E2E (44 passed, 2 skipped) and live smoke (6 passed) still stand.
+
+### Round 3 follow-up
+
+- **W3 (`b6fa7a7` + `3976ce2` → `dbe4333`):** squashed, and the commit now passes on its own. Fixed.
+- **W4 (`11f8f96` + `eee26de` → `c71478e`):** squashed, and the commit now passes Larastan on its own. Fixed.
+- **Suggestions S1–S4:** still not taken up. They are optional and do not block.
+
+### Commit hygiene
+
+- All 32 subjects start with `[PE-015]`, are imperative, have no trailing period and are at most 72 characters. All 32 messages end with the trailer.
+- Each code commit carries its tests and passes on its own. The bookkeeping commits (`37dd043`, `7bdb74e`, `c46611d`, `55039a5`, `530cbb6`, `42f348a`, `e32e5a2`) touch only `.agent-workflow` files.
+- The earlier rounds still name the pre-squash SHAs `b6fa7a7`, `3976ce2`, `11f8f96` and `eee26de`. That is deliberate, because those rounds describe that history, and the round 3 resolution maps each one to its squashed commit.
+
+No Critical findings, and no Warning is left open. The story moves to `qa-ready`.
