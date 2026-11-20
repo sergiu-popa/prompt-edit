@@ -155,6 +155,23 @@ final class GenerationTest extends TestCase
         $this->assertSame('concurrency_limited', DB::table('generations')->where('id', $generation->getKey())->value('submit_last_outcome'));
     }
 
+    public function test_the_last_provider_update_round_trips_through_its_cast(): void
+    {
+        $generation = Generation::factory()->create(['last_provider_update_at' => CarbonImmutable::parse('2026-11-20T10:03:10Z')]);
+
+        $row = Generation::query()->whereKey($generation->getKey())->firstOrFail();
+
+        $this->assertInstanceOf(CarbonImmutable::class, $row->last_provider_update_at);
+        $this->assertSameInstant('2026-11-20T10:03:10Z', $row->last_provider_update_at);
+    }
+
+    public function test_a_pending_row_has_no_last_provider_update(): void
+    {
+        $generation = Generation::factory()->create();
+
+        $this->assertNull(Generation::query()->whereKey($generation->getKey())->firstOrFail()->last_provider_update_at);
+    }
+
     public function test_a_pixelforge_instant_survives_a_non_utc_php_and_database_timezone(): void
     {
         date_default_timezone_set('Europe/Bucharest');

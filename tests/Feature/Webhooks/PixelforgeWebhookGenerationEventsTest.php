@@ -8,6 +8,7 @@ use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
@@ -145,6 +146,16 @@ final class PixelforgeWebhookGenerationEventsTest extends TestCase
         $this->assertSameInstant('2026-11-18T23:59:42Z', $row->started_at);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
         $this->assertSame([$lighthouse->id], array_column($this->storedWebhookEvents(), 'generation_id'));
+    }
+
+    public function test_an_applied_event_stamps_the_last_provider_update(): void
+    {
+        $lighthouse = $this->givenTheSubmittedLighthouseGeneration();
+        $this->travel(2)->minutes();
+
+        $this->deliverPixelforgeEvent(self::pixelforgeEvent('generation.processing', self::generationObjectFor($lighthouse, GenerationStatus::Processing)))->assertOk();
+
+        $this->assertTrue($this->reloadedGeneration($lighthouse)->last_provider_update_at?->equalTo(CarbonImmutable::now()->startOfSecond()));
     }
 
     /**

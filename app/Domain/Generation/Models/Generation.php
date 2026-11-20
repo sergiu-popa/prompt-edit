@@ -31,6 +31,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * The provider cost and the user charge stay null until the generation is
  * terminal, and only the transition action writes them, under its row lock.
+ * It also stamps `last_provider_update_at` whenever it applies a snapshot
+ * (D-50), and nothing else writes it.
  *
  * The `submit_*` columns are the submit job's record of its attempts (D-45). Only
  * the submit path writes them, never the transition action, and they are not
@@ -64,6 +66,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?CarbonImmutable $provider_created_at
  * @property ?CarbonImmutable $started_at
  * @property ?CarbonImmutable $completed_at
+ * @property ?CarbonImmutable $last_provider_update_at
  * @property ?CarbonImmutable $submit_first_attempted_at
  * @property ?CarbonImmutable $submit_last_attempted_at
  * @property ?SubmitAttemptOutcome $submit_last_outcome
@@ -107,6 +110,7 @@ use Illuminate\Database\Eloquent\Model;
     'provider_created_at',
     'started_at',
     'completed_at',
+    'last_provider_update_at',
 ])]
 #[UseEloquentBuilder(GenerationQueryBuilder::class)]
 #[UseFactory(GenerationFactory::class)]
@@ -160,6 +164,7 @@ final class Generation extends Model
             'provider_created_at' => 'immutable_datetime',
             'started_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
+            'last_provider_update_at' => 'immutable_datetime',
             'submit_first_attempted_at' => 'immutable_datetime',
             'submit_last_attempted_at' => 'immutable_datetime',
             'submit_last_outcome' => SubmitAttemptOutcome::class,

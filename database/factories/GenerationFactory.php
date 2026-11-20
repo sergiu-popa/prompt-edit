@@ -73,7 +73,8 @@ final class GenerationFactory extends Factory
     }
 
     /**
-     * Accepted by Pixelforge: it has a provider id and Pixelforge's creation time.
+     * Accepted by Pixelforge: it has a provider id and Pixelforge's creation time,
+     * and its last provider update is now, as the transition action stamps it.
      */
     public function queued(): static
     {
@@ -81,6 +82,7 @@ final class GenerationFactory extends Factory
             'status' => GenerationStatus::Queued,
             'provider_id' => 'gen_' . strtoupper((string) Str::ulid()),
             'provider_created_at' => CarbonImmutable::now()->startOfSecond()->subSeconds(20),
+            'last_provider_update_at' => CarbonImmutable::now()->startOfSecond(),
         ]);
     }
 
