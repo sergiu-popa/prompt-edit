@@ -4,9 +4,9 @@
 
 **Verdict: REQUEST CHANGES**
 
-Scope reviewed: the 25 `[PE-015]` commits `58c95a9..bcc6d81` on `pe-015-production-go-live` (`origin/main..HEAD`), against `story.md` and `plan.md`. They are the prompt log, the plan, 22 task commits (task 6 is split over two), the decisions and the bookkeeping. All 21 plan tasks are checked.
+Scope reviewed: the 25 `[PE-015]` commits `58c95a9..37dd043` on `pe-015-production-go-live` (`origin/main..HEAD`), against `story.md` and `plan.md`. They are the prompt log, the plan, 22 task commits (task 6 is split over two), the decisions and the bookkeeping. All 21 plan tasks are checked.
 
-Checks run on HEAD (`bcc6d81`):
+Checks run on HEAD (`37dd043`):
 - `make check` exits 0. Pint (292 files) and Larastan are clean. PHPUnit runs 1,728 tests (37,027 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 503 tests in 33 files, all passing.
 - `make e2e` (after `make restart-worker`) exits 0, with 44 passed and 2 skipped. The skips are the existing touch-only and mouse-only rows of `generate.spec.ts`. The new expired-session row passes on desktop (4.1 s) and mobile (1.2 s).
 - `make live-smoke` was run once against the real API with the dev key. All 6 tests passed (58 assertions) in 12.9 s. The printed line shows input text 12 tokens (inside 11–15, so code points are counted), image 0, output 280 and reasoning 282, for a provider cost of 14,785,000 n$ against the 17,525,000 n$ max. A search of the output for `Bearer`, `pf_` and `whsec_` finds nothing.
@@ -49,9 +49,9 @@ The constant-field check: `/health/reconciler` returns `status` and `last_succee
 
 ### Commit hygiene
 
-- Each task commit carries its code with its tests, and every new env name is cleared in `phpunit.xml` in the commit that first reads it. The prompt log (`58c95a9`), the plan (`96c264e`), the decisions (`7e1dafc`) and the bookkeeping (`bcc6d81`) each have their own commit.
+- Each task commit carries its code with its tests, and every new env name is cleared in `phpunit.xml` in the commit that first reads it. The prompt log (`58c95a9`), the plan (`96c264e`), the decisions (`71a986f`) and the bookkeeping (`37dd043`) each have their own commit.
 - All subjects start with `[PE-015]`, are imperative and are at most 72 characters. All 25 messages end with the trailer.
-- The cut point after task 13 (`c03f923`) is clean.
+- The cut point after task 13 (`d8e4453`) is clean.
 - The exception is task 6, which is split into a commit that does not pass (W3).
 
 ### Warnings
@@ -80,9 +80,9 @@ The constant-field check: `/health/reconciler` returns `status` and `last_succee
 
 **Verdict: REQUEST CHANGES**
 
-Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..8cf3422`, 29 commits), with a close look at the round 1 fix commits `11f8f96`, `eee26de` and `eb36a1c` and the bookkeeping commit `8cf3422`.
+Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..c46611d`, 29 commits), with a close look at the round 1 fix commits `11f8f96`, `eee26de` and `50e438d` and the bookkeeping commit `c46611d`.
 
-Checks run on HEAD (`8cf3422`):
+Checks run on HEAD (`c46611d`):
 - `make check` exits 0. Pint (292 files) and Larastan are clean. PHPUnit runs 1,729 tests (37,027 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 503 tests in 33 files, all passing.
 - `CI=true make live-smoke` now refuses. Both non-skipped live tests fail with "The live smoke never runs in CI (the CI variable is set). Run `make live-smoke` locally." and the other 4 are skipped, so no request reaches the real API. The new `test_the_make_target_forwards_ci_into_the_container` passes on its own.
 - Larastan run on `tests/Feature/Pixelforge/Live/LiveSmokeGuardTest.php` as of `11f8f96` (copied into the container and analysed with the project's `phpstan.neon`) reports 1 error at line 179: "Offset 'recipe' might not exist" (`offsetAccess.notFound`). See W4.
@@ -91,13 +91,13 @@ Checks run on HEAD (`8cf3422`):
 ### Round 1 follow-up
 
 - **W1, CI forwarding (`11f8f96` + `eee26de`):** `Makefile:99` now runs `docker exec -e CI prompt-edit-app …`. A bare `-e CI` copies the variable only when the host sets it, so a local run without `CI` behaves as before. The Makefile comment says why. `LiveSmokeGuardTest::test_the_make_target_forwards_ci_into_the_container` reads the `live-smoke` recipe and pins `-e CI` together with `--group=live`, so the guard and its entry point stay tied. With `$matches['recipe'] ?? ''`, a missing or renamed target fails the pattern assertion instead of erroring. Fixed.
-- **W2, `elseif` (`eb36a1c`):** `CheckGenerationMoneyAction::holdProblems()` (`app/Domain/Billing/Actions/CheckGenerationMoneyAction.php:80-86`) returns early on a wrong hold count and then checks the amount with a plain `if`. The behaviour is unchanged. The estimate-max problem is still collected first, and the existing `CheckGenerationMoneyActionTest` rows (including the tampered hold) still pass. `app/` has no `elseif` left. The one remaining `else` (`ReconcileGenerationsAction.php:146`) came from PE-014 and is outside this diff. Fixed.
+- **W2, `elseif` (`50e438d`):** `CheckGenerationMoneyAction::holdProblems()` (`app/Domain/Billing/Actions/CheckGenerationMoneyAction.php:80-86`) returns early on a wrong hold count and then checks the amount with a plain `if`. The behaviour is unchanged. The estimate-max problem is still collected first, and the existing `CheckGenerationMoneyActionTest` rows (including the tampered hold) still pass. `app/` has no `elseif` left. The one remaining `else` (`ReconcileGenerationsAction.php:146`) came from PE-014 and is outside this diff. Fixed.
 - **W3, `b6fa7a7` does not pass on its own:** unchanged. `b6fa7a7` and `3976ce2` are still separate, and neither the prompt log nor the story records a decision by the user. It stays open (below).
 - **Suggestions S1–S4:** not taken up. They are optional and do not block.
 
 ### Commit hygiene
 
-- Each W fix has its own commit with its test, and its body gives the reason (`11f8f96`, `eee26de`). The bookkeeping `8cf3422` holds only `review.md`. Every subject is `[PE-015] Imperative …`, at most 72 characters, with no trailing period, and every commit carries the trailer.
+- Each W fix has its own commit with its test, and its body gives the reason (`11f8f96`, `eee26de`). The bookkeeping `c46611d` holds only `review.md`. Every subject is `[PE-015] Imperative …`, at most 72 characters, with no trailing period, and every commit carries the trailer.
 - The exception is that `11f8f96` fails `make stan` on its own and `eee26de` is its fix-up (W4). This is the same shape as W3.
 
 ### Warnings
@@ -114,15 +114,15 @@ No Critical findings. No code or test change is needed from the Engineer. The tw
 
 **Verdict: REQUEST CHANGES**
 
-Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..0fac805`, 31 commits, 53 files). Nothing has been committed since round 2 except its bookkeeping (`0fac805`, `review.md` only). I re-read every production file again: `RedirectExpiredSession`, `CreateNewUser`, `ReconcilerHeartbeat`, `ShowReconcilerHealthController`, `routes/health.php`, `bootstrap/app.php`, `FortifyServiceProvider`, `ReconcileGenerationsCommand`, `CheckGenerationMoneyAction`, `CheckGenerationMoneyCommand`, `config/auth.php`, `config/pixelforge.php`, `phpunit.xml` and the `Makefile` target. No new finding.
+Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..55039a5`, 31 commits, 53 files). Nothing has been committed since round 2 except its bookkeeping (`55039a5`, `review.md` only). I re-read every production file again: `RedirectExpiredSession`, `CreateNewUser`, `ReconcilerHeartbeat`, `ShowReconcilerHealthController`, `routes/health.php`, `bootstrap/app.php`, `FortifyServiceProvider`, `ReconcileGenerationsCommand`, `CheckGenerationMoneyAction`, `CheckGenerationMoneyCommand`, `config/auth.php`, `config/pixelforge.php`, `phpunit.xml` and the `Makefile` target. No new finding.
 
-Checks run on HEAD (`0fac805`):
+Checks run on HEAD (`55039a5`):
 - `make check` exits 0. Pint (292 files) and Larastan are clean. PHPUnit runs 1,729 tests (37,027 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 503 tests in 33 files, all passing.
 - `make e2e` and `make live-smoke` were not re-run. No code has changed since round 1's runs (E2E 44 passed, 2 skipped; live smoke 6 passed), so those results still stand. Re-running the live smoke would also spend against the shared Pixelforge limits for no gain.
 
 ### Commit hygiene
 
-- All 31 subjects start with `[PE-015]`, are imperative, have no trailing period and are at most 72 characters. All 31 messages end with the trailer. The bookkeeping commits (`bcc6d81`, `a17254a`, `8cf3422`, `0fac805`) hold no code.
+- All 31 subjects start with `[PE-015]`, are imperative, have no trailing period and are at most 72 characters. All 31 messages end with the trailer. The bookkeeping commits (`37dd043`, `7bdb74e`, `c46611d`, `55039a5`) hold no code.
 - The history still has the two fix-up pairs from earlier rounds. `b6fa7a7` still declares `namespace App\Domain\Generation\Rules` in `app/Domain/Shared/Rules/StorableTextRule.php` (W3). `eee26de` still only fixes the Larastan offset error that `11f8f96` introduced (W4).
 - `.agent-workflow/prompts.md` records no decision by the user on either pair. "Continue" is an operational message and is not read as accepting the history.
 
