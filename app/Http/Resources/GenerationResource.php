@@ -81,7 +81,8 @@ final class GenerationResource extends JsonResource
 
     /**
      * An `https://` URL, or a root-relative one (`/…`, the fake's form, but not
-     * the protocol-relative `//…`); anything else is withheld.
+     * the protocol-relative `//…`, nor `/\…`, which browsers read the same way);
+     * anything else is withheld.
      */
     private static function loadableUrl(?string $url): ?string
     {
@@ -90,7 +91,7 @@ final class GenerationResource extends JsonResource
         }
 
         $isHttps = str_starts_with($url, 'https://');
-        $isRootRelative = str_starts_with($url, '/') && ! str_starts_with($url, '//');
+        $isRootRelative = str_starts_with($url, '/') && ! str_starts_with($url, '//') && ! str_starts_with($url, '/\\');
 
         return $isHttps || $isRootRelative ? $url : null;
     }

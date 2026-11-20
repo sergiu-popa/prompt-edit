@@ -137,6 +137,7 @@ final class GenerationHistoryStatusTest extends TestCase
             'root-relative, as the fake signs it' => ['/fake-pixelforge/images/01jc?expires=1&signature=x', '/fake-pixelforge/images/01jc?expires=1&signature=x'],
             'javascript' => ['javascript:alert(1)', null],
             'protocol-relative' => ['//evil.example.com/a.png', null],
+            'protocol-relative with a backslash' => ['/\\evil.example.com/a.png', null],
             'plain http' => ['http://images.example.com/a.png', null],
             'relative without a slash' => ['images/a.png', null],
         ];
