@@ -3,6 +3,7 @@ import { registerNewUser } from './support/auth';
 import { expectInsideContentBox, expectNoHorizontalScroll } from './support/layout';
 import {
     exactChargeAndEstimate,
+    EXPIRY_TIMEOUT_MS,
     expectNoReload,
     historyItems,
     markNoReload,
@@ -69,5 +70,56 @@ test('a [slow] generation stays Processing with a rising count while polling, th
     await expect.poll(secondsShown).toBeGreaterThan(firstCount);
 
     await expect(status).toHaveText('Succeeded', { timeout: SLOW_TERMINAL_TIMEOUT_MS });
+    await expectNoReload(page);
+});
+
+test('a [fail] generation turns Failed live, explained and not charged', async ({ page }, testInfo) => {
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, `[fail] ${LIGHTHOUSE_PROMPT}`);
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    await expect(statusOf(item)).toHaveText('Failed', { timeout: TERMINAL_TIMEOUT_MS });
+    await expect(item.locator('[data-failure-message]')).toHaveText(
+        "Pixelforge couldn't produce an image for this prompt. Try rephrasing it.",
+    );
+    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-estimate]')).toHaveText(/^Est\. \$\d+\.\d{4} – \$\d+\.\d{4}$/, { useInnerText: true });
+    await expect(item.getByRole('img')).toHaveCount(0);
+    await expectNoReload(page);
+});
+
+test('a [duplicate] generation succeeds as one History item, charged once within its estimate', async ({ page }, testInfo) => {
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, `[duplicate] ${LIGHTHOUSE_PROMPT}`);
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    await expect(statusOf(item)).toHaveText('Succeeded', { timeout: TERMINAL_TIMEOUT_MS });
+    await expect(historyItems(page)).toHaveCount(1);
+    await expect(item.locator('[data-charge]')).toHaveCount(1);
+
+    const { charge, min, max } = await exactChargeAndEstimate(item);
+    expect(charge).toBeGreaterThanOrEqual(min);
+    expect(charge).toBeLessThanOrEqual(max);
+    await expectNoReload(page);
+});
+
+test('an [expire] image turns into an Image expired placeholder once its short TTL passes, with no reload', async ({ page }, testInfo) => {
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, `[expire] ${LIGHTHOUSE_PROMPT}`);
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    await expect(statusOf(item)).toHaveText('Succeeded', { timeout: TERMINAL_TIMEOUT_MS });
+
+    // The fixture's console-error check proves the dead URL is never requested.
+    await expect(item.getByText('Image expired', { exact: true })).toBeVisible({ timeout: EXPIRY_TIMEOUT_MS });
+    await expect(item.locator('[data-image-note]')).toHaveText('Images are kept for 24 h after completion.');
+    await expect(item.locator('img')).toHaveCount(0);
+    await expect(item.locator('[data-charge]')).toHaveText(/^Charged \$\d+\.\d{4}$/, { useInnerText: true });
     await expectNoReload(page);
 });
