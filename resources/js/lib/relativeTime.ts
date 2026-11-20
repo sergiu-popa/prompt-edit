@@ -42,3 +42,42 @@ export function formatRelativeTime(iso: string, now: Date, timeZone?: string): s
 export function formatExactTimestamp(iso: string, timeZone?: string): string {
     return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'long', timeZone }).format(new Date(iso));
 }
+
+const ELAPSED_SECONDS_LIMIT = 120;
+const ELAPSED_MINUTES_LIMIT = 120;
+
+/**
+ * A running time, for a badge: "14 s" under 120 s, then whole minutes ("2 min") under
+ * 120 min, then whole hours ("2 h"). Each unit starts above where the one before it
+ * ends, so a ticking count never seems to go back.
+ */
+export function formatElapsed(seconds: number): string {
+    if (seconds < ELAPSED_SECONDS_LIMIT) {
+        return `${seconds} s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < ELAPSED_MINUTES_LIMIT) {
+        return `${minutes} min`;
+    }
+
+    return `${Math.floor(minutes / 60)} h`;
+}
+
+/**
+ * The time of day an instant happened, for a completion: "2:03 PM" when it is the same
+ * day as `now` in the zone shown, else with the date ("Nov 12, 2026, 2:03 PM").
+ *
+ * @param timeZone the zone it is shown in; the viewer's own by default
+ */
+export function formatClockTime(iso: string, now: Date, timeZone?: string): string {
+    const instant = new Date(iso);
+    const day = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone });
+    const isSameDay = day.format(instant) === day.format(now);
+
+    return new Intl.DateTimeFormat(
+        'en-US',
+        isSameDay ? { timeStyle: 'short', timeZone } : { dateStyle: 'medium', timeStyle: 'short', timeZone },
+    ).format(instant);
+}
