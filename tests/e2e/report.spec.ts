@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { OPERATOR_USER, registerNewUser, signIn } from './support/auth';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectInsideContentBox, expectNoHorizontalScroll } from './support/layout';
 import { exactNanodollars, historyItems, statusOf, submitPrompt, TERMINAL_TIMEOUT_MS } from './support/liveStatus';
 
 /*
@@ -44,6 +44,12 @@ test('an operator sees a new user’s billed generation in the report, which the
     await expect(row.locator('[data-succeeded]')).toHaveText('1');
     expect(await exactNanodollars(row.locator('[data-spend] [role="tooltip"]'))).toBe(charge);
 
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalScroll(page);
+    // The operator's header is the widest: Report, the balance and Buy credits stay inside the
+    // gutters at every width, wrapping onto their own rows below `md`.
+    const banner = page.getByRole('banner');
+    for (const width of [375, 640, 768]) {
+        await page.setViewportSize({ width, height: 812 });
+        await expectNoHorizontalScroll(page);
+        await expectInsideContentBox(banner.locator(':scope > div'), banner.locator('[data-balance], [data-buy-credits], button'));
+    }
 });

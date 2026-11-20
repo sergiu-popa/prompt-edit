@@ -44,21 +44,23 @@ function signOut(): void {
 <template>
     <div class="min-h-screen bg-zinc-50">
         <!--
-            Mobile: a grid of two rows. The brand, the name (truncated, so it never pushes Sign out
-            off the row) and Sign out share the first; the nav and, right-aligned, the balance
-            share the second.
-            From `sm`: one flex row of brand, nav, then the balance, the name and Sign out on the
-            right; the second row's wrapper is `display: contents` there, so it adds no box.
+            Phones and small tablets: a grid of two rows. The brand, the name (truncated, so it
+            never pushes Sign out off the row) and Sign out share the first; the nav and,
+            right-aligned, the balance share the second, which wraps the balance onto a row of its
+            own when both don't fit (an operator's Report link, or a long balance).
+            From `md`: one flex row of brand, nav, then the balance, the name and Sign out on the
+            right; the second row's wrapper is `display: contents` there, so it adds no box. Below
+            `md` an operator's nav and balance don't fit beside the brand, name and Sign out.
             The DOM order is the desktop order, so the tab order is the same at every width.
         -->
         <header class="border-b border-zinc-200 bg-white">
             <div
-                class="mx-auto grid max-w-5xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 sm:flex sm:gap-x-6 sm:px-6"
+                class="mx-auto grid max-w-5xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6 md:flex md:gap-x-6"
             >
                 <Link :href="paths.dashboard" class="text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
-                <div class="col-span-3 row-start-2 flex items-center justify-between gap-3 sm:contents">
+                <div class="col-span-3 row-start-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 md:contents">
                     <!-- On a phone the nav is pulled left so its first label lines up with the brand. -->
-                    <nav aria-label="Main" class="-ml-2.5 flex items-center gap-1 text-sm sm:ml-0">
+                    <nav aria-label="Main" class="-ml-2.5 flex items-center gap-1 text-sm md:ml-0">
                         <Link
                             v-for="item in navItems"
                             :key="item.href"
@@ -68,12 +70,12 @@ function signOut(): void {
                             >{{ item.label }}</Link
                         >
                     </nav>
-                    <HeaderBalance v-if="credits" :credits="credits" class="sm:ml-auto" />
+                    <HeaderBalance v-if="credits" :credits="credits" class="ml-auto" />
                 </div>
                 <p
                     :class="[
-                        'col-start-2 row-start-1 min-w-0 truncate text-right text-sm text-zinc-600 sm:max-w-64 sm:text-left',
-                        credits ? '' : 'sm:ml-auto',
+                        'col-start-2 row-start-1 min-w-0 truncate text-right text-sm text-zinc-600 md:max-w-64 md:text-left',
+                        credits ? '' : 'md:ml-auto',
                     ]"
                 >
                     {{ userName }}
