@@ -2,7 +2,7 @@
 
 **Verdict: QA FAILED**
 
-Run on branch `pe-017-credit-balances-buy-credits` at `879e6dc` in lane l17. Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1).
+Run on branch `pe-017-credit-balances-buy-credits` at `d4e11c5` in lane l17. Prerequisites checked: story status `qa-ready`, review verdict `APPROVE` (round 1).
 
 ## Failing items
 

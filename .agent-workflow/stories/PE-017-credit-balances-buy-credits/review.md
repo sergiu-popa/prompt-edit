@@ -4,9 +4,9 @@
 
 **Verdict: APPROVE**
 
-Scope reviewed: the 25 `[PE-017]` commits `945ee15..1b0faba` on `pe-017-credit-balances-buy-credits` (`origin/main..HEAD`), against `story.md` and `plan.md`. They are the plan, 23 task commits (tasks 1–23), and the bookkeeping. Tasks 1–23 are checked. Tasks 24 and 25 are left open on purpose: the plan's "Deferred until PE-016 has merged" section assigns them to the orchestrator after the rebase onto `main` (see W1).
+Scope reviewed: the 25 `[PE-017]` commits `20b0ff6..7324826` on `pe-017-credit-balances-buy-credits` (`origin/main..HEAD`), against `story.md` and `plan.md`. They are the plan, 23 task commits (tasks 1–23), and the bookkeeping. Tasks 1–23 are checked. Tasks 24 and 25 are left open on purpose: the plan's "Deferred until PE-016 has merged" section assigns them to the orchestrator after the rebase onto `main` (see W1).
 
-Checks run on HEAD (`1b0faba`) in lane l17:
+Checks run on HEAD (`7324826`) in lane l17:
 - `lane-make.sh l17 check` exits 0. Pint (317 files) and Larastan are clean. PHPUnit runs 1,830 tests (37,493 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 619 tests in 37 files, all passing.
 - `lane-make.sh l17 e2e` exits 0, with 46 passed and 2 skipped. The skips are the existing touch-only and mouse-only rows of `generate.spec.ts`. The new `credits.spec.ts` passes on desktop (11.1 s) and mobile (10.5 s). The three updated "returned — not charged" assertions and the longer keyboard walk in `auth.spec.ts` pass too.
 
@@ -57,10 +57,10 @@ The constant-field check: the shared `credits` prop returns `available_nanodolla
 ### Commit hygiene
 
 - Each task commit carries its code with its tests, in plan order, and every subject matches the plan's. All subjects start with `[PE-017]`, are imperative and are at most 72 characters, and every message ends with the `Co-Authored-By` trailer.
-- `CREDITS_STARTER_GRANT` is cleared in both places of `phpunit.xml` in the commit that first reads it (`5ba78ac`), so D-48 holds.
-- The plan (`945ee15`), the decisions (`7a5a993`) and the bookkeeping (`1b0faba`) each have their own commit. No code commit touches an artifact `.md` file.
-- Two commits explain an unexpected change in their body: `46d2f30` (the new tab stops in `auth.spec.ts`) and `7a5a993` (the D-number gap).
-- `844c147` changes the `PurchaseCreditsController` added one commit earlier, from `back()` to `to_route('credits.index')`. It does so because that route only exists from that task, and the Engineer notes record it. That is fine.
+- `CREDITS_STARTER_GRANT` is cleared in both places of `phpunit.xml` in the commit that first reads it (`73868be`), so D-48 holds.
+- The plan (`20b0ff6`), the decisions (`8e0df82`) and the bookkeeping (`7324826`) each have their own commit. No code commit touches an artifact `.md` file.
+- Two commits explain an unexpected change in their body: `215f3e8` (the new tab stops in `auth.spec.ts`) and `8e0df82` (the D-number gap).
+- `2d94e9d` changes the `PurchaseCreditsController` added one commit earlier, from `back()` to `to_route('credits.index')`. It does so because that route only exists from that task, and the Engineer notes record it. That is fine.
 
 ### Warnings
 
