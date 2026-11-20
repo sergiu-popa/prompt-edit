@@ -5,6 +5,7 @@ import {
     exactChargeAndEstimate,
     EXPIRY_TIMEOUT_MS,
     expectNoReload,
+    FAKE_EXPIRE_TTL_MS,
     historyItems,
     markNoReload,
     PROCESSING_TIMEOUT_MS,
@@ -121,5 +122,28 @@ test('an [expire] image turns into an Image expired placeholder once its short T
     await expect(item.locator('[data-image-note]')).toHaveText('Images are kept for 24 h after completion.');
     await expect(item.locator('img')).toHaveCount(0);
     await expect(item.locator('[data-charge]')).toHaveText(/^Charged \$\d+\.\d{4}$/, { useInnerText: true });
+    await expectNoReload(page);
+});
+
+test('an [expire] image that expired while the user was away reads Image expired after Back', async ({ page }, testInfo) => {
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, `[expire] ${LIGHTHOUSE_PROMPT}`);
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    await expect(statusOf(item)).toHaveText('Succeeded', { timeout: TERMINAL_TIMEOUT_MS });
+    const succeededAt = Date.now();
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Generate' }).click();
+    await expect(page).toHaveURL('/dashboard');
+    await expect.poll(() => Date.now(), { timeout: EXPIRY_TIMEOUT_MS }).toBeGreaterThan(succeededAt + FAKE_EXPIRE_TTL_MS);
+
+    // Back remounts History from its saved props, unasked. A stale clock would render the
+    // image until it ticks past the expiry, so the card is read once, as soon as it shows.
+    await page.goBack();
+    await expect(statusOf(item)).toHaveText('Succeeded');
+    expect(await item.locator('img').count(), 'no image is rendered from the restored props').toBe(0);
+    await expect(item.getByText('Image expired', { exact: true })).toBeVisible();
     await expectNoReload(page);
 });

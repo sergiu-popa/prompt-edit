@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref } from 'vue';
 
-import { useServerClock } from '@/composables/useServerClock';
+import { forgetServerClock, useServerClock } from '@/composables/useServerClock';
 
 const SERVER_TIME = '2026-11-19T12:00:00.000Z';
 const SERVER_MS = Date.parse(SERVER_TIME);
@@ -13,6 +13,7 @@ describe('useServerClock', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(SERVER_MS + BROWSER_SKEW_MS);
+        forgetServerClock();
     });
 
     afterEach(() => {
@@ -50,6 +51,36 @@ describe('useServerClock', () => {
         expect(now.value).toBe(SERVER_MS + 11_000);
 
         scope.stop();
+    });
+
+    it('keeps the server-aligned now when a page remounts with an older, restored server time', () => {
+        const fresh = effectScope();
+        fresh.run(() => useServerClock(SERVER_TIME));
+        fresh.stop();
+
+        // The user is away for 10 minutes, then Back restores the page with the server time it had.
+        vi.advanceTimersByTime(10 * 60_000);
+        const restored = effectScope();
+        const now = restored.run(() => useServerClock(SERVER_TIME))!;
+
+        expect(now.value).toBe(SERVER_MS + 10 * 60_000);
+
+        restored.stop();
+    });
+
+    it('re-measures from a newer server time on a later page', () => {
+        const first = effectScope();
+        first.run(() => useServerClock(SERVER_TIME));
+        first.stop();
+
+        // The browser's clock has since been corrected; the next response shows it.
+        vi.setSystemTime(SERVER_MS + 60_000);
+        const second = effectScope();
+        const now = second.run(() => useServerClock(new Date(SERVER_MS + 60_000).toISOString()))!;
+
+        expect(now.value).toBe(SERVER_MS + 60_000);
+
+        second.stop();
     });
 
     it('stops ticking once its scope is disposed', () => {

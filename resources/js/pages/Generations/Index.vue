@@ -16,7 +16,7 @@ const props = defineProps<{
     generations: GenerationHistory;
 }>();
 
-/** The server's clock, re-aligned on every response, for elapsed and relative times. */
+/** The server's clock, re-aligned on every fresh response (not a Back), for elapsed and relative times. */
 const now = useServerClock(() => props.generations.server_time);
 
 const IN_PROGRESS: readonly GenerationStatus[] = ['pending', 'queued', 'processing'];

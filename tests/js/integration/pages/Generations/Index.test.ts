@@ -6,6 +6,7 @@ import { nextTick } from 'vue';
 import { givenFlash, givenNoFlash, givenReloadsFail, givenReloadsSucceed, givenSignedInAs, givenThePageIsAt } from '../../support/inertia';
 import { visibleText } from '../../support/text';
 
+import { forgetServerClock } from '@/composables/useServerClock';
 import Index from '@/pages/Generations/Index.vue';
 import type { Generation, GenerationHistory, GenerationStatus } from '@/types/generation';
 
@@ -93,6 +94,7 @@ describe('History page', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(SERVER_TIME));
+        forgetServerClock();
         givenSignedInAs({ id: 1, name: 'Ada Lovelace', email: 'ada@example.com' });
         givenThePageIsAt('/generations');
     });
@@ -300,6 +302,27 @@ describe('History page', () => {
             await nextTick();
 
             expect(wrapper.get('[data-tone]').text()).toBe('Processing · 15 s');
+        });
+
+        it('shows Image expired, never the image, when Back restores a page whose image expired while the user was away', () => {
+            const finished = {
+                ...generation('a', 'A lighthouse', 'succeeded'),
+                completed_at: '2026-11-19T11:59:55Z',
+                user_charge_nanodollars: 381_887_500,
+                image_url: '/fake-pixelforge/images/a.png',
+                image_url_expires_at: '2026-11-19T12:00:05Z',
+            };
+            const restoredProps = pageOf([finished]);
+            const before = mountPage(restoredProps);
+            expect(before.find('main img').exists()).toBe(true);
+            before.unmount();
+
+            // Away on Generate for 10 minutes; Back remounts History from its saved props, unasked.
+            vi.advanceTimersByTime(10 * 60_000);
+            const restored = mountPage(restoredProps);
+
+            expect(visibleText(restored.get('main ul'))).toContain('Image expired');
+            expect(restored.find('main img').exists()).toBe(false);
         });
     });
 });
