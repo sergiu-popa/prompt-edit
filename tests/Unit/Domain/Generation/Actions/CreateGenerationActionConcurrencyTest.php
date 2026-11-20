@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Actions;
 
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
@@ -74,11 +75,43 @@ final class CreateGenerationActionConcurrencyTest extends TestCase
         Queue::assertPushed(SubmitGenerationJob::class, 1);
     }
 
-    private function startChild(int $userId, string $token): InvokedProcess
+    /**
+     * PE-017 AC 12: two tabs, two submissions, 100,000,000 n$ and a max of 86,312,500 n$
+     * each. The second waits on the user-row lock, then reads the first's hold and is
+     * refused, so the balance is never negative.
+     */
+    public function test_two_concurrent_creates_cannot_overspend(): void
+    {
+        $user = User::factory()->withCredits(100_000_000)->create();
+        Queue::fake([SubmitGenerationJob::class]);
+
+        DB::beginTransaction();
+
+        try {
+            $first = $this->createGenerationFor($user, self::duskRequest((string) Str::uuid()));
+
+            $child = $this->startChild($user->id, (string) Str::uuid(), dusk: true);
+
+            $childWaiting = $this->waitUntilBackendsWaitOnALock(1);
+        } finally {
+            DB::commit();
+        }
+
+        $result = $this->resultOf($child);
+
+        $this->assertTrue($childWaiting, 'The child did not wait on the user-row lock in time.');
+        $this->assertSame(['rejected' => true, 'available_nanodollars' => 13_687_500, 'required_nanodollars' => self::DUSK_HOLD], $result);
+        $this->assertSame([$first->id], Generation::query()->pluck('id')->all());
+        $this->assertSame([['hold', -self::DUSK_HOLD]], $this->ledgerEntriesFor($first));
+        $this->assertSame(13_687_500, CreditLedgerEntry::query()->ownedBy($user)->balance()->available->amount);
+        Queue::assertPushed(SubmitGenerationJob::class, 1);
+    }
+
+    private function startChild(int $userId, string $token, bool $dusk = false): InvokedProcess
     {
         return Process::path(base_path())
             ->timeout(self::CHILD_TIMEOUT_SECONDS)
             ->env($this->childDatabaseEnvironment())
-            ->start([PHP_BINARY, 'tests/scripts/create-generation.php', (string) $userId, $token]);
+            ->start([PHP_BINARY, 'tests/scripts/create-generation.php', (string) $userId, $token, ...($dusk ? ['dusk'] : [])]);
     }
 }
