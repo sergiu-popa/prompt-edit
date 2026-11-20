@@ -109,6 +109,16 @@ export const POLLED_TERMINAL_TIMEOUT_MS =
         2 * RECONCILE_PERIOD_MS +
         POLL_INTERVAL_MS);
 
+/** `usage.cache_seconds`: how long the report reuses a `/v1/usage` answer per range. */
+const USAGE_CACHE_MS = pixelforgeSeconds('PIXELFORGE_USAGE_CACHE_SECONDS') * 1_000;
+
+/**
+ * From a generation's Succeeded badge to the report's today showing Match: a parallel
+ * `[no-webhooks]` spec's generation may finish at the fake long before the reconciler
+ * records it, so up to a polled terminal, then a cached answer's lifetime, each with margin.
+ */
+export const USAGE_MATCH_TIMEOUT_MS = POLLED_TERMINAL_TIMEOUT_MS + MARGIN * USAGE_CACHE_MS;
+
 export interface PromptOptions {
     quality?: 'Low' | 'Medium' | 'High';
     size?: 'Square' | 'Landscape' | 'Portrait';
