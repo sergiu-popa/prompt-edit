@@ -52,7 +52,7 @@ The constant-field check: the report's props carry no constant field. `limits.ma
 
 ### Warnings
 
-- [ ] **W1. `ReportRange::isDate()` is public API with no production caller.**
+- [x] **W1. `ReportRange::isDate()` is public API with no production caller.**
   - `app/Domain/Reporting/ValueObjects/ReportRange.php:71-74` adds `public static function isDate(string $date): bool`. Its only caller is `ReportRangeTest::test_dates_are_validated_strictly_as_utc_calendar_dates` (`tests/Unit/Domain/Reporting/ValueObjects/ReportRangeTest.php:115-125`).
   - The plan's `ReportRange` API does not list it. The Form Request validates dates with Laravel's `date_format:Y-m-d` (`ShowOperatorReportRequest.php:44-45`), and the class itself uses only the private `tryParse()`.
   - The method was probably added in task 5 for a validation path that task 9 then built differently. Left in, it is an untested-for-purpose entry point on a money-domain value object that the next reader has to reason about, and PE-018 would inherit it.
@@ -60,7 +60,17 @@ The constant-field check: the report's props carry no constant field. `limits.ma
 
 ### Suggestions
 
-- [ ] **S1. The Form Request recomputes "today (UTC)" and the date format itself.** `ShowOperatorReportRequest::today()` (`app/Http/Requests/Reporting/ShowOperatorReportRequest.php:110-113`) and the two `date_format:Y-m-d` literals (lines 44-45) duplicate `ReportRange`'s private `DATE_FORMAT` and `limitsFor()['today']`. Making `DATE_FORMAT` public, and building the rule from `ReportRange::limitsFor(CarbonImmutable::now())['today']`, would keep a single source for both. This is optional.
-- [ ] **S2. `ReportTable.vue`'s import groups differ from its siblings.** Lines 2-6 import `vue` after two `@/` imports, then put a blank line before `@/types/report`. `ReportRangeForm.vue` and `Show.vue` import external packages first, then a blank line, then the `@/` imports. Reordering them would match. This is cosmetic.
-- [ ] **S3. The E2E reads "today" from the runner's clock.** `tests/e2e/report.spec.ts:38` compares To with `new Date().toISOString().slice(0, 10)`. That date and the server's UTC date differ only in a run that crosses UTC midnight, so the flake is very unlikely. Comparing with To's own `max` attribute (`limits.today`) would remove it entirely. This is optional.
-- [ ] **S4. `a38abb1` reworks `4cb7d7c`'s table caption within the same PR.** Its body explains why, and its tests move with it, so it reads cleanly. Folding it into `4cb7d7c` would need a history rewrite, which the pipeline may not do. I note it only for the user's commit-by-commit read, and it needs no action.
+- [x] **S1. The Form Request recomputes "today (UTC)" and the date format itself.** `ShowOperatorReportRequest::today()` (`app/Http/Requests/Reporting/ShowOperatorReportRequest.php:110-113`) and the two `date_format:Y-m-d` literals (lines 44-45) duplicate `ReportRange`'s private `DATE_FORMAT` and `limitsFor()['today']`. Making `DATE_FORMAT` public, and building the rule from `ReportRange::limitsFor(CarbonImmutable::now())['today']`, would keep a single source for both. This is optional.
+- [x] **S2. `ReportTable.vue`'s import groups differ from its siblings.** Lines 2-6 import `vue` after two `@/` imports, then put a blank line before `@/types/report`. `ReportRangeForm.vue` and `Show.vue` import external packages first, then a blank line, then the `@/` imports. Reordering them would match. This is cosmetic.
+- [x] **S3. The E2E reads "today" from the runner's clock.** `tests/e2e/report.spec.ts:38` compares To with `new Date().toISOString().slice(0, 10)`. That date and the server's UTC date differ only in a run that crosses UTC midnight, so the flake is very unlikely. Comparing with To's own `max` attribute (`limits.today`) would remove it entirely. This is optional.
+- [x] **S4. `a38abb1` reworks `4cb7d7c`'s table caption within the same PR.** Its body explains why, and its tests move with it, so it reads cleanly. Folding it into `4cb7d7c` would need a history rewrite, which the pipeline may not do. I note it only for the user's commit-by-commit read, and it needs no action.
+
+### Resolution (engineer, round 1 feedback)
+
+- W1: `1cb6e68` deletes `ReportRange::isDate()`. Its cases now run through `fromDates()`: a leap day `2028-02-29` is accepted, and `2026-02-29`, a leading space, a trailing `\n` and `''` join the `invalidRanges` provider.
+- S1: `228fec0` makes `ReportRange::DATE_FORMAT` public and builds both `date_format` rules and `before_or_equal` from it and `ReportRange::limitsFor(CarbonImmutable::now())['today']`. The request's own `today()` is gone.
+- S2: `54100b2` puts `vue` first in `ReportTable.vue`, then a blank line, then the `@/` imports.
+- S3: `2064847` compares To with its own `max` (the server's `limits.today`), and asserts that `max` is a `Y-m-d` date.
+- S4: no action, as the review says.
+
+Checks: `lint` and `stan` clean; `test` 1,819 passed with `PIXELFORGE_FAKE_WEBHOOK_URL=http://app:8080` (without it, the same 34 lane-only `tests/Feature/Pixelforge/Fake` failures as in the review); `js-check` clean; `js-test` 528 passed; `e2e "operator sees"` 2 passed.
