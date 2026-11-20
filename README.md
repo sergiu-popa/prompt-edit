@@ -311,7 +311,7 @@ The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.
 
 **Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.
 
-The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, `/health/reconciler`, that the webhook URL answers an unsigned delivery with a 400 and no redirect, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
+The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, `/health/reconciler`, that the webhook URL answers an unsigned delivery with a 400 and no redirect, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in, checks History and the operator report read-only, and signs out (D-76). History must show a succeeded generation with its charge and a loaded image, so that check needs an image less than 24 h old; the report must show every day and the total as Match against `/v1/usage`, reloading for up to 3 min. Its only writes are sign-in and sign-out. It never registers users.
 
 ```bash
 export E2E_BASE_URL=https://prompt.sergiupopa.dev   # plus E2E_REVIEWER_EMAIL and E2E_REVIEWER_PASSWORD, as above
