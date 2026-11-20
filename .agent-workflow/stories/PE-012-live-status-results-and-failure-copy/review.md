@@ -70,3 +70,55 @@ Optional; none blocks QA.
 - **S1:** done in `1e8de89`, with a data-provider row.
 - **S2:** done in `5b2167d`.
 - **S3:** no change, as noted.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole story diff, `origin/main...HEAD` (the 23 `[PE-012]` commits `5b562e0..2ddb37a`), with a close read of round 1's fix commits `415796d`, `bbe1f8e`, `1e8de89`, `5b2167d` and the bookkeeping commit `2ddb37a`.
+
+Checks run on HEAD (`2ddb37a`):
+- `make check` exits 0. Pint (231 files) and Larastan are clean. PHPUnit runs 1,230 tests (34,575 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 487 tests in 31 files, all passing.
+- `make e2e` exits 0, with 38 passed and 2 skipped. The skips are the same touch-only and mouse-only rows of `generate.spec.ts` as in round 1. The new Back row passes on both the desktop and the mobile project.
+
+There is no Critical finding and no open Warning.
+
+### Round 1 findings, verified
+
+- **W1 (fixed in `415796d`, documented in `bbe1f8e`).**
+  - `resources/js/composables/useServerClock.ts:11-12` keeps `offsetMs` and `newestServerMs` at module level. Lines 39-42 re-measure the offset only from a `server_time` newer than any seen. A Back restore carries the same or an older `server_time`, so it keeps the last fresh offset and makes no extra request. AC 2's "never polls" therefore still holds for an all-terminal page.
+  - Module-level state is safe here because the app has no SSR entry, so no server process shares the module across requests. An unparsable time gives `NaN`, which fails the `>` check and leaves the offset alone.
+  - The three tests each fail on the old per-instance clock:
+    - `useServerClock.test.ts`: the restored row, plus a row proving a newer time still re-measures.
+    - `Index.test.ts:307-326`: a remount with stale props renders no `img` and reads "Image expired".
+    - `live-status.spec.ts:128-149`: it reads the card once, as soon as the restored page shows, so a clock that flips late can't pass by accident.
+  - `forgetServerClock()` is a test-only reset, and its docblock says so. Every suite that mounts the clock calls it in `beforeEach`, so no state leaks between cases.
+  - D-42 and the composable's docblock record the remaining gap: a restore into a freshly loaded document has no fresh offset until its first poll.
+- **S1 (done in `1e8de89`).** `GenerationResource.php:94` also rejects `/\…`. The docblock matches the code, and a data-provider row (`GenerationHistoryStatusTest.php:140`) pins the new case.
+- **S2 (done in `5b2167d`).** The docblock at `HistoryItem.vue:14-25` now wraps evenly. The commit changes only the comment.
+- **S3.** No change is needed, as noted in round 1.
+
+### Whole-diff pass
+
+This pass re-read the production files against the ACs: `GenerationResource`, `GenerationFailureCode`, `ShowGenerationHistoryController`, `useLiveUpdates`, `useServerClock`, `generationTiming`, `HistoryItem`, `ResultImage`, `LiveUpdatesNote` and `Index`. It found nothing new.
+- The charge, the image fields and the expiry flag are still gated on `Succeeded`, and `failure_message` on `Failed`.
+- Copy is rendered by interpolation only.
+- Polls never overlap, and dispose cancels a poll in flight.
+- The expired `src` is nulled before ResultImage sees it.
+
+### Commit hygiene
+
+- Round 1's fixes are four focused commits, each with its tests where there is code:
+  - the W1 code and its three test layers (`415796d`);
+  - the decision's wording (`bbe1f8e`), kept apart like task 16's decisions commit;
+  - the S1 code and its row (`1e8de89`);
+  - the S2 comment-only rewrap (`5b2167d`).
+- The bookkeeping is in its own commit (`2ddb37a`).
+- All subjects start with `[PE-012]`, are imperative and are at most 72 characters. Every commit ends with the trailer. `415796d` and `1e8de89` have short bodies explaining the non-obvious why.
+- No earlier commit was rewritten.
+
+### Suggestions
+
+Optional; none blocks QA.
+
+- **S4.** `tests/e2e/live-status.spec.ts:140`: the `expect.poll` on `Date.now()` is a time wait, not a wait for state. While the user is on Generate, nothing on the page changes, so this is the honest form. It is bounded by `EXPIRY_TIMEOUT_MS`, which is derived from the fake's TTL. If PE-013 or PE-014 adds more away-and-Back rows, a named helper in `support/liveStatus.ts`, such as `waitPastExpiry(succeededAt)`, would keep that intent in one place. No change is needed now.
