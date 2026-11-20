@@ -12,7 +12,9 @@ use App\Support\Pixelforge\PixelforgeRequestBudget;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\InteractsWithPixelforgeApi;
 use Tests\TestCase;
 
@@ -89,6 +91,40 @@ final class FetchPixelforgeUsageActionTest extends TestCase
         $this->fetch('2026-11-17', '2026-11-18');
 
         Http::assertSentCount(2);
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function staleEntries(): array
+    {
+        return [
+            'another shape' => [['object' => 'usage', 'days' => []]],
+            'no array' => ['0.017480000'],
+            'another range' => [[
+                'object' => 'usage',
+                'start_date' => '2026-11-18',
+                'end_date' => '2026-11-18',
+                'data' => [['date' => '2026-11-18', 'generations' => 0, 'input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0, 'cost_usd' => '0.000000000']],
+                'total' => ['generations' => 0, 'input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0, 'cost_usd' => '0.000000000'],
+            ]],
+        ];
+    }
+
+    /**
+     * Review S2: an entry stored by an earlier deploy never fails the page.
+     */
+    #[DataProvider('staleEntries')]
+    public function test_a_cached_entry_that_no_longer_reads_is_fetched_again(mixed $entry): void
+    {
+        Http::fake(['*' => self::twoDays()]);
+        Cache::put('pixelforge-usage:2026-11-17:2026-11-18', $entry, 60);
+
+        $usage = $this->fetch('2026-11-17', '2026-11-18');
+        $this->fetch('2026-11-17', '2026-11-18');
+
+        Http::assertSentCount(1);
+        $this->assertSame(17_480_000, $usage->days['2026-11-17']->cost->amount);
     }
 
     private function fetch(string $startDate, string $endDate): UsageReportData
