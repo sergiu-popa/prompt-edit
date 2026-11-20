@@ -50,10 +50,19 @@ describe('AppLayout', () => {
             expect(wrapper.get('header [data-balance] button').text()).toBe('$0.9257');
         });
 
-        it('shows no balance without one, as for a guest', () => {
+        it('shows no balance and no Buy credits without one, as for a guest', () => {
             givenCredits(null);
 
-            expect(mount(AppLayout).find('[data-balance]').exists()).toBe(false);
+            const wrapper = mount(AppLayout);
+            expect(wrapper.find('[data-balance]').exists()).toBe(false);
+            expect(wrapper.find('[data-buy-credits]').exists()).toBe(false);
+        });
+
+        it('links to Buy credits beside the balance', () => {
+            const link = mount(AppLayout).get('header [data-buy-credits]');
+
+            expect(link.text()).toBe('Buy credits');
+            expect(link.attributes('href')).toBe('/credits');
         });
 
         it('shows a negative balance in red with its minus sign', () => {

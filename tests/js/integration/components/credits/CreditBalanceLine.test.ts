@@ -27,6 +27,25 @@ describe('CreditBalanceLine', () => {
         expect(lineFor({ available_nanodollars: 925_668_750, reserved_nanodollars: 0, running_generations: 0 })).toBe('Available $0.9257');
     });
 
+    it('says a negative balance needs a top-up and links to Buy credits (AC 13)', () => {
+        const wrapper = mount(CreditBalanceLine, {
+            props: { credits: { available_nanodollars: -1_000_000, reserved_nanodollars: 0, running_generations: 0 } },
+        });
+
+        expect(visibleText(wrapper.get('[data-credit-balance]'))).toBe('Balance -$0.0010 · Top up to keep generating. Buy credits');
+        expect(wrapper.get('[data-credit-balance] a').attributes('href')).toBe('/credits');
+        expect(wrapper.get('[data-credit-balance] button').element.closest('.text-red-700')).not.toBeNull();
+    });
+
+    it('offers no top-up while the balance is not negative', () => {
+        const wrapper = mount(CreditBalanceLine, {
+            props: { credits: { available_nanodollars: 0, reserved_nanodollars: 86_312_500, running_generations: 1 } },
+        });
+
+        expect(wrapper.find('a').exists()).toBe(false);
+        expect(visibleText(wrapper.get('[data-credit-balance]'))).toBe('Available $0.0000 · $0.0863 reserved for 1 running generation');
+    });
+
     it('gives each amount its exact value', () => {
         const wrapper = mount(CreditBalanceLine, {
             props: { credits: { available_nanodollars: 913_687_500, reserved_nanodollars: 86_312_500, running_generations: 1 } },
