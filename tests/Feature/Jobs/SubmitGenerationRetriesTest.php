@@ -24,6 +24,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\DeliversPixelforgeWebhooks;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithPixelforgeApi;
+use Tests\Concerns\ReadsGenerationHistory;
 use Tests\TestCase;
 
 /**
@@ -36,6 +37,7 @@ final class SubmitGenerationRetriesTest extends TestCase
     use DeliversPixelforgeWebhooks;
     use InteractsWithCreditLedger;
     use InteractsWithPixelforgeApi;
+    use ReadsGenerationHistory;
     use RefreshDatabase;
 
     private const string START = '2026-11-20T10:00:00Z';
@@ -237,6 +239,7 @@ final class SubmitGenerationRetriesTest extends TestCase
         $this->assertSame(SubmitRetryNote::Retrying, $row->submit_retry_note);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
         $this->assertCount($runs, $this->recordedCreateRequests());
+        $this->assertSame('Pixelforge is busy — retrying automatically', $this->onlyHistoryItemOf(User::query()->findOrFail($row->user_id))['status_note']);
     }
 
     /**

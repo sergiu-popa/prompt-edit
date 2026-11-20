@@ -8,6 +8,7 @@ use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\Models\Generation;
+use App\Models\User;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -17,7 +18,9 @@ use Illuminate\Support\Facades\Http;
 use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
+use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\Concerns\InteractsWithPixelforgeApi;
+use Tests\Concerns\ReadsGenerationHistory;
 use Tests\TestCase;
 
 /**
@@ -29,7 +32,9 @@ final class SubmitGenerationLimitsTest extends TestCase
     use CapturesLogMessages;
     use InteractsWithCreditLedger;
     use InteractsWithGenerations;
+    use InteractsWithGenerationSnapshots;
     use InteractsWithPixelforgeApi;
+    use ReadsGenerationHistory;
     use RefreshDatabase;
 
     private const string START = '2026-11-20T10:00:00Z';
@@ -60,6 +65,26 @@ final class SubmitGenerationLimitsTest extends TestCase
         $this->assertSame(SubmitRetryNote::WaitingForSlot, $row->submit_retry_note);
         $this->assertSameInstant(self::START, $row->submit_first_concurrency_limited_at);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
+        $this->assertSame('Waiting for a free slot', $this->onlyHistoryItemOf(User::query()->findOrFail($row->user_id))['status_note']);
+    }
+
+    /**
+     * AC 6: the marker goes as soon as Pixelforge accepts it.
+     */
+    public function test_the_free_slot_marker_clears_once_pixelforge_accepts_it(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => Http::sequence()
+            ->pushResponse(self::concurrencyLimited())
+            ->pushResponse(self::pixelforgeAccepted(self::generationObjectFor($lighthouse, GenerationStatus::Queued)))]);
+        $this->runSubmitJob($lighthouse)->assertReleased(5);
+        $this->travel(5)->seconds();
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
+
+        $item = $this->onlyHistoryItemOf(User::query()->findOrFail($lighthouse->user_id));
+        $this->assertSame('queued', $item['status']);
+        $this->assertNull($item['status_note']);
     }
 
     /**

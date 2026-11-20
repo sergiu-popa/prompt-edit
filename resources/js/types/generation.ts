@@ -69,6 +69,11 @@ export interface Generation {
     image_expired: boolean;
     /** Why it failed, in plain words (App\Domain\Generation\Enums\GenerationFailureCode); null unless it failed. */
     failure_message: string | null;
+    /**
+     * Why a queued generation is waiting, such as "Waiting for a free slot"
+     * (App\Domain\Generation\Enums\SubmitRetryNote); null unless it is waiting to be retried.
+     */
+    status_note: string | null;
 }
 
 /**

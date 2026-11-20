@@ -20,7 +20,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * and whenever it is neither `https://` nor root-relative, so a page never requests
  * a dead URL and a provider URL never becomes a `javascript:` link (D-42). A
  * failed generation sends one composed message, from GenerationFailureCode, and
- * neither its raw code nor Pixelforge's text beside it (D-43).
+ * neither its raw code nor Pixelforge's text beside it (D-43). A generation still
+ * `pending` sends why it is waiting, when the submit job is retrying it (D-45); any
+ * other status leaves a stale note behind.
  * Every instant is UTC to the second. It reads no relation, so a page of items
  * costs one query.
  *
@@ -46,6 +48,7 @@ final class GenerationResource extends JsonResource
      *     image_url_expires_at: ?string,
      *     image_expired: bool,
      *     failure_message: ?string,
+     *     status_note: ?string,
      * }
      */
     public function toArray(Request $request): array
@@ -75,6 +78,9 @@ final class GenerationResource extends JsonResource
             'image_expired' => $imageExpired,
             'failure_message' => $this->resource->status === GenerationStatus::Failed
                 ? GenerationFailureCode::messageFor($this->resource)
+                : null,
+            'status_note' => $this->resource->status === GenerationStatus::Pending
+                ? $this->resource->submit_retry_note?->message()
                 : null,
         ];
     }

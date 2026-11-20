@@ -13,4 +13,15 @@ enum SubmitRetryNote: string
     case Retrying = 'retrying';
 
     case WaitingForSlot = 'waiting_for_slot';
+
+    /**
+     * What History says under the Queued badge (AC 3, 5, 13).
+     */
+    public function message(): string
+    {
+        return match ($this) {
+            self::Retrying => 'Pixelforge is busy — retrying automatically',
+            self::WaitingForSlot => 'Waiting for a free slot',
+        };
+    }
 }

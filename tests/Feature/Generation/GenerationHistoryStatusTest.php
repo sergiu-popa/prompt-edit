@@ -7,6 +7,7 @@ namespace Tests\Feature\Generation;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\Models\Generation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -310,6 +311,66 @@ final class GenerationHistoryStatusTest extends TestCase
         $this->assertNull($item['image_url']);
         $this->assertFalse($item['image_expired']);
         $this->assertStringNotContainsString(self::LIGHTHOUSE_PROVIDER_COST, (string) json_encode($history));
+    }
+
+    /**
+     * @return array<string, array{?SubmitRetryNote, string}>
+     */
+    public static function pendingNotes(): array
+    {
+        return [
+            'retrying' => [SubmitRetryNote::Retrying, 'Pixelforge is busy — retrying automatically'],
+            'waiting for a slot' => [SubmitRetryNote::WaitingForSlot, 'Waiting for a free slot'],
+        ];
+    }
+
+    /**
+     * AC 3, 5: the note is stored on the row, so it survives a reload.
+     */
+    #[DataProvider('pendingNotes')]
+    public function test_a_pending_generation_says_why_it_is_waiting(SubmitRetryNote $note, string $message): void
+    {
+        $user = User::factory()->create();
+        Generation::factory()->create(['user_id' => $user->id, 'submit_retry_note' => $note]);
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertSame('Queued', $item['status_label']);
+        $this->assertSame($message, $item['status_note']);
+    }
+
+    public function test_a_pending_generation_with_no_note_has_none(): void
+    {
+        $user = User::factory()->create();
+        Generation::factory()->create(['user_id' => $user->id]);
+
+        $this->assertNull($this->onlyHistoryItemOf($user)['status_note']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function statesPastPending(): array
+    {
+        return [
+            'queued' => ['queued'],
+            'processing' => ['processing'],
+            'succeeded' => ['succeeded'],
+            'failed' => ['failed'],
+        ];
+    }
+
+    /**
+     * AC 6: a generation that advanced or failed leaves its note behind.
+     */
+    #[DataProvider('statesPastPending')]
+    public function test_a_generation_past_pending_has_no_note_though_one_is_stored(string $status): void
+    {
+        $user = User::factory()->create();
+        $generation = $this->givenAGenerationIn(GenerationStatus::from($status));
+        $generation->forceFill(['user_id' => $user->id, 'submit_retry_note' => SubmitRetryNote::WaitingForSlot])->save();
+
+        $this->assertNull($this->onlyHistoryItemOf($user)['status_note']);
     }
 
     public function test_history_carries_the_servers_time_to_the_millisecond(): void
