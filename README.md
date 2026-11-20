@@ -27,6 +27,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
   - a failed or rejected generation is free and its hold is released.
 
   Details are in [How the money works](#how-the-money-works).
+- **Operator report:** the reviewer account is an operator: Report shows spend, Pixelforge cost and profit per UTC day and per user, exact to the nanodollar on hover.
 - **Why it is built this way:** every choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
 - **Running the tests:** see [Testing](#testing). `make check` runs PHP lint, static analysis, PHPUnit, the frontend checks and Vitest; `make e2e` runs Playwright against the in-app fake. `make live-smoke` is the one opt-in test against the real API (D-58): it reads a **dev** key from `.env` as `PIXELFORGE_API_KEY`, never the production key, because that would add to production's `/v1/usage` and break its reconciliation (PE-018). It refuses to run in production, in CI and without a key, and costs at most $0.0175 a run.
 
@@ -251,6 +252,17 @@ printf '%s\n' "$E2E_REVIEWER_PASSWORD" | ssh admin@164.90.236.77 \
 ```
 
 The password follows the registration rules (at least 8 characters). It lives only in your shell session and your password manager, never in a remote command line, the server's history or the app log, which records only the email and user id. To rotate it, run the same command with a new password. Existing sessions stay valid until they expire (120 minutes).
+
+### Operator access
+
+`app:grant-operator` makes an existing account an operator, who sees Report in the nav and may open the operator report (D-62). Create the account first with `app:upsert-user` (above), then, from your machine:
+
+```bash
+ssh admin@164.90.236.77 \
+  "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:grant-operator '$E2E_REVIEWER_EMAIL'"
+```
+
+It is idempotent: running it again prints "… is already an operator." and exits 0. It never creates users or sets passwords, and an unknown email exits 1 without writing anything. There is no UI for operator access and no revoke.
 
 ### First deploy
 
