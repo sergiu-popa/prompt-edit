@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Credits\PurchaseCreditsController;
 use App\Http\Controllers\Generation\CreateGenerationController;
 use App\Http\Controllers\Generation\ShowGenerationFormController;
 use App\Http\Controllers\Generation\ShowGenerationHistoryController;
@@ -19,4 +20,5 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/report', ShowOperatorReportController::class)
         ->middleware('can:' . ShowOperatorReportController::ABILITY)
         ->name('report');
+    Route::post('/credits/purchases', PurchaseCreditsController::class)->name('credits.purchases.store');
 });

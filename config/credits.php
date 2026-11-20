@@ -14,4 +14,10 @@ return [
      * Anything but a positive integer means the default.
      */
     'starter_grant_nanodollars' => filter_var(env('CREDITS_STARTER_GRANT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1_000_000_000]]),
+
+    /**
+     * The fake Buy credits page's fixed packs: $1.00, $5.00 and $10.00 (D-71). Each is
+     * a whole number of cents, so the page can show it to 2 decimals. No payment is taken.
+     */
+    'packs_nanodollars' => [1_000_000_000, 5_000_000_000, 10_000_000_000],
 ];
