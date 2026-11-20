@@ -316,7 +316,7 @@ Variable names only: no key or secret is ever committed, echoed, logged or put o
      ```
 
      `grep -c '^PIXELFORGE_' shared/.env` now prints 3, and `stat -c '%a %U:%G' shared/.env` prints `600 admin:admin`.
-  3. **Deploy.** `dep deploy`, then `make smoke-production`. The smoke also checks `/health/reconciler` and that an unsigned `POST /webhooks/pixelforge` answers 400 with no redirect, which proves the URL and that the secret is set.
+  3. **Deploy.** `dep deploy`, then wait until `/health/reconciler` reads `ok` (the scheduler's next minute; on the first go-live the heartbeat doesn't exist yet), then `make smoke-production`. The smoke also checks `/health/reconciler` and that an unsigned `POST /webhooks/pixelforge` answers 400 with no redirect, which proves the URL and that the secret is set.
   4. **Config**, as `admin` in `current/`. Never `config:show pixelforge`, which would print the key.
 
      ```bash
@@ -333,7 +333,7 @@ Variable names only: no key or secret is ever committed, echoed, logged or put o
   ```bash
   read -rs PF_SECRET
   printf 'PIXELFORGE_WEBHOOK_SECRET=%s\n' "$PF_SECRET" | ssh admin@164.90.236.77 \
-    'f=/home/admin/web/prompt.sergiupopa.dev/shared/.env; { grep -v "^PIXELFORGE_WEBHOOK_SECRET=" "$f"; cat; } > "$f.new" && chmod 600 "$f.new" && mv "$f.new" "$f"'
+    'umask 077; f=/home/admin/web/prompt.sergiupopa.dev/shared/.env; { grep -v "^PIXELFORGE_WEBHOOK_SECRET=" "$f"; cat; } > "$f.new" && chmod 600 "$f.new" && mv "$f.new" "$f"'
   unset PF_SECRET
   dep deploy
   ```
@@ -362,7 +362,8 @@ Verified on production at go-live (PE-015) and worth repeating after any change 
 | Production settings | `about --only=environment`: production, debug off. An unknown URL renders the plain 404 page; a 500 shows the generic page with no trace (`ProductionErrorPagesTest`) |
 | No fake driver | The app refuses to boot with `PIXELFORGE_DRIVER=fake` in production (`RefusesFakePixelforgeInProductionTest`) |
 | HTTPS | Plain http redirects to https, generated URLs are https, and the session cookie is `Secure` and `HttpOnly` (`make smoke-production`) |
-| Abuse limits | 5 failed sign-ins a minute per email and IP, shown inline; 10 generations a minute per user (D-39); 3 new accounts an hour per IP (D-57). The account limit uses the same client IP as the sign-in throttle: repeat the [Client IP](#first-deploy) check |
+| Abuse limits | 5 failed sign-ins a minute per email and IP, shown inline; 10 generations a minute per user (D-39); 3 new accounts an hour per IP (D-57). `php8.4 artisan tinker --execute 'echo config("generations.submissions_per_minute"), " ", config("auth.registrations_per_hour");'` prints `10 3`. In a browser, six wrong passwords within a minute for a throwaway email show "Too many login attempts. Please try again in N seconds." under Email on the 6th, never an error page. The account limit uses the same client IP as the sign-in throttle: repeat the [Client IP](#first-deploy) check |
+| Expired session | `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -X POST -H 'X-Inertia: true' -H 'X-Requested-With: XMLHttpRequest' -H 'Referer: https://prompt.sergiupopa.dev/login' https://prompt.sergiupopa.dev/login` prints `303 https://prompt.sergiupopa.dev/login`: a request with no token is sent back with the notice (D-60), never a 419 page |
 | Timeouts | The step 4 echo prints `5 30 60 90 1800` |
 | Worker and scheduler | `systemctl is-active prompt-edit-worker` prints `active`; `/health/reconciler` is `ok`; as root, the last `CRON … (admin) CMD (cd /home/admin/web/prompt.sergiupopa.dev…` line in `/var/log/syslog` is within the last minute |
 | Failed jobs | `php8.4 artisan queue:failed` lists none, or each is explained |
