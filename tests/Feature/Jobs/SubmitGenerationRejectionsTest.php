@@ -4,22 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Jobs;
 
+use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Models\Generation;
+use App\Domain\Shared\Enums\ImageQuality;
+use App\Domain\Shared\Enums\ImageSize;
 use App\Jobs\SubmitGenerationJob;
+use App\Models\User;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
-use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
-use App\Support\Pixelforge\Exceptions\DailyLimitExceededException;
-use App\Support\Pixelforge\Exceptions\InvalidApiKeyException;
-use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
-use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
+use Carbon\CarbonImmutable;
 use GuzzleHttp\Exception\ResponseTransferException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\CapturesLogMessages;
@@ -92,46 +94,106 @@ final class SubmitGenerationRejectionsTest extends TestCase
         ];
     }
 
-    /**
-     * @param  class-string<Throwable>  $expected
-     */
-    #[DataProvider('retriedFailures')]
-    public function test_every_other_failure_is_rethrown_and_the_generation_keeps_its_hold(string $answer, string $expected): void
+    #[DataProvider('releasedFailures')]
+    public function test_every_other_failure_releases_the_job_and_the_generation_keeps_its_hold(string $answer, int $delay): void
     {
         $lighthouse = $this->givenTheLighthouseGeneration();
         $this->fakePixelforgeAnswering($answer);
         $before = [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
-        try {
-            $this->runSubmitJob($lighthouse);
-            $this->fail(sprintf('Expected %s to be rethrown.', $expected));
-        } catch (Throwable $exception) {
-            $this->assertInstanceOf($expected, $exception);
-        }
+        $this->runSubmitJob($lighthouse)->assertReleased($delay);
 
         $this->assertSame($before, [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
     }
 
     /**
-     * @return array<string, array{string, class-string<Throwable>}>
+     * Until PE-013b, a concurrency limit, a daily limit and a refused key wait like
+     * a rate limit.
+     *
+     * @return array<string, array{string, int}>
      */
-    public static function retriedFailures(): array
+    public static function releasedFailures(): array
     {
         return [
-            '401 invalid api key' => ['401', InvalidApiKeyException::class],
-            '404 not found' => ['404', NotFoundException::class],
-            '429 rate limit exceeded' => ['429 rate', RateLimitExceededException::class],
-            '429 concurrency limit exceeded' => ['429 concurrency', ConcurrencyLimitExceededException::class],
-            '429 daily limit exceeded' => ['429 daily', DailyLimitExceededException::class],
-            '503 overloaded' => ['503', OverloadedException::class],
-            'no key' => ['no key', PixelforgeNotConfiguredException::class],
-            'a read timeout' => ['read timeout', AmbiguousPixelforgeOutcomeException::class],
-            'a 422 cut off mid-body' => ['422 cut off', AmbiguousPixelforgeOutcomeException::class],
-            'a 502 HTML page' => ['502 html', AmbiguousPixelforgeOutcomeException::class],
-            'a 2xx that is not a generation' => ['202 not a generation', AmbiguousPixelforgeOutcomeException::class],
-            'a 400 whose message holds a NUL byte' => ['400 nul', AmbiguousPixelforgeOutcomeException::class],
+            '401 invalid api key' => ['401', 60],
+            '404 not found, ambiguous at create' => ['404', 5],
+            '429 rate limit exceeded, Retry-After 17' => ['429 rate', 17],
+            '429 concurrency limit exceeded, Retry-After 5' => ['429 concurrency', 5],
+            '429 daily limit exceeded' => ['429 daily', 60],
+            '503 overloaded, Retry-After 2' => ['503', 2],
+            'no key' => ['no key', 60],
+            'a read timeout' => ['read timeout', 5],
+            'a 422 cut off mid-body' => ['422 cut off', 5],
+            'a 502 HTML page' => ['502 html', 5],
+            'a 2xx that is not a generation' => ['202 not a generation', 5],
+            'a 400 whose message holds a NUL byte' => ['400 nul', 5],
         ];
+    }
+
+    /**
+     * AC 11 and AC 15: `A lighthouse at dusk [overloaded]` (33 code points, medium,
+     * 1024x1024, no references) holds 86,318,750 n$. Still overloaded 2 min after the
+     * first 503, it fails free with one release and no charge.
+     */
+    public function test_an_overload_past_its_deadline_fails_free_with_one_release(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $generation = $this->createGenerationFor(User::factory()->create(), new NewGenerationData('A lighthouse at dusk [overloaded]', ImageSize::Square, ImageQuality::Medium, []));
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2'])]);
+
+        $attempts = $this->runSubmitJobUntilItIsDone($generation);
+
+        $row = $this->reloadedGeneration($generation);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(LocalFailureReason::ProviderOverloaded, $row->local_failure_reason);
+        $this->assertSame('overloaded', $row->error_code);
+        $this->assertNull($row->provider_id);
+        $this->assertSame(0, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
+        $this->assertSame([['hold', -86_318_750], ['release', 86_318_750]], $this->ledgerEntriesFor($generation));
+        $this->assertSame(0, $this->ledgerNetFor($generation));
+        $this->assertSameInstant('2026-11-20T10:02:00Z', CarbonImmutable::now());
+        $this->assertCount($attempts, $this->recordedCreateRequests());
+        $this->assertSame(9, $attempts);
+    }
+
+    /**
+     * AC 17: a retry whose next attempt would start past the window is a stop, which
+     * fails a generation that was never ambiguous free by its last outcome.
+     */
+    public function test_a_retry_that_would_start_past_the_window_stops_the_job(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::RateLimitExceeded, headers: ['Retry-After' => '17'])]);
+        $this->runSubmitJob($lighthouse)->assertReleased(17);
+        $this->travel(1_790)->seconds();
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(LocalFailureReason::ProviderBusy, $row->local_failure_reason);
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($lighthouse));
+    }
+
+    /**
+     * A run that starts after the window sends nothing and stops.
+     */
+    public function test_a_run_after_the_window_sends_nothing(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::RateLimitExceeded, headers: ['Retry-After' => '17'])]);
+        $this->runSubmitJob($lighthouse);
+        $this->travel(1_800)->seconds();
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
+
+        $this->assertCount(1, $this->recordedCreateRequests());
+        $this->assertSame(LocalFailureReason::ProviderBusy, $this->reloadedGeneration($lighthouse)->local_failure_reason);
     }
 
     /**
@@ -180,6 +242,26 @@ final class SubmitGenerationRejectionsTest extends TestCase
         $this->assertCount(1, $errors);
         $this->assertSame(['generation_id' => $lighthouse->id, 'exception' => null], $errors[0]->context);
         $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+    }
+
+    /**
+     * Runs the job, travelling past each release, until it is not released.
+     *
+     * @return int how many runs it took
+     */
+    private function runSubmitJobUntilItIsDone(Generation $generation): int
+    {
+        for ($runs = 1; $runs <= 100; $runs++) {
+            $job = $this->runSubmitJob($this->reloadedGeneration($generation));
+
+            if (! $job->job instanceof FakeJob || ! $job->job->isReleased()) {
+                return $runs;
+            }
+
+            $this->travel((int) $job->job->releaseDelay)->seconds();
+        }
+
+        $this->fail('The submit job was still being released after 100 runs.');
     }
 
     private function fakePixelforgeAnswering(string $answer): void

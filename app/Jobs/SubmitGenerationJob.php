@@ -34,9 +34,17 @@ final class SubmitGenerationJob implements ShouldQueueAfterCommit
         public readonly string $generationId,
     ) {}
 
+    /**
+     * Released after each wait the retry policy decides, measured by the action
+     * from the first attempt.
+     */
     public function handle(SubmitGenerationAction $submitGeneration): void
     {
-        $submitGeneration->execute($this->generationId);
+        $retryInSeconds = $submitGeneration->execute($this->generationId);
+
+        if ($retryInSeconds !== null) {
+            $this->release($retryInSeconds);
+        }
     }
 
     /**

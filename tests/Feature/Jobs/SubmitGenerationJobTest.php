@@ -13,10 +13,7 @@ use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
-use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
-use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
-use App\Support\Pixelforge\Exceptions\OverloadedException;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -165,14 +162,10 @@ final class SubmitGenerationJobTest extends TestCase
             ->pushResponse(self::pixelforgeAccepted($accepted, replayed: 'true'))]);
         $before = [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
-        try {
-            $this->runSubmitJob($lighthouse);
-            $this->fail('Expected the timed-out attempt to be ambiguous.');
-        } catch (AmbiguousPixelforgeOutcomeException) {
-            $this->assertSame($before, [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
-        }
+        $this->runSubmitJob($lighthouse)->assertReleased(5);
+        $this->assertSame($before, [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
 
-        $this->runSubmitJob($this->reloadedGeneration($lighthouse));
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
 
         $row = $this->reloadedGeneration($lighthouse);
         $this->assertSame(GenerationStatus::Queued, $row->status);
@@ -193,12 +186,8 @@ final class SubmitGenerationJobTest extends TestCase
             ->pushResponse(self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2']))
             ->pushResponse(self::pixelforgeAccepted(self::generationObjectFor($generation, GenerationStatus::Queued)))]);
 
-        try {
-            $this->runSubmitJob($this->reloadedGeneration($generation));
-            $this->fail('Expected the first attempt to be overloaded.');
-        } catch (OverloadedException) {
-            $this->runSubmitJob($this->reloadedGeneration($generation));
-        }
+        $this->runSubmitJob($this->reloadedGeneration($generation))->assertReleased(2);
+        $this->runSubmitJob($this->reloadedGeneration($generation))->assertNotReleased();
 
         [$first, $second] = $this->recordedCreateRequests();
         $stored = $this->reloadedGeneration($generation);
@@ -245,7 +234,7 @@ final class SubmitGenerationJobTest extends TestCase
         $lighthouse = $this->givenTheLighthouseGeneration();
         Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2'])]);
 
-        $this->runSubmitJobIgnoringItsRethrow($lighthouse);
+        $this->runSubmitJob($lighthouse);
 
         $row = $this->reloadedGeneration($lighthouse);
         $this->assertSame(SubmitAttemptOutcome::Overloaded, $row->submit_last_outcome);
@@ -260,7 +249,7 @@ final class SubmitGenerationJobTest extends TestCase
         $lighthouse = $this->givenTheLighthouseGeneration();
         Http::fake(['*' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received')]);
 
-        $this->runSubmitJobIgnoringItsRethrow($lighthouse);
+        $this->runSubmitJob($lighthouse);
 
         $row = $this->reloadedGeneration($lighthouse);
         $this->assertSame(SubmitAttemptOutcome::Ambiguous, $row->submit_last_outcome);
@@ -292,14 +281,5 @@ final class SubmitGenerationJobTest extends TestCase
         $this->assertSameInstant('2026-11-20T09:59:00Z', $row->submit_first_attempted_at);
         $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_last_attempted_at);
         $this->assertSame(SubmitAttemptOutcome::Accepted, $row->submit_last_outcome);
-    }
-
-    private function runSubmitJobIgnoringItsRethrow(Generation $generation): void
-    {
-        try {
-            $this->runSubmitJob($generation);
-        } catch (ReportsPixelforgeContext) {
-            // The failure is rethrown for the queue; the bookkeeping is the point.
-        }
     }
 }

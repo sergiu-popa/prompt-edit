@@ -10,7 +10,6 @@ use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
-use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
@@ -100,13 +99,10 @@ final class BootsWithoutPixelforgeTest extends TestCase
         $lighthouse = $this->givenTheLighthouseGeneration();
         Http::fake();
 
-        try {
-            $this->app->call([new SubmitGenerationJob($lighthouse->id), 'handle']);
-            $this->fail('Expected the submit job to find no key.');
-        } catch (PixelforgeNotConfiguredException $exception) {
-            $this->assertStringContainsString('PIXELFORGE_API_KEY', $exception->getMessage());
-        }
+        $job = (new SubmitGenerationJob($lighthouse->id))->withFakeQueueInteractions();
+        $this->app->call([$job, 'handle']);
 
+        $job->assertReleased(60);
         Http::assertNothingSent();
         $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
