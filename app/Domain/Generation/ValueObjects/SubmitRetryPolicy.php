@@ -55,6 +55,11 @@ final readonly class SubmitRetryPolicy
     public const int CONCURRENCY_LIMITED_WAIT_SECONDS = 5;
 
     /**
+     * A latched generation at the daily limit checks back once a minute.
+     */
+    public const int DAILY_LIMITED_LATCHED_WAIT_SECONDS = 60;
+
+    /**
      * Nothing can be sent until a key (or the fake's secret) is configured.
      */
     public const int NOT_CONFIGURED_WAIT_SECONDS = 60;
@@ -112,10 +117,12 @@ final readonly class SubmitRetryPolicy
             SubmitAttemptOutcome::Overloaded => $this->afterOverload($bookkeeping, $retryAfterSeconds, $now),
             SubmitAttemptOutcome::Ambiguous => SubmitDecision::retryIn(self::ambiguousWait($bookkeeping, $now)),
             SubmitAttemptOutcome::ConcurrencyLimited => $this->afterConcurrencyLimit($bookkeeping, $retryAfterSeconds, $now),
+            SubmitAttemptOutcome::DailyLimited => $bookkeeping->isAmbiguous()
+                ? SubmitDecision::retryIn(self::DAILY_LIMITED_LATCHED_WAIT_SECONDS)
+                : SubmitDecision::failFree(LocalFailureReason::DailyLimit),
             SubmitAttemptOutcome::NotConfigured => SubmitDecision::retryIn(self::NOT_CONFIGURED_WAIT_SECONDS),
             SubmitAttemptOutcome::BudgetExhausted,
             SubmitAttemptOutcome::RateLimited,
-            SubmitAttemptOutcome::DailyLimited,
             SubmitAttemptOutcome::InvalidApiKey => SubmitDecision::retryIn($retryAfterSeconds ?? self::RATE_LIMITED_WAIT_SECONDS),
             SubmitAttemptOutcome::Accepted, SubmitAttemptOutcome::Rejected, null => throw new LogicException(sprintf(
                 'A submit attempt that ended %s is not retried.',

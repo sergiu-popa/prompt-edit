@@ -109,8 +109,8 @@ final class SubmitGenerationRejectionsTest extends TestCase
     }
 
     /**
-     * Until PE-013b, a concurrency limit, a daily limit and a refused key wait like
-     * a rate limit.
+     * Until the 401 rule lands, a refused key waits like a rate limit. The daily
+     * limit fails at once (SubmitGenerationLimitsTest).
      *
      * @return array<string, array{string, int}>
      */
@@ -121,7 +121,6 @@ final class SubmitGenerationRejectionsTest extends TestCase
             '404 not found, ambiguous at create' => ['404', 5],
             '429 rate limit exceeded, Retry-After 17' => ['429 rate', 17],
             '429 concurrency limit exceeded, Retry-After 5' => ['429 concurrency', 5],
-            '429 daily limit exceeded' => ['429 daily', 60],
             '503 overloaded, Retry-After 2' => ['503', 2],
             'no key' => ['no key', 60],
             'a read timeout' => ['read timeout', 5],

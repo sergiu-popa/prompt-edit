@@ -193,7 +193,8 @@ final class SubmitGenerationAction
             LocalFailureReason::IdempotencyKeyReused => Log::error('Failed a generation at no charge: Pixelforge holds its idempotency key with other params.', $context),
             LocalFailureReason::ProviderOverloaded,
             LocalFailureReason::ProviderBusy,
-            LocalFailureReason::ServiceUnavailable => Log::warning('Failed a generation at no charge: Pixelforge never accepted it.', [
+            LocalFailureReason::ServiceUnavailable,
+            LocalFailureReason::DailyLimit => Log::warning('Failed a generation at no charge: Pixelforge never accepted it.', [
                 ...$context,
                 'reason' => $reason->value,
             ]),

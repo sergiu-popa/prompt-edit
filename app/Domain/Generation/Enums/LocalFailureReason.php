@@ -41,4 +41,9 @@ enum LocalFailureReason: string
      * The key was refused, or no request could ever be sent (AC 14, 17).
      */
     case ServiceUnavailable = 'service_unavailable';
+
+    /**
+     * `429 daily_limit_exceeded`: the account's 500 a UTC day are used (AC 8).
+     */
+    case DailyLimit = 'daily_limit';
 }

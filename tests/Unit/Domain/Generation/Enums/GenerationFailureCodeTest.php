@@ -47,6 +47,10 @@ final class GenerationFailureCodeTest extends TestCase
                 GenerationFailureCode::ServiceUnavailable,
                 'Service unavailable — this generation wasn\'t sent. You were not charged.',
             ],
+            'daily limit' => [
+                GenerationFailureCode::DailyLimit,
+                'Daily capacity reached, try after 00:00 UTC. You were not charged.',
+            ],
         ];
     }
 
@@ -102,6 +106,7 @@ final class GenerationFailureCodeTest extends TestCase
                 'provider_overloaded',
                 'provider_busy',
                 'service_unavailable',
+                'daily_limit',
             ],
             array_column(GenerationFailureCode::cases(), 'value'),
         );

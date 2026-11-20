@@ -52,7 +52,6 @@ final class SubmitRetryPolicyTest extends TestCase
             'no key, whatever was sent' => [SubmitAttemptOutcome::NotConfigured, null, 60],
             'a concurrency limit with Retry-After 5' => [SubmitAttemptOutcome::ConcurrencyLimited, 5, 5],
             'a concurrency limit without Retry-After' => [SubmitAttemptOutcome::ConcurrencyLimited, null, 5],
-            'a daily limit, as a rate limit until PE-013b' => [SubmitAttemptOutcome::DailyLimited, null, 60],
             'a refused key, as a rate limit until PE-013b' => [SubmitAttemptOutcome::InvalidApiKey, null, 60],
         ];
     }
@@ -182,6 +181,26 @@ final class SubmitRetryPolicyTest extends TestCase
         }
 
         $this->assertSame($failure, $decision->failureReason);
+    }
+
+    /**
+     * AC 8: nothing more is sent today, so it fails free at once.
+     */
+    public function test_a_daily_limit_fails_free_at_once(): void
+    {
+        $now = self::at(self::FIRST_ATTEMPT);
+
+        $decision = $this->policy->decide(self::lastOutcome(SubmitAttemptOutcome::DailyLimited, $now), null, $now);
+
+        $this->assertSame(LocalFailureReason::DailyLimit, $decision->failureReason);
+    }
+
+    public function test_a_latched_daily_limit_checks_back_a_minute_later(): void
+    {
+        $now = self::at(self::FIRST_ATTEMPT);
+        $bookkeeping = new SubmitBookkeeping($now, $now, SubmitAttemptOutcome::DailyLimited, $now);
+
+        $this->assertRetriesIn(60, $this->policy->decide($bookkeeping, null, $now));
     }
 
     /**

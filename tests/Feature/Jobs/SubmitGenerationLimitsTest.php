@@ -98,6 +98,42 @@ final class SubmitGenerationLimitsTest extends TestCase
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
     }
 
+    /**
+     * AC 8: no `Retry-After`, no further call, and its hold released.
+     */
+    public function test_the_daily_limit_fails_it_free_at_once(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::DailyLimitExceeded)]);
+
+        $this->runSubmitJob($lighthouse)->assertNotReleased();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertCount(1, $this->recordedCreateRequests());
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(LocalFailureReason::DailyLimit, $row->local_failure_reason);
+        $this->assertSame('daily_limit_exceeded', $row->error_code);
+        $this->assertSame(0, $row->provider_cost_nanodollars);
+        $this->assertSame(0, $row->user_charge_nanodollars);
+        $this->assertSame(self::LIGHTHOUSE_FREE, $this->ledgerEntriesFor($lighthouse));
+    }
+
+    public function test_a_latched_generation_at_the_daily_limit_checks_back_a_minute_later(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => Http::sequence()
+            ->pushFailedConnection(self::READ_TIMEOUT)
+            ->whenEmpty(self::pixelforgeErrorFor(PixelforgeErrorCode::DailyLimitExceeded))]);
+        $this->runSubmitJob($lighthouse)->assertReleased(5);
+        $this->travel(5)->seconds();
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(60);
+
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
+    }
+
     private static function concurrencyLimited(): PromiseInterface
     {
         return self::pixelforgeErrorFor(PixelforgeErrorCode::ConcurrencyLimitExceeded, headers: ['Retry-After' => '5']);
