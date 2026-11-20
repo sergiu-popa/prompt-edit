@@ -8,6 +8,7 @@ use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Reporting\Actions\ShowOperatorReportAction;
 use App\Domain\Reporting\ValueObjects\ReportRange;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Reporting\ShowOperatorReportRequest;
 use Carbon\CarbonImmutable;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -26,14 +27,13 @@ final class ShowOperatorReportController extends Controller
     /**
      * @throws NanodollarOverflowException
      */
-    public function __invoke(ShowOperatorReportAction $showOperatorReport): Response
+    public function __invoke(ShowOperatorReportRequest $request, ShowOperatorReportAction $showOperatorReport): Response
     {
-        $now = CarbonImmutable::now();
-        $range = ReportRange::defaultFor($now);
+        $range = $request->range();
 
         return Inertia::render('Reporting/Show', [
             'range' => $range->toArray(),
-            'limits' => ReportRange::limitsFor($now),
+            'limits' => ReportRange::limitsFor(CarbonImmutable::now()),
             'report' => $showOperatorReport->execute($range)->toArray(),
         ]);
     }
