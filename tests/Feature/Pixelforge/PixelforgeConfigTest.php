@@ -48,6 +48,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_SUBMIT_RESERVE',
         'PIXELFORGE_RECONCILE_EVERY',
         'PIXELFORGE_REDISPATCH_AFTER',
+        'PIXELFORGE_GIVE_UP_AFTER',
     ];
 
     /**
@@ -60,6 +61,7 @@ final class PixelforgeConfigTest extends TestCase
         'max_recheck_seconds' => 900,
         'batch_size' => 20,
         'redispatch_after_seconds' => 300,
+        'give_up_after_seconds' => 86_400,
     ];
 
     /**
@@ -139,7 +141,7 @@ final class PixelforgeConfigTest extends TestCase
     public function test_set_reconcile_bounds_apply(): void
     {
         $this->assertSame(
-            ['queued_after_seconds' => 5, 'processing_after_seconds' => 6, 'recheck_seconds' => 2, 'max_recheck_seconds' => 300, 'batch_size' => 7, 'redispatch_after_seconds' => 90],
+            ['queued_after_seconds' => 5, 'processing_after_seconds' => 6, 'recheck_seconds' => 2, 'max_recheck_seconds' => 300, 'batch_size' => 7, 'redispatch_after_seconds' => 90, 'give_up_after_seconds' => 3_600],
             $this->reconcileConfigWith([
                 'PIXELFORGE_RECONCILE_QUEUED_AFTER' => '5',
                 'PIXELFORGE_RECONCILE_PROCESSING_AFTER' => '6',
@@ -147,6 +149,7 @@ final class PixelforgeConfigTest extends TestCase
                 'PIXELFORGE_RECONCILE_RECHECK_MAX' => '300',
                 'PIXELFORGE_RECONCILE_BATCH' => '7',
                 'PIXELFORGE_REDISPATCH_AFTER' => '90',
+                'PIXELFORGE_GIVE_UP_AFTER' => '3600',
             ]),
         );
     }

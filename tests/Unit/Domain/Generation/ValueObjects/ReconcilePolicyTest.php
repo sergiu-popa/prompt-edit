@@ -142,6 +142,25 @@ final class ReconcilePolicyTest extends TestCase
         $this->assertSame('2026-11-20T11:59:00Z', self::policy(redispatchAfterSeconds: 60)->redispatchBefore(self::now())->toIso8601ZuluString());
     }
 
+    /**
+     * @return array<string, array{int, bool}>
+     */
+    public static function giveUp(): array
+    {
+        return [
+            '24 h − 1 s old' => [86_399, false],
+            'exactly 24 h old' => [86_400, true],
+            'two days old' => [172_800, true],
+            'a minute old' => [60, false],
+        ];
+    }
+
+    #[DataProvider('giveUp')]
+    public function test_an_unconfirmed_row_is_given_up_once_it_is_a_day_old(int $ageSeconds, bool $pastGiveUp): void
+    {
+        $this->assertSame($pastGiveUp, self::policy()->isPastGiveUp(self::now()->subSeconds($ageSeconds), self::now()));
+    }
+
     private static function now(): CarbonImmutable
     {
         return CarbonImmutable::parse(self::NOW);
@@ -155,6 +174,7 @@ final class ReconcilePolicyTest extends TestCase
         int $batchSize = 20,
         int $submitReserve = 10,
         int $redispatchAfterSeconds = 300,
+        int $giveUpAfterSeconds = 86_400,
     ): ReconcilePolicy {
         return new ReconcilePolicy(
             queuedAfterSeconds: $queuedAfterSeconds,
@@ -164,6 +184,7 @@ final class ReconcilePolicyTest extends TestCase
             batchSize: $batchSize,
             submitReserve: $submitReserve,
             redispatchAfterSeconds: $redispatchAfterSeconds,
+            giveUpAfterSeconds: $giveUpAfterSeconds,
         );
     }
 }

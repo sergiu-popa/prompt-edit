@@ -21,7 +21,8 @@ use Throwable;
  * reserve of D-44's budget is left for submits (D-51). A spent budget or Pixelforge's
  * 429 stops the run's polls. Generations Pixelforge never confirmed, whose submit job
  * was handed over, stopped or died, then take the rest of the batch, oldest created
- * first, and are re-dispatched (D-52). Every row is isolated: an exception on one is
+ * first: each is re-dispatched (D-52), or given up as `lost` once it is a day old
+ * (D-49). Every row is isolated: an exception on one is
  * logged with its ULID, and the run goes on.
  */
 final class ReconcileGenerationsAction
@@ -29,6 +30,7 @@ final class ReconcileGenerationsAction
     public function __construct(
         private readonly PollGenerationAction $pollGeneration,
         private readonly RedispatchGenerationAction $redispatchGeneration,
+        private readonly GiveUpUnconfirmedGenerationAction $giveUpUnconfirmedGeneration,
         private readonly ReconcilePolicy $policy,
         private readonly PixelforgeRequestBudget $budget,
     ) {}
@@ -91,7 +93,8 @@ final class ReconcileGenerationsAction
     }
 
     /**
-     * Re-dispatches never take a budget unit here: the job takes one when it runs.
+     * Re-dispatches never take a budget unit here: the job takes one when it runs. A
+     * give-up can come up to one recheck late, when the row is next due.
      */
     private function handleUnsubmittedGenerations(CarbonImmutable $now, int $limit): void
     {
@@ -107,10 +110,16 @@ final class ReconcileGenerationsAction
             ->get();
 
         foreach ($unsubmitted as $generation) {
+            $isPastGiveUp = $this->policy->isPastGiveUp($generation->created_at, $now);
+
             try {
-                $this->redispatchGeneration->execute($generation, $now);
+                if ($isPastGiveUp) {
+                    $this->giveUpUnconfirmedGeneration->execute($generation);
+                } else {
+                    $this->redispatchGeneration->execute($generation, $now);
+                }
             } catch (Throwable $exception) {
-                self::logFailedRow('redispatch', $generation, $exception);
+                self::logFailedRow($isPastGiveUp ? 'give_up' : 'redispatch', $generation, $exception);
             }
         }
     }

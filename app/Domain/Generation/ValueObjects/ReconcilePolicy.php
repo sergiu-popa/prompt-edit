@@ -36,6 +36,8 @@ final readonly class ReconcilePolicy
         private int $submitReserve,
         #[Config('pixelforge.reconcile.redispatch_after_seconds')]
         private int $redispatchAfterSeconds,
+        #[Config('pixelforge.reconcile.give_up_after_seconds')]
+        private int $giveUpAfterSeconds,
     ) {}
 
     /**
@@ -89,5 +91,14 @@ final readonly class ReconcilePolicy
     public function redispatchBefore(CarbonImmutable $now): CarbonImmutable
     {
         return $now->subSeconds($this->redispatchAfterSeconds);
+    }
+
+    /**
+     * An unconfirmed generation is given up once this long has passed since its
+     * creation: 24 h by default, at the instant itself (D-49).
+     */
+    public function isPastGiveUp(CarbonImmutable $createdAt, CarbonImmutable $now): bool
+    {
+        return $now->greaterThanOrEqualTo($createdAt->addSeconds($this->giveUpAfterSeconds));
     }
 }

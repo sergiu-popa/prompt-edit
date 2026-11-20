@@ -147,6 +147,12 @@ return [
          * that may still be retrying is left alone. A handed-over one is due at once.
          */
         'redispatch_after_seconds' => filter_var(env('PIXELFORGE_REDISPATCH_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 300]]),
+
+        /**
+         * A generation Pixelforge never confirmed is failed `lost`, free, this long
+         * after its creation (D-49). One Pixelforge confirmed is never given up.
+         */
+        'give_up_after_seconds' => filter_var(env('PIXELFORGE_GIVE_UP_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),
     ],
 
     /**
