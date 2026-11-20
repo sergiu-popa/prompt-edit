@@ -4,7 +4,7 @@
 Credit balances, fake 'Buy credits', and blocking unaffordable generations
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 This is stretch (b). Every user gets a credit balance derived from the PE-007 append-only ledger. There is no separate balance column that could drift. New users receive a starter grant. A clearly fake "Buy credits" button tops up the balance with fixed packs.
