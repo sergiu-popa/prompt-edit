@@ -4,6 +4,32 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 
 **Stack:** Laravel 13 · Inertia 3 · Vue 3 · TypeScript · Tailwind CSS 4 · PostgreSQL 17 · Docker · GitHub Actions.
 
+## Reviewer guide
+
+- **Live app:** https://prompt.sergiupopa.dev, backed by the real Pixelforge API.
+- **Signing in:** the reviewer account is shared with you privately and never appears in this repo. You can also create your own account: each network may create 3 accounts an hour (D-57).
+- **Test keywords:** put any of these anywhere in a prompt to force Pixelforge's behaviour:
+
+  | Keyword | What you see |
+  | --- | --- |
+  | `[succeed]` | Succeeds, never failing at random: the image, the actual cost and the charge |
+  | `[fail]` | Accepted, then Failed with the failure copy and "Not charged" |
+  | `[blocked]` | Rejected by the content policy at submit, "Not charged" |
+  | `[overloaded]` | "Pixelforge is busy — retrying automatically", then Failed after 2 min, "Not charged" |
+  | `[slow]` | Processing for 60–90 s, then Succeeded without a reload |
+  | `[duplicate]` | Every webhook arrives twice, and the generation is still charged once |
+
+  The reviewer account's History holds a few real generations made with them at go-live.
+- **The money model:**
+  - amounts are integer nanodollars (1 n$ = $0.000000001), never floats;
+  - you pay Pixelforge's exact cost + 25 %, rounded up to the next nanodollar;
+  - submitting holds the estimate's maximum, and completion settles the actual cost;
+  - a failed or rejected generation is free and its hold is released.
+
+  Details are in [How the money works](#how-the-money-works).
+- **Why it is built this way:** every choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
+- **Running the tests:** see [Testing](#testing). `make check` runs PHP lint, static analysis, PHPUnit, the frontend checks and Vitest; `make e2e` runs Playwright against the in-app fake. `make live-smoke` is the one opt-in test against the real API (D-58): it reads a **dev** key from `.env` as `PIXELFORGE_API_KEY`, never the production key, because that would add to production's `/v1/usage` and break its reconciliation (PE-018). It refuses to run in production, in CI and without a key, and costs at most $0.0175 a run.
+
 ## Status
 
 | Area | State |
@@ -336,6 +362,7 @@ All commands run inside the `prompt-edit-app` container.
 - `make js-test` — Vitest unit + integration projects
 - `make e2e` — production build, then Playwright (desktop + mobile) in the `playwright` Docker service; `make e2e filter="name"` to grep
 - `make check` — lint + stan + test + js-check + js-test
+- `make live-smoke` — opt-in PHPUnit `live` group against the real Pixelforge, with the dev key from `.env` (D-58); never part of `make test`, `make check` or CI
 - `make smoke-production` — opt-in Playwright smoke against production (needs `E2E_BASE_URL`, `E2E_REVIEWER_EMAIL`, `E2E_REVIEWER_PASSWORD`); never part of `make e2e` or CI
 
 ## Testing
@@ -346,6 +373,7 @@ All commands run inside the `prompt-edit-app` container.
 | JS unit — pure `resources/js/lib` functions and composables | Vitest (`unit` project, node) | `tests/js/unit` | `make js-test` |
 | JS integration — mounted components and pages, Inertia mocked | Vitest + Vue Test Utils (`integration` project, jsdom) | `tests/js/integration` | `make js-test` |
 | End-to-end — critical user flows in a real browser | Playwright (`playwright` Compose service) | `tests/e2e` | `make e2e` |
+| Live Pixelforge smoke — opt-in, dev key only, never in CI | PHPUnit group `live` | `tests/Feature/Pixelforge/Live` | `make live-smoke` |
 | Production smoke — opt-in, never in CI | Playwright (`playwright.production.config.ts`) | `tests/smoke` | `make smoke-production` |
 
 Every Playwright test also fails if the browser logs a console or page error (`tests/e2e/fixtures.ts`).
