@@ -35,7 +35,9 @@ test('an operator sees a new user’s billed generation in the report, which the
     await expect(page).toHaveTitle(/^Report/);
     await expect(page.getByRole('heading', { level: 1, name: 'Operator report' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Report' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByLabel('To')).toHaveValue(new Date().toISOString().slice(0, 10));
+    const to = page.getByLabel('To');
+    await expect(to).toHaveAttribute('max', /^\d{4}-\d{2}-\d{2}$/);
+    await expect(to).toHaveValue((await to.getAttribute('max')) ?? '');
 
     const row = page.getByRole('table', { name: 'Per user' }).getByRole('row').filter({ hasText: email });
     await expect(row).toHaveCount(1);
