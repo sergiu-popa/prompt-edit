@@ -85,7 +85,11 @@ final class ShowOperatorReportRequest extends FormRequest
 
                 if ($days < 1) {
                     $errors->add('start_date', 'The start date must be on or before the end date.');
-                } elseif ($days > ReportRange::MAX_DAYS) {
+
+                    return;
+                }
+
+                if ($days > ReportRange::MAX_DAYS) {
                     $errors->add('end_date', sprintf('The range can be at most %d days.', ReportRange::MAX_DAYS));
                 }
             },
