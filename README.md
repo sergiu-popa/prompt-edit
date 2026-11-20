@@ -55,7 +55,8 @@ Worked examples and the full model are in [`requirements.md` §3](.agent-workflo
 
 - **Local row first.** Its ULID is both the `Idempotency-Key` and `metadata.generation_id`. Retries are safe, and a webhook that arrives before the create response still finds its row.
 - **Webhooks are verified, deduplicated and order-independent.** The HMAC-SHA256 signature over `"<t>.<raw body>"` is checked with a 5-minute tolerance. The event id is deduplicated in the same transaction as the state change, and the state machine only moves forward: a late `processing` can never undo `succeeded`.
-- **Limits and overloads.** `429` (rate limit or concurrency) and `503` are retried, honouring `Retry-After` and reusing the same idempotency key. Definitive rejections (content policy, validation) fail free with a clear message, and so does the daily limit.
+- **Limits and overloads.** Every call takes from one shared budget of 50 requests a minute, below Pixelforge's 60. A `429` rate limit or concurrency limit and a `503` are retried after `Retry-After`, with the same idempotency key and byte-identical body. A slot that never frees up (10 min) or an overload that lasts (2 min) fails free; so does the daily limit, at once, and a key refused 3 times, with one critical log. History says "Pixelforge is busy — retrying automatically" or "Waiting for a free slot" while it waits. Definitive rejections (content policy, validation) fail free with a clear message.
+- **Ambiguity is never failed.** A timeout, a 5xx or an unreadable answer may have created the generation, so it is retried with the same key and never failed locally. The submit job is bounded by time (30 min), not by tries; if the generation is still ambiguous then, it stays pending with its hold and is handed to the reconciler.
 - **Lost webhooks.** A scheduled reconciler polls stuck generations through the same transition path.
 
 Every failure mode is covered in the [robustness matrix](.agent-workflow/requirements.md#4-robustness-matrix). The reasoning behind each choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
@@ -162,7 +163,8 @@ APP_KEY="base64:$(openssl rand -base64 32)" DB_PASSWORD="$PE_DB_PASSWORD" \
 unset PE_DB_PASSWORD
 ls -l "$D/shared/.env"                               # -rw------- admin admin
 
-# 5. The queue worker: enabled now, started after the first deploy
+# 5. The queue worker: enabled now, started after the first deploy. --tries=3 bounds the other
+#    jobs; the submit job is bounded by time instead, and its retryUntil overrides it (D-46).
 cat > /etc/systemd/system/prompt-edit-worker.service <<'UNIT'
 [Unit]
 Description=PromptEdit queue worker (prompt.sergiupopa.dev)
