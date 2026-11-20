@@ -207,10 +207,9 @@ final class SubmitGenerationRejectionsTest extends TestCase
     }
 
     #[DataProvider('exhaustedFailures')]
-    public function test_running_out_of_attempts_logs_the_failure_and_leaves_the_generation_waiting(Throwable $exception, string $errorCode): void
+    public function test_when_the_queue_gives_up_the_failure_is_logged_and_the_generation_stopped(Throwable $exception, string $errorCode): void
     {
         $lighthouse = $this->givenTheLighthouseGeneration();
-        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
         (new SubmitGenerationJob($lighthouse->id))->failed($exception);
 
@@ -222,16 +221,16 @@ final class SubmitGenerationRejectionsTest extends TestCase
         $this->assertSame($lighthouse->id, $errors[0]->context['generation_id'] ?? null);
         $this->assertSame($errorCode, $errors[0]->context['error_code'] ?? null);
         $this->assertSame($exception::class, $errors[0]->context['exception'] ?? null);
-        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame(LocalFailureReason::ServiceUnavailable, $this->reloadedGeneration($lighthouse)->local_failure_reason);
+        $this->assertSame([['hold', -457_150_000], ['release', 457_150_000]], $this->ledgerEntriesFor($lighthouse));
     }
 
     /**
      * The queue passes no exception when a job is failed by hand (`fail()`).
      */
-    public function test_a_give_up_without_an_exception_is_still_logged_and_leaves_the_generation_waiting(): void
+    public function test_a_give_up_without_an_exception_is_still_logged_and_stops_the_generation(): void
     {
         $lighthouse = $this->givenTheLighthouseGeneration();
-        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
         (new SubmitGenerationJob($lighthouse->id))->failed(null);
 
@@ -241,7 +240,24 @@ final class SubmitGenerationRejectionsTest extends TestCase
         ));
         $this->assertCount(1, $errors);
         $this->assertSame(['generation_id' => $lighthouse->id, 'exception' => null], $errors[0]->context);
-        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame(GenerationStatus::Failed, $this->reloadedGeneration($lighthouse)->status);
+    }
+
+    /**
+     * Pixelforge may have it, so a give-up after an ambiguous attempt hands it over.
+     */
+    public function test_a_give_up_after_an_ambiguous_attempt_hands_the_generation_over(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        $this->fakePixelforgeAnswering('read timeout');
+        $this->runSubmitJob($lighthouse);
+
+        (new SubmitGenerationJob($lighthouse->id))->failed(null);
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(GenerationStatus::Pending, $row->status);
+        $this->assertNotNull($row->submit_handed_over_at);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
     }
 
     /**

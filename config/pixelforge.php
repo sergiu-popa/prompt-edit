@@ -64,6 +64,12 @@ return [
          * From the first `503 overloaded`; then the generation fails free.
          */
         'overloaded_deadline_seconds' => filter_var(env('PIXELFORGE_OVERLOADED_DEADLINE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 120]]),
+
+        /**
+         * Above the request timeout and below the queue's `retry_after` (90),
+         * so one job never runs twice at once (AC 19).
+         */
+        'job_timeout_seconds' => 60,
     ],
 
     /**

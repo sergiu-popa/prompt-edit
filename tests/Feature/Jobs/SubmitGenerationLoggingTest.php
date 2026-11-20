@@ -114,9 +114,11 @@ final class SubmitGenerationLoggingTest extends TestCase
 
         (new SubmitGenerationJob($lighthouse->id))->failed(new OverloadedException('api_error', 'Pixelforge is overloaded.', retryAfterSeconds: 2));
 
-        $lines = $this->submissionLinesFor($lighthouse);
+        $lines = array_values(array_filter(
+            $this->submissionLinesFor($lighthouse),
+            fn (MessageLogged $logged): bool => $logged->level === 'error',
+        ));
         $this->assertCount(1, $lines);
-        $this->assertSame('error', $lines[0]->level);
         $this->assertSame([
             'generation_id' => $lighthouse->id,
             'exception' => OverloadedException::class,
