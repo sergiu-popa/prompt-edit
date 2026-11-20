@@ -23,6 +23,12 @@ final class CreateGenerationThrottleTest extends TestCase
     use RefreshDatabase;
     use SubmitsGenerations;
 
+    /**
+     * Each Lighthouse holds 457,150,000 n$, so the $1.00 starter covers two; the limit,
+     * not the balance, must be what refuses the eleventh.
+     */
+    private const int ELEVEN_LIGHTHOUSE_HOLDS = 11 * 457_150_000;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -32,7 +38,7 @@ final class CreateGenerationThrottleTest extends TestCase
 
     public function test_the_eleventh_submission_in_a_minute_is_refused_inline_and_creates_nothing(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create();
         $this->givenSubmissions(10, $user);
 
         $this->travel(18)->seconds();
@@ -50,7 +56,7 @@ final class CreateGenerationThrottleTest extends TestCase
      */
     public function test_the_eleventh_submission_writes_no_hold_and_pushes_no_submit_job(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create();
         $this->givenSubmissions(10, $user);
 
         $this->submitGeneration(as: $user)->assertSessionHasErrors('submission');
@@ -62,7 +68,7 @@ final class CreateGenerationThrottleTest extends TestCase
 
     public function test_submissions_work_again_once_the_minute_has_passed(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create();
         $this->givenSubmissions(10, $user);
 
         $this->travel(61)->seconds();
@@ -77,7 +83,7 @@ final class CreateGenerationThrottleTest extends TestCase
     public function test_the_limit_is_configurable(): void
     {
         config(['generations.submissions_per_minute' => 2]);
-        $user = User::factory()->create();
+        $user = User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create();
         $this->givenSubmissions(2, $user);
 
         $this->submitGeneration(as: $user)
@@ -94,9 +100,9 @@ final class CreateGenerationThrottleTest extends TestCase
 
     public function test_each_user_has_their_own_limit(): void
     {
-        $this->givenSubmissions(10, User::factory()->create());
+        $this->givenSubmissions(10, User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create());
 
-        $this->submitGeneration(as: User::factory()->create())->assertSessionHasNoErrors();
+        $this->submitGeneration(as: User::factory()->withCredits(self::ELEVEN_LIGHTHOUSE_HOLDS)->create())->assertSessionHasNoErrors();
 
         $this->assertSame(11, Generation::query()->count());
     }

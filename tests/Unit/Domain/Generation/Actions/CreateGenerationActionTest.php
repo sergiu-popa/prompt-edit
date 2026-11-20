@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\Actions;
 
 use App\Domain\Billing\Actions\EstimateGenerationCostAction;
+use App\Domain\Billing\Exceptions\InsufficientCreditsException;
 use App\Domain\Billing\Models\CreditLedgerEntry;
+use App\Domain\Generation\Actions\CreateGenerationAction;
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
@@ -374,5 +376,92 @@ final class CreateGenerationActionTest extends TestCase
         $request = self::lighthouseRequest();
 
         return new NewGenerationData($request->prompt, $request->size, $request->quality, $request->referenceImages, $token);
+    }
+
+    /**
+     * AC 10: a balance equal to the max holds it, down to exactly nothing.
+     */
+    public function test_a_balance_equal_to_the_max_is_accepted_and_leaves_nothing_available(): void
+    {
+        $user = User::factory()->withCredits(self::DUSK_HOLD)->create();
+
+        $generation = $this->createGenerationFor($user, self::duskRequest());
+
+        $this->assertSame(self::DUSK_HOLD, $generation->user_estimate_max_nanodollars);
+        $this->assertSame([['hold', -self::DUSK_HOLD]], $this->ledgerEntriesFor($generation));
+        $this->assertSame(0, CreditLedgerEntry::query()->ownedBy($user)->balance()->available->amount);
+    }
+
+    /**
+     * AC 9, 10: 1 n$ short is refused before anything is written or sent.
+     */
+    public function test_a_balance_one_nanodollar_short_is_refused_with_nothing_written_or_pushed(): void
+    {
+        $user = User::factory()->withCredits(self::DUSK_HOLD - 1)->create();
+        Queue::fake();
+
+        try {
+            $this->app->make(CreateGenerationAction::class)->execute($user, self::duskRequest((string) Str::uuid()));
+            $this->fail('A generation the balance cannot hold was created.');
+        } catch (InsufficientCreditsException $exception) {
+            $this->assertSame(
+                ['required_nanodollars' => self::DUSK_HOLD, 'available_nanodollars' => self::DUSK_HOLD - 1, 'shortfall_nanodollars' => 1],
+                $exception->toArray(),
+            );
+        }
+
+        $this->assertSame(0, DB::table('generations')->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count());
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * D-38 holds after the first hold spent the balance: a double click gets the
+     * first generation back, never a refusal.
+     */
+    public function test_a_replay_after_the_hold_spent_the_balance_returns_the_first_generation(): void
+    {
+        $user = User::factory()->withCredits(self::DUSK_HOLD)->create();
+        $token = (string) Str::uuid();
+        $first = $this->createGenerationFor($user, self::duskRequest($token));
+
+        $replayed = $this->createGenerationFor($user, self::duskRequest($token));
+
+        $this->assertSame($first->id, $replayed->id);
+        $this->assertFalse($replayed->wasRecentlyCreated);
+        $this->assertSame(1, Generation::query()->count());
+        Queue::assertPushed(SubmitGenerationJob::class, 1);
+    }
+
+    /**
+     * AC 13: after a charge above its hold the balance is negative, and even the red
+     * fox, the cheapest kind of request, is refused until a top-up.
+     */
+    public function test_a_negative_balance_refuses_every_create(): void
+    {
+        $user = User::factory()->withCredits(10_000_000)->create();
+        Generation::factory()->succeeded()->create(['user_id' => $user->id]);
+        $this->assertSame(-99_312_500, CreditLedgerEntry::query()->ownedBy($user)->balance()->available->amount);
+
+        try {
+            $this->createGenerationFor($user, new NewGenerationData(self::RED_FOX_PROMPT, ImageSize::Square, ImageQuality::Low, []));
+            $this->fail('A create went through on a negative balance.');
+        } catch (InsufficientCreditsException $exception) {
+            $this->assertSame(self::RED_FOX_HOLD + 99_312_500, $exception->shortfall()->amount);
+            $this->assertSame(-99_312_500, $exception->available()->amount);
+            $this->assertSame(self::RED_FOX_HOLD, $exception->required()->amount);
+        }
+
+        $this->assertSame(1, Generation::query()->count());
+    }
+
+    public function test_another_users_balance_never_pays_for_a_hold(): void
+    {
+        User::factory()->withCredits(10_000_000_000)->create();
+        $user = User::factory()->withoutCredits()->create();
+
+        $this->expectException(InsufficientCreditsException::class);
+
+        $this->createGenerationFor($user, self::duskRequest());
     }
 }

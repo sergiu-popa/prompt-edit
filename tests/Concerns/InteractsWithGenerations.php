@@ -47,6 +47,16 @@ trait InteractsWithGenerations
     protected const int RED_FOX_HOLD = 21_850_000;
 
     /**
+     * PE-017's worked example: 30 code points, medium, 1024x1024 and no references.
+     */
+    protected const string DUSK_PROMPT = 'A lighthouse at dusk [succeed]';
+
+    /**
+     * The dusk request's hold, its max user price: ceil(69,050,000 × 125 / 100) n$.
+     */
+    protected const int DUSK_HOLD = 86_312_500;
+
+    /**
      * The submit job is held back, so the row stays pending with its hold, as
      * a test of anything after creation expects; on the test's `sync` queue
      * it would otherwise run inline. Tests of the dispatch itself call
@@ -73,6 +83,14 @@ trait InteractsWithGenerations
             ImageQuality::High,
             ['https://example.com/style.png'],
         );
+    }
+
+    /**
+     * PE-017's worked example, from the Generate form when it carries a token.
+     */
+    protected static function duskRequest(?string $submissionToken = null): NewGenerationData
+    {
+        return new NewGenerationData(self::DUSK_PROMPT, ImageSize::Square, ImageQuality::Medium, [], $submissionToken);
     }
 
     /**

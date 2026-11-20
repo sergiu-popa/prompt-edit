@@ -20,11 +20,11 @@ use Tests\Concerns\WaitsForDatabaseLocks;
 use Tests\TestCase;
 
 /**
- * Two requests of one form submission at once (D-38): the second, in its own
- * process and connection, waits on the first's uncommitted row in the unique
- * `(user_id, submission_token)` index, then gets that row back instead of
- * creating its own. The child must see committed rows, so this file truncates
- * instead of wrapping each test in a transaction.
+ * Two requests of one user at once. The second, in its own process and
+ * connection, waits on the user-row lock the first holds until it commits
+ * (D-68). Of one form submission (D-38), it then finds the first's row and
+ * gets it back instead of creating its own. The child must see committed rows,
+ * so this file truncates instead of wrapping each test in a transaction.
  */
 final class CreateGenerationActionConcurrencyTest extends TestCase
 {
