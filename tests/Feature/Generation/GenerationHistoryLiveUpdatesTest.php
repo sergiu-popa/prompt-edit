@@ -53,4 +53,26 @@ final class GenerationHistoryLiveUpdatesTest extends TestCase
 
         Queue::assertNothingPushed();
     }
+
+    public function test_a_partial_reload_returns_only_the_signed_in_users_generations(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $own = Generation::factory()->create(['user_id' => $user->id]);
+        Generation::factory()->create(['user_id' => $other->id, 'prompt' => 'Another user\'s prompt']);
+
+        $this->actingAs($user)
+            ->get(route('generations.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->tap(fn () => Generation::factory()->create(['user_id' => $other->id, 'prompt' => 'Another user\'s new prompt']))
+                ->reloadOnly('generations', fn (Assert $reload) => $reload
+                    ->has('generations.data', 1)
+                    ->where('generations.data.0.id', $own->id)
+                    ->where('generations.meta.total', 1)
+                    ->tap(fn (Assert $reloaded) => $this->assertStringNotContainsString(
+                        'Another user',
+                        (string) json_encode($reloaded->toArray()['props']),
+                    ))));
+    }
 }
