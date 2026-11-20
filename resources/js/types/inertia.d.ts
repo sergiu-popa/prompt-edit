@@ -1,5 +1,5 @@
 import type { AuthProps } from '@/types/auth';
-import type { CreditBalance } from '@/types/credits';
+import type { CreditBalance, CreditShortfall } from '@/types/credits';
 import type { NavigationLink } from '@/types/navigation';
 
 /**
@@ -18,6 +18,8 @@ declare module '@inertiajs/core' {
         flashDataType: {
             /** The generation CreateGenerationController just created, highlighted once on History. */
             highlighted_generation_id?: string;
+            /** Why the server refused a generation the balance can't hold (D-68), with the `balance` error. */
+            credit_shortfall?: CreditShortfall;
             /** The server's one-off notice, such as "Your session expired. Please try again." (D-60). */
             notice?: string;
         };
