@@ -30,10 +30,22 @@ const credits = computed(() => page.props.credits);
 const formId = useId();
 const focusFirstInvalidField = useFocusFirstInvalidField('formElement');
 
-const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmittable, rowErrors, formError, submit } = useGenerationForm({
+const {
+    form,
+    estimate,
+    referenceImageCount,
+    perReferenceNanodollars,
+    isSubmittable,
+    rowErrors,
+    formError,
+    shortfall,
+    isShortfallFromServer,
+    submit,
+} = useGenerationForm({
     pricing: () => props.pricing,
     limits: () => props.limits,
     canSubmit: () => props.can_submit,
+    available: () => credits.value?.available_nanodollars ?? null,
     onRejected: () => focusFirstInvalidField(),
 });
 </script>
@@ -83,6 +95,8 @@ const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmitta
                     :busy="form.processing"
                     :error="formError"
                     :unavailable="!can_submit"
+                    :shortfall="shortfall"
+                    :announce-shortfall="isShortfallFromServer"
                 />
             </div>
         </div>

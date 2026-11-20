@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fixturePricing, fixturePricingWith, LIGHTHOUSE_PROMPT } from '../../../support/pricing';
-import { givenCredits, givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
+import { givenCredits, givenFlash, givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending, page } from '../../support/inertia';
 import { descriptionOf, inputLabelled } from '../../support/form';
 import { visibleText } from '../../support/text';
 
@@ -441,6 +441,129 @@ describe('Generate page', () => {
             const wrapper = await highLandscapeLighthouse();
 
             expect(visibleText(wrapper.get('form'))).toContain('+$0.0096 each');
+        });
+    });
+
+    describe('affordability (AC 14)', () => {
+        /** PE-017's worked example at the defaults (Square, Medium): its max is 86,312,500 n$. */
+        const DUSK_PROMPT = 'A lighthouse at dusk [succeed]';
+
+        const AC_11_COPY =
+            'This generation needs $0.0863 reserved (its maximum estimate), but you have $0.0063 available. You need $0.0800 more.';
+
+        function shortfallCopy(wrapper: VueWrapper): string {
+            return visibleText(wrapper.get('[data-submit-area] [data-shortfall-copy]'));
+        }
+
+        beforeEach(() => {
+            givenCredits({ available_nanodollars: 6_312_500, reserved_nanodollars: 0, running_generations: 0 });
+        });
+
+        it('disables Generate while the max exceeds the balance, with the reason and a Buy credits link', async () => {
+            const wrapper = mountPage();
+
+            await wrapper.get('textarea').setValue(DUSK_PROMPT);
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+            expect(shortfallCopy(wrapper)).toBe(AC_11_COPY);
+            expect(wrapper.get('[data-submit-area] [data-shortfall] a').attributes('href')).toBe('/credits');
+            expect(wrapper.get('[data-submit-area] [data-shortfall]').attributes('role')).toBeUndefined();
+            expect(descriptionOf(wrapper, wrapper.get<HTMLButtonElement>('button[type="submit"]').element)).toContain(AC_11_COPY);
+        });
+
+        it('sends nothing from a disabled Generate', async () => {
+            const post = givenVisitsStayPending();
+            const wrapper = mountPage();
+
+            await wrapper.get('textarea').setValue(DUSK_PROMPT);
+            await wrapper.get('form').trigger('submit');
+
+            expect(post).not.toHaveBeenCalled();
+        });
+
+        it('re-enables Generate once a cheaper input is affordable', async () => {
+            givenCredits({ available_nanodollars: 25_000_000, reserved_nanodollars: 0, running_generations: 0 });
+            const wrapper = mountPage();
+            await wrapper.get('textarea').setValue(DUSK_PROMPT);
+            expect(generateButton(wrapper).attributes('disabled')).toBeDefined();
+
+            await radio(wrapper, 'Quality', 'Low').setValue(true);
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+            expect(wrapper.find('[data-shortfall]').exists()).toBe(false);
+        });
+
+        it('re-enables Generate once the balance covers the max', async () => {
+            const wrapper = mountPage();
+            await wrapper.get('textarea').setValue(DUSK_PROMPT);
+
+            page.props.credits = { available_nanodollars: 86_312_500, reserved_nanodollars: 0, running_generations: 0 };
+            await flushPromises();
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+            expect(wrapper.find('[data-shortfall]').exists()).toBe(false);
+        });
+
+        it('checks nothing without a balance to check against', async () => {
+            givenCredits(null);
+            const wrapper = mountPage();
+
+            await wrapper.get('textarea').setValue(DUSK_PROMPT);
+
+            expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+        });
+
+        describe("the server's refusal", () => {
+            /** A stale tab: the page thinks $1.00 is available, the server knows better. */
+            async function submitDuskRefused(): Promise<VueWrapper> {
+                givenCredits({ available_nanodollars: 1_000_000_000, reserved_nanodollars: 0, running_generations: 0 });
+                givenVisitsFailWith({ balance: "You don't have enough credit for this generation." });
+                givenFlash({
+                    credit_shortfall: {
+                        required_nanodollars: 86_312_500,
+                        available_nanodollars: 6_312_500,
+                        shortfall_nanodollars: 80_000_000,
+                    },
+                });
+                const wrapper = mountPage();
+
+                await wrapper.get('textarea').setValue(DUSK_PROMPT);
+                await wrapper.get('form').trigger('submit');
+                await flushPromises();
+
+                return wrapper;
+            }
+
+            it("shows the server's numbers, announced as an alert", async () => {
+                const wrapper = await submitDuskRefused();
+
+                const notice = wrapper.get('[data-submit-area] [data-shortfall]');
+                expect(notice.attributes('role')).toBe('alert');
+                expect(shortfallCopy(wrapper)).toBe(AC_11_COPY);
+                expect(visibleText(wrapper.get('[data-submit-area]'))).not.toContain("You don't have enough credit for this generation.");
+            });
+
+            it('hands over to the advisory once the prompt changes', async () => {
+                const wrapper = await submitDuskRefused();
+
+                await wrapper.get('textarea').setValue(`${DUSK_PROMPT}!`);
+
+                expect(wrapper.find('[data-submit-area] [data-shortfall]').exists()).toBe(false);
+                expect(generateButton(wrapper).attributes('disabled')).toBeUndefined();
+            });
+
+            it('falls back to the error text when the flash is gone, as after Back', async () => {
+                givenCredits({ available_nanodollars: 1_000_000_000, reserved_nanodollars: 0, running_generations: 0 });
+                givenVisitsFailWith({ balance: "You don't have enough credit for this generation." });
+                const wrapper = mountPage();
+
+                await wrapper.get('textarea').setValue(DUSK_PROMPT);
+                await wrapper.get('form').trigger('submit');
+                await flushPromises();
+
+                expect(wrapper.get('[data-submit-area] [role="alert"]').text()).toBe("You don't have enough credit for this generation.");
+                expect(wrapper.find('[data-shortfall]').exists()).toBe(false);
+            });
         });
     });
 });
