@@ -16,7 +16,9 @@ use Illuminate\Database\Eloquent\Builder;
  * `staleAtPixelforge()->dueForRecheck()->oldestProviderUpdateFirst()`, which the
  * partial `generations_reconcile_poll_index` serves, and its unsubmitted step
  * `awaitingRedispatch()->dueForRecheck()->oldestCreatedFirst()`, which the
- * partial `generations_pending_index` serves.
+ * partial `generations_pending_index` serves. Its stuck step reads
+ * `stuckUnwarned()->oldestCreatedFirst()`, which the partial
+ * `generations_stuck_unwarned_index` serves.
  *
  * @extends Builder<Generation>
  */
@@ -104,7 +106,8 @@ final class GenerationQueryBuilder extends Builder
 
     /**
      * Not terminal, created at or before the instant, and not yet warned about by the
-     * reconciler (D-56).
+     * reconciler (D-56). The status list and the null marker repeat the partial
+     * index's predicate, so the planner can use it.
      */
     public function stuckUnwarned(CarbonImmutable $createdBefore): self
     {

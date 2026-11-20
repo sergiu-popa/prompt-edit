@@ -249,6 +249,21 @@ final class GenerationQueryBuilderTest extends TestCase
         $this->assertSame(collect([$pending->id, $queued->id, $processing->id])->sort()->values()->all(), $ids);
     }
 
+    /**
+     * Terminal rows are never marked as warned, so only the partial index keeps this
+     * step from scanning all history every run.
+     */
+    public function test_the_stuck_selection_reads_the_partial_stuck_index(): void
+    {
+        Generation::factory()->processing()->create(['created_at' => self::now()->subHour()]);
+        DB::statement('SET LOCAL enable_seqscan = off');
+        $query = Generation::query()->stuckUnwarned(self::now()->subSeconds(900))->oldestCreatedFirst()->limit(20);
+
+        $plan = implode("\n", array_map(fn (object $line): string => (string) current((array) $line), DB::select('explain ' . $query->toSql(), $query->getBindings())));
+
+        $this->assertStringContainsString('generations_stuck_unwarned_index', $plan);
+    }
+
     private function awaitingRedispatchSelection(): GenerationQueryBuilder
     {
         return Generation::query()
