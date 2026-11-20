@@ -78,8 +78,10 @@ final readonly class CheckGenerationMoneyAction
         $holds = array_values(array_filter($ledger, fn (array $entry): bool => $entry[0] === CreditLedgerEntryType::Hold->value));
 
         if (count($holds) !== 1) {
-            $problems[] = sprintf('%d holds, expected 1', count($holds));
-        } elseif ($holds[0][1] !== -$holdAmount) {
+            return [...$problems, sprintf('%d holds, expected 1', count($holds))];
+        }
+
+        if ($holds[0][1] !== -$holdAmount) {
             $problems[] = sprintf('the hold is %d n$, expected %d n$', $holds[0][1], -$holdAmount);
         }
 
