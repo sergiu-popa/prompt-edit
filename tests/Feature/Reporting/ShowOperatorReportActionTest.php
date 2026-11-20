@@ -207,6 +207,40 @@ final class ShowOperatorReportActionTest extends TestCase
     }
 
     /**
+     * The ledger is the source of spend (D-08): the generation's own `user_charge_nanodollars`
+     * column is never read, so a row whose column disagrees still shows its ledger charge.
+     */
+    public function test_spend_comes_from_the_ledger_not_the_generations_charge_column(): void
+    {
+        $generation = $this->givenASucceededGeneration('2026-11-16T09:00:00Z');
+        DB::table('generations')->where('id', $generation->id)->update(['user_charge_nanodollars' => 1]);
+
+        $report = $this->report('2026-11-16', '2026-11-16');
+
+        $this->assertFigures([1, self::CHARGE, self::PROVIDER_COST], $report->days['2026-11-16']);
+    }
+
+    /**
+     * One aggregate query per range, however many users and days it covers: no N+1.
+     */
+    public function test_one_query_reads_the_whole_range(): void
+    {
+        foreach (['2026-11-14T09:00:00Z', '2026-11-15T09:00:00Z', '2026-11-16T09:00:00Z'] as $completedAt) {
+            $this->givenASucceededGeneration($completedAt);
+        }
+        Generation::factory()->providerCostOnly()->create(['completed_at' => CarbonImmutable::parse('2026-11-16T10:00:00Z')]);
+
+        DB::enableQueryLog();
+        $report = $this->report('2026-11-14', '2026-11-16');
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertCount(4, $report->users);
+        $this->assertCount(1, $queries);
+        $this->assertStringContainsString('"generations"', $queries[0]['query']);
+    }
+
+    /**
      * AC 13: users by spend descending, then by email; each user's totals sum their days.
      */
     public function test_users_are_sorted_by_spend_then_email_and_sum_their_days(): void
