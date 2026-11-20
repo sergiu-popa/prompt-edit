@@ -11,6 +11,7 @@ use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
+use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
@@ -127,6 +128,23 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         }
 
         return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), true);
+    }
+
+    /**
+     * The generation as the fake stores it now: its status, usage, rates and error.
+     * It signs nothing, so it needs no secret.
+     *
+     * @throws NotFoundException for an id the fake never created
+     */
+    public function retrieveGeneration(string $providerId): GenerationSnapshot
+    {
+        $generation = FakePixelforgeGeneration::query()->find($providerId);
+
+        if ($generation === null) {
+            throw new NotFoundException('invalid_request_error', 'No generation was found with this id.');
+        }
+
+        return GenerationSnapshot::from($generation->snapshot);
     }
 
     /**

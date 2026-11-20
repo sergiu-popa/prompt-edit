@@ -6,7 +6,9 @@ namespace App\Support\Pixelforge\Contracts;
 
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
+use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
+use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
@@ -29,6 +31,18 @@ interface PixelforgeClient
      * @throws RateBudgetExhaustedException when the account-wide budget is spent, so nothing was sent
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData;
+
+    /**
+     * `GET /v1/generations/{id}`: the generation as it is now. It sends no body and no
+     * idempotency key, and, like every call, takes one unit of the shared budget.
+     *
+     * @throws NotFoundException when the id is unknown or belongs to another account
+     * @throws PixelforgeApiException for any other documented error envelope
+     * @throws AmbiguousPixelforgeOutcomeException when no complete response arrived, or it is no readable generation
+     * @throws PixelforgeNotConfiguredException when nothing can be sent
+     * @throws RateBudgetExhaustedException when the account-wide budget is spent, so nothing was sent
+     */
+    public function retrieveGeneration(string $providerId): GenerationSnapshot;
 
     /**
      * Whether `createGeneration` can send anything at all. Until it can, Generate stays

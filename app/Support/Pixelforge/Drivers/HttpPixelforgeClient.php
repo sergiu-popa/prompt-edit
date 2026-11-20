@@ -15,6 +15,7 @@ use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -56,13 +57,8 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         }
 
         try {
-            $response = Http::baseUrl($this->baseUrl)
-                ->withToken($this->apiKey)
-                ->acceptJson()
+            $response = $this->request()
                 ->withHeaders(['Idempotency-Key' => $payload->idempotencyKey()])
-                ->connectTimeout($this->connectTimeoutSeconds)
-                ->timeout($this->requestTimeoutSeconds)
-                ->withoutRedirecting()
                 ->withBody($payload->toJson(), 'application/json')
                 ->post('generations');
         } catch (ConnectionException|RequestException $exception) {
@@ -80,6 +76,29 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     }
 
     /**
+     * The id is one encoded path segment, so it can never reach another endpoint.
+     * A documented 404 is a `NotFoundException`.
+     */
+    public function retrieveGeneration(string $providerId): GenerationSnapshot
+    {
+        if (! $this->isConfigured()) {
+            throw PixelforgeNotConfiguredException::missingApiKey();
+        }
+
+        try {
+            $response = $this->request()->get('generations/' . rawurlencode($providerId));
+        } catch (ConnectionException|RequestException $exception) {
+            throw AmbiguousPixelforgeOutcomeException::transportFailed($exception);
+        }
+
+        if (! $response->successful()) {
+            throw $this->errorFrom($response);
+        }
+
+        return $this->generationFrom($response);
+    }
+
+    /**
      * Configured once it has a key to send.
      *
      * @phpstan-assert-if-true non-empty-string $this->apiKey
@@ -87,6 +106,20 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     public function isConfigured(): bool
     {
         return $this->apiKey !== null && $this->apiKey !== '';
+    }
+
+    /**
+     * What every call shares: the base URL, the key, JSON, the timeouts and no
+     * redirects. Callers check isConfigured() first.
+     */
+    private function request(): PendingRequest
+    {
+        return Http::baseUrl($this->baseUrl)
+            ->withToken((string) $this->apiKey)
+            ->acceptJson()
+            ->connectTimeout($this->connectTimeoutSeconds)
+            ->timeout($this->requestTimeoutSeconds)
+            ->withoutRedirecting();
     }
 
     /**

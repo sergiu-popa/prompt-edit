@@ -57,6 +57,8 @@ final class HttpPixelforgeClientTest extends TestCase
 
     private const string CREATE_URL = 'https://pixelforge.promptedit.dev/v1/generations';
 
+    private const string PROVIDER_ID = 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K';
+
     public function test_the_http_driver_resolves_the_http_client_afresh_each_time_behind_the_rate_budget(): void
     {
         config(['pixelforge.driver' => 'http']);
@@ -518,6 +520,135 @@ final class HttpPixelforgeClientTest extends TestCase
         ];
     }
 
+    public function test_a_retrieve_returns_the_generation_as_it_is_now(): void
+    {
+        Http::fake(['*' => self::pixelforgeRetrieved(self::succeededObject())]);
+
+        $snapshot = $this->client()->retrieveGeneration(self::PROVIDER_ID);
+
+        $this->assertSame(self::PROVIDER_ID, $snapshot->id);
+        $this->assertSame(GenerationStatus::Succeeded, $snapshot->status);
+        $this->assertSame(self::GENERATION_ID, $snapshot->generationId);
+        $this->assertSame(3_184, $snapshot->usage?->reasoningTokens);
+    }
+
+    public function test_a_retrieve_is_a_bare_get_of_the_generation(): void
+    {
+        $options = [];
+        Http::fake(function (Request $request, array $requestOptions) use (&$options): PromiseInterface {
+            $options = $requestOptions;
+
+            return self::pixelforgeRetrieved(self::queuedObject());
+        });
+
+        $this->client()->retrieveGeneration(self::PROVIDER_ID);
+
+        $requests = $this->recordedRetrieveRequests();
+        $this->assertCount(1, $requests);
+        $this->assertSame('GET', $requests[0]->method());
+        $this->assertSame(self::CREATE_URL . '/' . self::PROVIDER_ID, $requests[0]->url());
+        $this->assertSame(['Bearer ' . self::PIXELFORGE_API_KEY], $requests[0]->header('Authorization'));
+        $this->assertSame(['application/json'], $requests[0]->header('Accept'));
+        $this->assertSame(['accept', 'authorization'], self::applicationHeaderNames($requests[0]));
+        $this->assertSame('', $requests[0]->body());
+        $this->assertSame(5, $options['connect_timeout'] ?? null);
+        $this->assertSame(30, $options['timeout'] ?? null);
+    }
+
+    public function test_a_retrieve_encodes_the_id_into_one_path_segment(): void
+    {
+        Http::fake(['*' => Http::response('', 500)]);
+
+        try {
+            $this->client()->retrieveGeneration('gen_1/../usage?x=1');
+        } catch (AmbiguousPixelforgeOutcomeException) {
+            //
+        }
+
+        $this->assertSame(self::CREATE_URL . '/gen_1%2F..%2Fusage%3Fx%3D1', $this->recordedRetrieveRequests()[0]->url());
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     * @param  class-string<PixelforgeApiException>  $class
+     */
+    #[DataProvider('documentedRetrieveErrors')]
+    public function test_a_documented_retrieve_error_becomes_its_typed_error(PixelforgeErrorCode $code, array $headers, string $class, ?int $retryAfterSeconds): void
+    {
+        Http::fake(['*' => self::pixelforgeErrorFor($code, headers: $headers)]);
+
+        try {
+            $this->client()->retrieveGeneration(self::PROVIDER_ID);
+            $this->fail('Expected a typed Pixelforge error.');
+        } catch (PixelforgeApiException $exception) {
+            $this->assertInstanceOf($class, $exception);
+            $this->assertSame($retryAfterSeconds, $exception->retryAfterSeconds);
+        }
+    }
+
+    /**
+     * @return array<string, array{PixelforgeErrorCode, array<string, string>, class-string<PixelforgeApiException>, ?int}>
+     */
+    public static function documentedRetrieveErrors(): array
+    {
+        return [
+            '404 not found' => [PixelforgeErrorCode::NotFound, [], NotFoundException::class, null],
+            '401 invalid api key' => [PixelforgeErrorCode::InvalidApiKey, [], InvalidApiKeyException::class, null],
+            '429 rate limit exceeded, Retry-After 17' => [PixelforgeErrorCode::RateLimitExceeded, ['Retry-After' => '17'], RateLimitExceededException::class, 17],
+        ];
+    }
+
+    #[DataProvider('ambiguousRetrieveAnswers')]
+    public function test_a_retrieve_answer_that_is_no_generation_or_typed_error_is_ambiguous(string $answer, ?int $status): void
+    {
+        Http::fake(['*' => match ($answer) {
+            '500' => Http::response('', 500),
+            'undocumented 404' => Http::response('<html>Not Found</html>', 404, ['Content-Type' => 'text/html']),
+            '302' => Http::response('', 302, ['Location' => 'https://elsewhere.example/generations']),
+            'timeout' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received'),
+            'unreadable 200' => Http::response('{"object":"generation"}', 200),
+            default => $this->fail(sprintf('Unknown answer %s.', $answer)),
+        }]);
+
+        try {
+            $this->client()->retrieveGeneration(self::PROVIDER_ID);
+            $this->fail('Expected an ambiguous outcome.');
+        } catch (AmbiguousPixelforgeOutcomeException $exception) {
+            $this->assertSame($status, $exception->status);
+        }
+
+        Http::assertSentCount(1);
+    }
+
+    /**
+     * @return array<string, array{string, ?int}>
+     */
+    public static function ambiguousRetrieveAnswers(): array
+    {
+        return [
+            'a 500' => ['500', 500],
+            'a 404 without the envelope' => ['undocumented 404', 404],
+            'a 302, not followed' => ['302', 302],
+            'a read timeout' => ['timeout', null],
+            'an unreadable 200' => ['unreadable 200', 200],
+        ];
+    }
+
+    #[DataProvider('missingKeys')]
+    public function test_a_retrieve_without_a_key_raises_not_configured_and_sends_nothing(?string $key): void
+    {
+        config(['pixelforge.api_key' => $key]);
+        Http::fake();
+
+        $this->expectException(PixelforgeNotConfiguredException::class);
+
+        try {
+            $this->client()->retrieveGeneration(self::PROVIDER_ID);
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
     public function test_a_trace_through_the_constructor_redacts_the_key(): void
     {
         $parameter = new ReflectionParameter([HttpPixelforgeClient::class, '__construct'], 'apiKey');
@@ -565,6 +696,19 @@ final class HttpPixelforgeClientTest extends TestCase
     {
         return [
             ...self::pixelforgeFixture('generation-queued'),
+            'metadata' => ['generation_id' => self::GENERATION_ID],
+        ];
+    }
+
+    /**
+     * The docs' succeeded object, echoing our ULID.
+     *
+     * @return array<string, mixed>
+     */
+    private static function succeededObject(): array
+    {
+        return [
+            ...self::pixelforgeFixture('generation-succeeded'),
             'metadata' => ['generation_id' => self::GENERATION_ID],
         ];
     }
