@@ -13,6 +13,7 @@ use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use App\Support\Pixelforge\PixelforgeCreateLock;
 use Carbon\CarbonImmutable;
 use Closure;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -66,6 +67,36 @@ final class ReconcileGiveUpTest extends TestCase
         $this->assertSame('Gave up on a generation Pixelforge never confirmed; it is failed as lost and not charged.', $errors[0]->message);
         $this->assertSame($redFox->id, $errors[0]->context['generation_id']);
         $this->assertSame('applied', $errors[0]->context['outcome']);
+    }
+
+    /**
+     * A re-dispatched create may still be in flight at the day's end. The give-up
+     * waits for its lock, so that create cannot land on a `lost` row; the next run,
+     * with the lock free, gives up.
+     */
+    public function test_a_row_whose_create_is_in_flight_is_given_up_at_the_next_run(): void
+    {
+        $redFox = $this->givenTheHandedOverRedFox();
+        $this->travel(self::DAY_SECONDS)->seconds();
+        $inFlightCreate = app(PixelforgeCreateLock::class)->for($redFox->id);
+        $this->assertTrue($inFlightCreate->get());
+
+        $this->runReconciler();
+
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($redFox)->status);
+        $this->assertSame([['hold', -self::RED_FOX_HOLD]], $this->ledgerEntriesFor($redFox));
+        $this->assertSame([], array_values(array_filter($this->loggedMessages(), fn (MessageLogged $message): bool => $message->level === 'error')));
+        $skipped = array_values(array_filter($this->loggedMessages(), fn (MessageLogged $message): bool => str_starts_with($message->message, 'A submit run holds the create lock')));
+        $this->assertCount(1, $skipped);
+        $this->assertSame('info', $skipped[0]->level);
+        $this->assertSame($redFox->id, $skipped[0]->context['generation_id']);
+
+        $inFlightCreate->release();
+        $this->travel(1)->minutes();
+        $this->runReconciler();
+
+        $this->assertSame(LocalFailureReason::Lost, $this->reloadedGeneration($redFox)->local_failure_reason);
+        $this->assertSame([['hold', -self::RED_FOX_HOLD], ['release', self::RED_FOX_HOLD]], $this->ledgerEntriesFor($redFox));
     }
 
     /**
