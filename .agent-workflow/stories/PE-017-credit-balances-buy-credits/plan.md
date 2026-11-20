@@ -53,8 +53,8 @@ Tasks 1–11 are the balance half: the ledger types, the balance, starter grants
 
 ### Deferred until PE-016 has merged (orchestrator, after rebasing onto `main`)
 These two need PE-016's code, which this branch doesn't have. The Engineer, Reviewer and QA leave them unticked. See "Deferred test design".
-- [ ] 24. Add `tests/Feature/Reporting/OperatorReportIgnoresCreditTopUpsTest.php` (AC 19). Commit: `[PE-017] Prove the operator report ignores grants and purchases`
-- [ ] 25. Make PE-016's operator seeder call `GrantStarterCreditsAction` after it creates or updates the operator, and add a row to its seeder test: two runs leave exactly one grant (AC 2). Commit: `[PE-017] Give the seeded operator its starter grant`
+- [x] 24. Add `tests/Feature/Reporting/OperatorReportIgnoresCreditTopUpsTest.php` (AC 19). Commit: `[PE-017] Prove the operator report ignores grants and purchases`
+- [x] 25. Make PE-016's operator seeder call `GrantStarterCreditsAction` after it creates or updates the operator, and add a row to its seeder test: two runs leave exactly one grant (AC 2). Commit: `[PE-017] Give the seeded operator its starter grant`
 
 ## Story clarifications
 - **One PR.** The story asks for a PE-017a/b split. Per `.agent-workflow/CLAUDE.md`, this is one PR with the split named as the cut point after task 11.
@@ -261,3 +261,7 @@ PE-016 merged first (#26, `1a92c58`), so this branch was rebased from `52e0515` 
 - `BuyCreditsPageTest` (`ccb380f`) lists `operator_navigation` among the shared props.
 
 Tasks 24 and 25 follow in their own commits.
+
+## Engineer notes (QA fix round, after the rebase)
+- Task 25 (`35646f3`): `OperatorUserSeeder` grants the starter credit after it grants access. Its test adds two runs leaving one grant, a pre-balances operator getting its grant, and no ledger row when production is refused.
+- Task 24 (`f6c2cb0`): PE-016's worked example was private to `OperatorReportWorkedExampleTest`, so it moved into `tests/Concerns/BuildsTheOperatorReportWorkedExample.php` and both tests build it from there. No PE-016 production code changed. The new test compares `toArray()` of R0 and R1, the report's page-prop shape.
