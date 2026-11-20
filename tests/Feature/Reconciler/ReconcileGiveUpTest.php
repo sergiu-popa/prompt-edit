@@ -11,9 +11,13 @@ use App\Domain\Generation\Models\Generation;
 use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use Carbon\CarbonImmutable;
+use Closure;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Tests\Concerns\CapturesLogMessages;
@@ -27,7 +31,7 @@ use Tests\TestCase;
 /**
  * AC 20, on PE-014's red fox: a generation Pixelforge never confirmed is given up a
  * day after its creation, as `lost` and free (D-49). A late success then records
- * Pixelforge's cost only (D-09).
+ * Pixelforge's cost only (D-09). One Pixelforge confirmed is never given up (AC 21).
  */
 final class ReconcileGiveUpTest extends TestCase
 {
@@ -105,6 +109,104 @@ final class ReconcileGiveUpTest extends TestCase
         $this->assertSame('We couldn\'t confirm this generation with Pixelforge. You were not charged.', $item['failure_message']);
         $this->assertNull($item['user_charge_nanodollars']);
         $this->assertNull($item['image_url']);
+    }
+
+    /**
+     * AC 21: never given up, because Pixelforge confirmed it. After a day of
+     * `not_found` the operator gets one error log, whatever further runs answer.
+     */
+    public function test_a_confirmed_row_not_found_for_over_a_day_is_reported_once_and_keeps_its_hold(): void
+    {
+        $redFox = $this->givenTheSubmittedRedFox();
+        $this->answerPollsWith(fn (): PromiseInterface => self::pixelforgeErrorFor(PixelforgeErrorCode::NotFound));
+        $this->travel(5)->minutes();
+        $this->runReconciler();
+        $since = CarbonImmutable::now()->startOfSecond();
+
+        $this->travel(self::DAY_SECONDS + 1)->seconds();
+
+        for ($run = 0; $run < 4; $run++) {
+            $this->runReconciler();
+            $this->travel(15)->minutes();
+        }
+
+        $row = $this->reloadedGeneration($redFox);
+        $this->assertCount(5, $this->recordedRetrieveRequests());
+        $this->assertSame(GenerationStatus::Queued, $row->status);
+        $this->assertSame([['hold', -self::RED_FOX_HOLD]], $this->ledgerEntriesFor($redFox));
+        $this->assertTrue($row->reconcile_not_found_since?->equalTo($since));
+        $this->assertNotNull($row->reconcile_not_found_reported_at);
+
+        $reports = $this->notFoundReports();
+        $this->assertCount(1, $reports);
+        $this->assertSame('error', $reports[0]->level);
+        $this->assertSame($redFox->id, $reports[0]->context['generation_id']);
+        $this->assertSame($row->provider_id, $reports[0]->context['provider_id']);
+    }
+
+    public function test_a_day_of_not_found_is_not_yet_too_long(): void
+    {
+        $this->givenTheSubmittedRedFox();
+        $this->answerPollsWith(fn (): PromiseInterface => self::pixelforgeErrorFor(PixelforgeErrorCode::NotFound));
+        $this->travel(5)->minutes();
+        $this->runReconciler();
+
+        $this->travel(self::DAY_SECONDS)->seconds();
+        $this->runReconciler();
+
+        $this->assertCount(2, $this->recordedRetrieveRequests());
+        $this->assertSame([], $this->notFoundReports());
+    }
+
+    public function test_any_snapshot_ends_the_not_found_streak(): void
+    {
+        $redFox = $this->givenTheSubmittedRedFox();
+        $answer = fn (): PromiseInterface => self::pixelforgeErrorFor(PixelforgeErrorCode::NotFound);
+        $this->answerPollsWith(function () use (&$answer): PromiseInterface {
+            return $answer();
+        });
+        $this->travel(5)->minutes();
+        $this->runReconciler();
+        $this->assertNotNull($this->reloadedGeneration($redFox)->reconcile_not_found_since);
+
+        $answer = fn (): PromiseInterface => self::pixelforgeRetrieved(self::generationObjectFor($redFox, GenerationStatus::Queued));
+        $this->travel(5)->minutes();
+        $this->runReconciler();
+
+        $row = $this->reloadedGeneration($redFox);
+        $this->assertCount(2, $this->recordedRetrieveRequests());
+        $this->assertNull($row->reconcile_not_found_since);
+        $this->assertNull($row->reconcile_not_found_reported_at);
+    }
+
+    /**
+     * Its create was answered `202`, so it has a provider id and is `queued`.
+     */
+    private function givenTheSubmittedRedFox(): Generation
+    {
+        $redFox = $this->givenTheRedFoxGeneration();
+        $this->transitionGeneration($redFox, self::snapshotFor($redFox, GenerationStatus::Queued));
+
+        return $this->reloadedGeneration($redFox);
+    }
+
+    /**
+     * @param  Closure(): PromiseInterface  $answer
+     */
+    private function answerPollsWith(Closure $answer): void
+    {
+        Http::fake(fn (): PromiseInterface => $answer());
+    }
+
+    /**
+     * @return list<MessageLogged>
+     */
+    private function notFoundReports(): array
+    {
+        return array_values(array_filter(
+            $this->loggedMessages(),
+            fn (MessageLogged $message): bool => str_starts_with($message->message, 'Pixelforge has not found a generation it confirmed'),
+        ));
     }
 
     /**

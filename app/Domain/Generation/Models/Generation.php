@@ -78,6 +78,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $submit_invalid_api_key_count
  * @property ?SubmitRetryNote $submit_retry_note
  * @property ?CarbonImmutable $reconcile_recheck_at
+ * @property ?CarbonImmutable $reconcile_not_found_since
+ * @property ?CarbonImmutable $reconcile_not_found_reported_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  *
@@ -136,7 +138,7 @@ final class Generation extends Model
      * columns alone, like the submit bookkeeping: never status, costs, the
      * ledger or `updated_at`, so it never reads as news from Pixelforge.
      *
-     * @param  array{reconcile_recheck_at?: ?CarbonImmutable}  $columns
+     * @param  array{reconcile_recheck_at?: ?CarbonImmutable, reconcile_not_found_since?: ?CarbonImmutable, reconcile_not_found_reported_at?: ?CarbonImmutable}  $columns
      */
     public function recordReconcileBookkeeping(array $columns): void
     {
@@ -198,6 +200,8 @@ final class Generation extends Model
             'submit_invalid_api_key_count' => 'integer',
             'submit_retry_note' => SubmitRetryNote::class,
             'reconcile_recheck_at' => 'immutable_datetime',
+            'reconcile_not_found_since' => 'immutable_datetime',
+            'reconcile_not_found_reported_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

@@ -161,6 +161,13 @@ final class ReconcilePolicyTest extends TestCase
         $this->assertSame($pastGiveUp, self::policy()->isPastGiveUp(self::now()->subSeconds($ageSeconds), self::now()));
     }
 
+    public function test_a_not_found_streak_is_too_long_only_past_the_give_up_age(): void
+    {
+        $this->assertFalse(self::policy()->hasBeenNotFoundTooLong(self::now()->subSeconds(86_400), self::now()));
+        $this->assertTrue(self::policy()->hasBeenNotFoundTooLong(self::now()->subSeconds(86_401), self::now()));
+        $this->assertFalse(self::policy()->hasBeenNotFoundTooLong(self::now()->subMinute(), self::now()));
+    }
+
     private static function now(): CarbonImmutable
     {
         return CarbonImmutable::parse(self::NOW);

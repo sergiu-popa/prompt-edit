@@ -24,7 +24,8 @@ use LogicException;
  * to the single transition action (D-06), so a poll settles exactly as a webhook
  * would, and exactly once however the two interleave. The next check is recorded
  * before the request (D-50), so a poll that fails still waits its turn. A failed
- * poll is never retried here: the cadence is the retry.
+ * poll is never retried here: the cadence is the retry. A confirmed generation is
+ * never failed here, however long Pixelforge answers `not_found` (D-49).
  */
 final class PollGenerationAction
 {
@@ -58,6 +59,7 @@ final class PollGenerationAction
                 'generation_id' => $generation->id,
                 'provider_id' => $providerId,
             ]);
+            $this->recordNotFound($generation, $providerId, $now);
 
             return;
         } catch (ReportsPixelforgeContext $exception) {
@@ -70,6 +72,10 @@ final class PollGenerationAction
             return;
         }
 
+        if ($generation->reconcile_not_found_since !== null) {
+            $generation->recordReconcileBookkeeping(['reconcile_not_found_since' => null, 'reconcile_not_found_reported_at' => null]);
+        }
+
         $outcome = $this->transitionGeneration->execute($generation, $snapshot);
 
         if ($outcome === GenerationTransitionOutcome::Applied) {
@@ -80,5 +86,32 @@ final class PollGenerationAction
                 'outcome' => $outcome->value,
             ]);
         }
+    }
+
+    /**
+     * The streak starts at the first `not_found`; other errors neither start nor end
+     * it. Once it is longer than the give-up age, one error log names both ids for
+     * the operator, and the row keeps its hold and is polled on (D-49).
+     */
+    private function recordNotFound(Generation $generation, string $providerId, CarbonImmutable $now): void
+    {
+        $since = $generation->reconcile_not_found_since;
+
+        if ($since === null) {
+            $generation->recordReconcileBookkeeping(['reconcile_not_found_since' => $now]);
+
+            return;
+        }
+
+        if ($generation->reconcile_not_found_reported_at !== null || ! $this->policy->hasBeenNotFoundTooLong($since, $now)) {
+            return;
+        }
+
+        Log::error('Pixelforge has not found a generation it confirmed for over a day; it keeps its hold and is still polled.', [
+            'generation_id' => $generation->id,
+            'provider_id' => $providerId,
+            'not_found_since' => $since->toIso8601ZuluString(),
+        ]);
+        $generation->recordReconcileBookkeeping(['reconcile_not_found_reported_at' => $now]);
     }
 }

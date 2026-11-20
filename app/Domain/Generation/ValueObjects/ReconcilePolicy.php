@@ -101,4 +101,13 @@ final readonly class ReconcilePolicy
     {
         return $now->greaterThanOrEqualTo($createdAt->addSeconds($this->giveUpAfterSeconds));
     }
+
+    /**
+     * A confirmed generation is never given up (D-49), but once Pixelforge has
+     * answered `not_found` for longer than the give-up age, the operator is told.
+     */
+    public function hasBeenNotFoundTooLong(CarbonImmutable $notFoundSince, CarbonImmutable $now): bool
+    {
+        return $now->greaterThan($notFoundSince->addSeconds($this->giveUpAfterSeconds));
+    }
 }
