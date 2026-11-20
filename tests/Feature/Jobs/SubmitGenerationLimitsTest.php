@@ -7,11 +7,14 @@ namespace Tests\Feature\Jobs;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Enums\SubmitRetryNote;
+use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithPixelforgeApi;
@@ -23,6 +26,7 @@ use Tests\TestCase;
  */
 final class SubmitGenerationLimitsTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithCreditLedger;
     use InteractsWithGenerations;
     use InteractsWithPixelforgeApi;
@@ -132,6 +136,72 @@ final class SubmitGenerationLimitsTest extends TestCase
 
         $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
+    }
+
+    /**
+     * AC 14: a key rotated mid-deploy gets 3 tries in 40 s; then it is free, with one
+     * critical alert.
+     */
+    public function test_a_refused_key_is_tried_three_times_then_fails_free_with_one_alert(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::InvalidApiKey)]);
+
+        $this->runSubmitJob($lighthouse)->assertReleased(20);
+        $this->travel(20)->seconds();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(20);
+        $this->travel(20)->seconds();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertNotReleased();
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertCount(3, $this->recordedCreateRequests());
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(LocalFailureReason::ServiceUnavailable, $row->local_failure_reason);
+        $this->assertSame(3, $row->submit_invalid_api_key_count);
+        $this->assertSame(self::LIGHTHOUSE_FREE, $this->ledgerEntriesFor($lighthouse));
+        $this->assertOneSecretFreeAlertFor($lighthouse);
+    }
+
+    /**
+     * AC 13 and 14: latched, it is never failed here; the alert is still written once.
+     */
+    public function test_a_latched_generation_whose_key_is_refused_keeps_trying_with_one_alert(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => Http::sequence()
+            ->pushFailedConnection(self::READ_TIMEOUT)
+            ->whenEmpty(self::pixelforgeErrorFor(PixelforgeErrorCode::InvalidApiKey))]);
+        $this->runSubmitJob($lighthouse)->assertReleased(5);
+        $this->travel(5)->seconds();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(20);
+        $this->travel(20)->seconds();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(20);
+        $this->travel(20)->seconds();
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(60);
+        $this->travel(60)->seconds();
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse))->assertReleased(60);
+
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
+        $this->assertOneSecretFreeAlertFor($lighthouse);
+    }
+
+    private function assertOneSecretFreeAlertFor(Generation $generation): void
+    {
+        $alerts = array_values(array_filter(
+            $this->loggedMessages(),
+            fn (MessageLogged $logged): bool => $logged->level === 'critical',
+        ));
+
+        $this->assertCount(1, $alerts);
+        $this->assertSame(['generation_id' => $generation->id, 'error_code' => 'invalid_api_key', 'status' => 401], $alerts[0]->context);
+
+        $logged = $alerts[0]->message . json_encode($alerts[0]->context, JSON_THROW_ON_ERROR);
+
+        foreach ([self::PIXELFORGE_API_KEY, 'Bearer', 'Authorization', 'Idempotency-Key', 'Content-Type', 'Accept'] as $secret) {
+            $this->assertStringNotContainsStringIgnoringCase($secret, $logged);
+        }
     }
 
     private static function concurrencyLimited(): PromiseInterface

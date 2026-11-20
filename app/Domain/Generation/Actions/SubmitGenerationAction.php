@@ -141,6 +141,10 @@ final class SubmitGenerationAction
         $finished = $this->finishAttempt($generation, $bookkeeping, SubmitAttemptOutcome::fromFailure($failure));
         $decision = $this->retryPolicy->decide($finished, self::retryAfterSecondsOf($failure), CarbonImmutable::now());
 
+        if ($this->retryPolicy->reachedInvalidApiKeyLimit($finished)) {
+            self::alertRefusedKey($generation, $failure);
+        }
+
         if ($decision->retryInSeconds !== null) {
             Log::warning('Pixelforge did not take a generation create; it will be retried with the same key.', [
                 'generation_id' => $generation->id,
@@ -199,6 +203,21 @@ final class SubmitGenerationAction
                 'reason' => $reason->value,
             ]),
         };
+    }
+
+    /**
+     * Once per generation (AC 14). The context names the generation and the error
+     * only: never the key, a header or the request.
+     */
+    private static function alertRefusedKey(Generation $generation, ReportsPixelforgeContext $failure): void
+    {
+        $context = $failure->context();
+
+        Log::critical('Pixelforge keeps refusing our API key; this generation will not be sent with it.', [
+            'generation_id' => $generation->id,
+            'error_code' => $context['error_code'],
+            'status' => $context['status'] ?? null,
+        ]);
     }
 
     /**

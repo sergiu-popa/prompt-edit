@@ -60,6 +60,16 @@ final readonly class SubmitRetryPolicy
     public const int DAILY_LIMITED_LATCHED_WAIT_SECONDS = 60;
 
     /**
+     * A refused key is tried again soon, in case it was rotated mid-deploy (AC 14).
+     */
+    public const int INVALID_API_KEY_WAIT_SECONDS = 20;
+
+    /**
+     * A latched generation whose key is still refused checks back once a minute.
+     */
+    public const int INVALID_API_KEY_LATCHED_WAIT_SECONDS = 60;
+
+    /**
      * Nothing can be sent until a key (or the fake's secret) is configured.
      */
     public const int NOT_CONFIGURED_WAIT_SECONDS = 60;
@@ -71,6 +81,8 @@ final readonly class SubmitRetryPolicy
         private int $overloadedDeadlineSeconds,
         #[Config('pixelforge.submit.concurrency_max_wait_seconds')]
         private int $concurrencyMaxWaitSeconds,
+        #[Config('pixelforge.submit.invalid_api_key_attempts')]
+        private int $invalidApiKeyAttempts,
     ) {}
 
     /**
@@ -97,6 +109,16 @@ final readonly class SubmitRetryPolicy
     }
 
     /**
+     * Whether the last attempt was the refused key that reached the limit, which is
+     * alerted once per generation.
+     */
+    public function reachedInvalidApiKeyLimit(SubmitBookkeeping $bookkeeping): bool
+    {
+        return $bookkeeping->lastOutcome === SubmitAttemptOutcome::InvalidApiKey
+            && $bookkeeping->invalidApiKeyCount === $this->invalidApiKeyAttempts;
+    }
+
+    /**
      * Whether an attempt starting now would be past the window, measured from the
      * first attempt. A generation never attempted has a window still to come.
      */
@@ -120,10 +142,10 @@ final readonly class SubmitRetryPolicy
             SubmitAttemptOutcome::DailyLimited => $bookkeeping->isAmbiguous()
                 ? SubmitDecision::retryIn(self::DAILY_LIMITED_LATCHED_WAIT_SECONDS)
                 : SubmitDecision::failFree(LocalFailureReason::DailyLimit),
+            SubmitAttemptOutcome::InvalidApiKey => $this->afterInvalidApiKey($bookkeeping),
             SubmitAttemptOutcome::NotConfigured => SubmitDecision::retryIn(self::NOT_CONFIGURED_WAIT_SECONDS),
             SubmitAttemptOutcome::BudgetExhausted,
-            SubmitAttemptOutcome::RateLimited,
-            SubmitAttemptOutcome::InvalidApiKey => SubmitDecision::retryIn($retryAfterSeconds ?? self::RATE_LIMITED_WAIT_SECONDS),
+            SubmitAttemptOutcome::RateLimited => SubmitDecision::retryIn($retryAfterSeconds ?? self::RATE_LIMITED_WAIT_SECONDS),
             SubmitAttemptOutcome::Accepted, SubmitAttemptOutcome::Rejected, null => throw new LogicException(sprintf(
                 'A submit attempt that ended %s is not retried.',
                 $outcome->value ?? 'without an outcome',
@@ -167,6 +189,21 @@ final readonly class SubmitRetryPolicy
         }
 
         return SubmitDecision::retryIn($retryAfterSeconds ?? self::CONCURRENCY_LIMITED_WAIT_SECONDS);
+    }
+
+    /**
+     * Tried again 20 s later until the limit, where it fails free unless latched;
+     * a latched one checks back once a minute from then on.
+     */
+    private function afterInvalidApiKey(SubmitBookkeeping $bookkeeping): SubmitDecision
+    {
+        if ($bookkeeping->invalidApiKeyCount < $this->invalidApiKeyAttempts) {
+            return SubmitDecision::retryIn(self::INVALID_API_KEY_WAIT_SECONDS);
+        }
+
+        return $bookkeeping->isAmbiguous()
+            ? SubmitDecision::retryIn(self::INVALID_API_KEY_LATCHED_WAIT_SECONDS)
+            : SubmitDecision::failFree(LocalFailureReason::ServiceUnavailable);
     }
 
     private static function ambiguousWait(SubmitBookkeeping $bookkeeping, CarbonImmutable $now): int

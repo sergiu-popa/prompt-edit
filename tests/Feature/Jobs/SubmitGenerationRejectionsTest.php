@@ -109,15 +109,14 @@ final class SubmitGenerationRejectionsTest extends TestCase
     }
 
     /**
-     * Until the 401 rule lands, a refused key waits like a rate limit. The daily
-     * limit fails at once (SubmitGenerationLimitsTest).
+     * The daily limit and a refused key's last try fail free (SubmitGenerationLimitsTest).
      *
      * @return array<string, array{string, int}>
      */
     public static function releasedFailures(): array
     {
         return [
-            '401 invalid api key' => ['401', 60],
+            '401 invalid api key, the first' => ['401', 20],
             '404 not found, ambiguous at create' => ['404', 5],
             '429 rate limit exceeded, Retry-After 17' => ['429 rate', 17],
             '429 concurrency limit exceeded, Retry-After 5' => ['429 concurrency', 5],

@@ -71,6 +71,12 @@ return [
         'concurrency_max_wait_seconds' => filter_var(env('PIXELFORGE_CONCURRENCY_MAX_WAIT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 600]]),
 
         /**
+         * How many `401 invalid_api_key` answers, 20 s apart, a generation gets
+         * before it fails free: enough to ride out a key rotated mid-deploy.
+         */
+        'invalid_api_key_attempts' => 3,
+
+        /**
          * Above the request timeout and below the queue's `retry_after` (90),
          * so one job never runs twice at once (AC 19).
          */

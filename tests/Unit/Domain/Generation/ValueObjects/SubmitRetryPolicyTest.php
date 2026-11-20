@@ -27,6 +27,8 @@ final class SubmitRetryPolicyTest extends TestCase
 
     private const int CONCURRENCY_MAX_WAIT = 600;
 
+    private const int INVALID_API_KEY_ATTEMPTS = 3;
+
     private const string FIRST_ATTEMPT = '2026-11-20T10:00:00Z';
 
     private SubmitRetryPolicy $policy;
@@ -35,7 +37,7 @@ final class SubmitRetryPolicyTest extends TestCase
     {
         parent::setUp();
 
-        $this->policy = new SubmitRetryPolicy(self::WINDOW, self::OVERLOADED_DEADLINE, self::CONCURRENCY_MAX_WAIT);
+        $this->policy = new SubmitRetryPolicy(self::WINDOW, self::OVERLOADED_DEADLINE, self::CONCURRENCY_MAX_WAIT, self::INVALID_API_KEY_ATTEMPTS);
     }
 
     /**
@@ -52,7 +54,6 @@ final class SubmitRetryPolicyTest extends TestCase
             'no key, whatever was sent' => [SubmitAttemptOutcome::NotConfigured, null, 60],
             'a concurrency limit with Retry-After 5' => [SubmitAttemptOutcome::ConcurrencyLimited, 5, 5],
             'a concurrency limit without Retry-After' => [SubmitAttemptOutcome::ConcurrencyLimited, null, 5],
-            'a refused key, as a rate limit until PE-013b' => [SubmitAttemptOutcome::InvalidApiKey, null, 60],
         ];
     }
 
@@ -201,6 +202,44 @@ final class SubmitRetryPolicyTest extends TestCase
         $bookkeeping = new SubmitBookkeeping($now, $now, SubmitAttemptOutcome::DailyLimited, $now);
 
         $this->assertRetriesIn(60, $this->policy->decide($bookkeeping, null, $now));
+    }
+
+    /**
+     * @return array<string, array{int, bool, ?int, ?LocalFailureReason, bool}>
+     */
+    public static function refusedKeys(): array
+    {
+        return [
+            'the 1st 401' => [1, false, 20, null, false],
+            'the 2nd 401' => [2, false, 20, null, false],
+            'the 3rd 401' => [3, false, null, LocalFailureReason::ServiceUnavailable, true],
+            'the 1st 401, latched' => [1, true, 20, null, false],
+            'the 3rd 401, latched' => [3, true, 60, null, true],
+            'the 4th 401, latched' => [4, true, 60, null, false],
+        ];
+    }
+
+    /**
+     * AC 14: at most 3 attempts within 60 s, then free, unless latched; the limit is
+     * reached, and alerted, exactly once.
+     */
+    #[DataProvider('refusedKeys')]
+    public function test_a_refused_key_is_tried_briefly_then_fails_free(int $count, bool $latched, ?int $wait, ?LocalFailureReason $failure, bool $reachesLimit): void
+    {
+        $now = self::at(self::FIRST_ATTEMPT)->addSeconds(40);
+        $bookkeeping = new SubmitBookkeeping(
+            self::at(self::FIRST_ATTEMPT),
+            $now,
+            SubmitAttemptOutcome::InvalidApiKey,
+            ambiguousAt: $latched ? self::at(self::FIRST_ATTEMPT) : null,
+            invalidApiKeyCount: $count,
+        );
+
+        $decision = $this->policy->decide($bookkeeping, null, $now);
+
+        $this->assertSame($wait, $decision->retryInSeconds);
+        $this->assertSame($failure, $decision->failureReason);
+        $this->assertSame($reachesLimit, $this->policy->reachedInvalidApiKeyLimit($bookkeeping));
     }
 
     /**
