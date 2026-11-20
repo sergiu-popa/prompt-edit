@@ -99,6 +99,15 @@ final class RegistrationTest extends TestCase
         ];
     }
 
+    public function test_registering_never_grants_operator_access(): void
+    {
+        $this->from('/register')
+            ->post('/register', [...$this->registrationInput(), 'is_operator' => '1'])
+            ->assertRedirect(route('dashboard'));
+
+        $this->assertFalse(User::query()->sole()->refresh()->is_operator);
+    }
+
     public function test_the_email_is_stored_lowercase(): void
     {
         $this->register(['email' => 'Ada@Example.COM'])->assertRedirect(route('dashboard'));
