@@ -71,12 +71,30 @@ export function givenVisitsStayPending() {
  * errors that belong to no form field.
  */
 export function givenVisitsFailWith(errors: Record<string, string>) {
-    return vi.spyOn(router, 'post').mockImplementation((_url, _data, options: VisitOptions = {}) => {
+    return vi.spyOn(router, 'post').mockImplementation((_url, _data, options: VisitOptions = {}) => failWith(errors, options));
+}
+
+/**
+ * Every GET starts and never finishes, as while the request is in flight.
+ */
+export function givenGetVisitsStayPending() {
+    return vi.spyOn(router, 'get').mockImplementation((_url, _data, options: VisitOptions = {}) => {
         options.onStart?.(pendingVisit);
-        page.props.errors = errors;
-        options.onError?.(errors);
-        options.onFinish?.(finishedVisit);
     });
+}
+
+/**
+ * Every GET comes back with these validation errors, like `givenVisitsFailWith()` for a POST.
+ */
+export function givenGetVisitsFailWith(errors: Record<string, string>) {
+    return vi.spyOn(router, 'get').mockImplementation((_url, _data, options: VisitOptions = {}) => failWith(errors, options));
+}
+
+function failWith(errors: Record<string, string>, options: VisitOptions): void {
+    options.onStart?.(pendingVisit);
+    page.props.errors = errors;
+    options.onError?.(errors);
+    options.onFinish?.(finishedVisit);
 }
 
 export function givenNoErrors(): void {

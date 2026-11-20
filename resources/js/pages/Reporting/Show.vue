@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 
+import ReportRangeForm from '@/components/report/ReportRangeForm.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { OperatorReport, ReportLimits, ReportRange } from '@/types/report';
@@ -21,6 +22,8 @@ defineProps<{
                 title="Operator report"
                 :description="`Spend, Pixelforge cost and profit per UTC day, from ${range.start_date} to ${range.end_date}.`"
             />
+
+            <ReportRangeForm :range="range" :limits="limits" />
         </div>
     </AppLayout>
 </template>

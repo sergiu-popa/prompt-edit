@@ -8,4 +8,5 @@ export const paths = {
     logout: '/logout',
     dashboard: '/dashboard',
     generations: '/generations',
+    report: '/report',
 } as const;

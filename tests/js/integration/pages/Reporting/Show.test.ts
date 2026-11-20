@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { inputLabelled } from '../../support/form';
 import { givenSignedInAs } from '../../support/inertia';
 
 import Show from '@/pages/Reporting/Show.vue';
@@ -72,5 +73,13 @@ describe('Reporting/Show', () => {
         expect(mountShow().get('main header p').text()).toBe(
             'Spend, Pixelforge cost and profit per UTC day, from 2026-11-15 to 2026-11-18.',
         );
+    });
+
+    it('lets the operator choose the range, starting from the one shown', () => {
+        const wrapper = mountShow();
+
+        expect(inputLabelled(wrapper, 'From').value).toBe('2026-11-15');
+        expect(inputLabelled(wrapper, 'To').value).toBe('2026-11-18');
+        expect(wrapper.get('button[type="submit"]').text()).toBe('Apply');
     });
 });
