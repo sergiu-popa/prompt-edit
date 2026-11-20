@@ -138,6 +138,21 @@ final class ExpiredSessionTest extends TestCase
         $this->assertNothingWasCreated();
     }
 
+    /**
+     * The webhook route sits outside the web group, so the real CSRF check never reaches
+     * it, and its own refusal of an unsigned delivery stays a 400 with no redirect (D-28).
+     */
+    public function test_the_webhook_route_keeps_its_own_answer_without_a_token(): void
+    {
+        config(['pixelforge.webhook_secret' => 'whsec_test_expired_session_4b8e1d6a2c9f3e7b']);
+
+        $response = $this->post(route('webhooks.pixelforge'), ['id' => 'evt_unsigned'])
+            ->assertStatus(400)
+            ->assertHeaderMissing('Location');
+
+        $this->assertSame([], $response->headers->getCookies());
+    }
+
     public function test_a_guest_opening_a_signed_in_page_gets_no_notice(): void
     {
         $this->get('/dashboard')
