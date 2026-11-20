@@ -7,6 +7,7 @@ import { visibleText } from '../../support/text';
 
 import Show from '@/pages/Reporting/Show.vue';
 import type { OperatorReport, ReportDay, ReportFigures } from '@/types/report';
+import type { UsageComparison, UsageFigures } from '@/types/usage';
 
 const ZERO: ReportFigures = { succeeded: 0, spend_nanodollars: 0, provider_cost_nanodollars: 0, profit_nanodollars: 0 };
 
@@ -48,12 +49,43 @@ const WORKED_EXAMPLE: OperatorReport = {
     totals: { succeeded: 3, spend_nanodollars: 93_243_750, provider_cost_nanodollars: 92_075_000, profit_nanodollars: 1_168_750 },
 };
 
-function mountShow(report: OperatorReport = WORKED_EXAMPLE) {
+const NO_DELTA = { provider_cost_nanodollars: 0, input_text_tokens: 0, input_image_tokens: 0, output_tokens: 0, reasoning_tokens: 0 };
+
+function matching(figures: UsageFigures) {
+    return { recorded: figures, pixelforge: figures, delta: NO_DELTA, matches: true };
+}
+
+function usageFigures(generations: number, cost: number, tokens: [number, number, number, number]): UsageFigures {
+    return {
+        generations,
+        provider_cost_nanodollars: cost,
+        input_text_tokens: tokens[0],
+        input_image_tokens: tokens[1],
+        output_tokens: tokens[2],
+        reasoning_tokens: tokens[3],
+    };
+}
+
+/** The worked example's reconciliation (PE-018 AC 6): every day and the total Match. */
+const ALL_MATCH: UsageComparison = {
+    availability: 'available',
+    has_mismatch: false,
+    days: [
+        { date: '2026-11-18', in_progress: true, ...matching(usageFigures(0, 0, [0, 0, 0, 0])) },
+        { date: '2026-11-17', in_progress: false, ...matching(usageFigures(1, 17_480_000, [6, 0, 280, 500])) },
+        { date: '2026-11-16', in_progress: false, ...matching(usageFigures(2, 74_595_000, [14, 0, 1_380, 1_546])) },
+        { date: '2026-11-15', in_progress: false, ...matching(usageFigures(0, 0, [0, 0, 0, 0])) },
+    ],
+    total: matching(usageFigures(3, 92_075_000, [20, 0, 1_660, 2_046])),
+};
+
+function mountShow(report: OperatorReport = WORKED_EXAMPLE, usage: UsageComparison = ALL_MATCH) {
     return mount(Show, {
         props: {
             range: { start_date: '2026-11-15', end_date: '2026-11-18' },
             limits: { max_days: 92, today: '2026-11-18' },
             report,
+            usage,
         },
     });
 }
@@ -107,8 +139,25 @@ describe('Reporting/Show', () => {
         );
     });
 
+    it('reconciles the range with Pixelforge between the per-day and per-user tables', () => {
+        const sections = mountShow().findAll('section');
+
+        expect(sections.map((section) => section.get('h2').text())).toStrictEqual([
+            'Per day (by Pixelforge completion date, UTC)',
+            'Pixelforge reconciliation (per UTC day)',
+            'Per user',
+        ]);
+        expect(sections[1]!.findAll('tbody [data-status]').map((status) => status.text())).toStrictEqual([
+            'Match',
+            'Match',
+            'Match',
+            'Match',
+        ]);
+        expect(sections[1]!.get('tfoot [data-status]').text()).toBe('Match');
+    });
+
     it('lists the users in the order the server sent them', () => {
-        const perUser = mountShow().findAll('section')[1]!;
+        const perUser = mountShow().findAll('section')[2]!;
 
         expect(perUser.get('h2').text()).toBe('Per user');
         expect(perUser.get('thead th').text()).toBe('User');
@@ -125,7 +174,7 @@ describe('Reporting/Show', () => {
             users: [],
             totals: ZERO,
         });
-        const [daily, perUser] = wrapper.findAll('section');
+        const [daily, , perUser] = wrapper.findAll('section');
 
         expect(daily!.findAll('tbody tr').map((row) => visibleText(row))).toStrictEqual([
             '2026-11-18 0 $0.0000 $0.0000 $0.0000',

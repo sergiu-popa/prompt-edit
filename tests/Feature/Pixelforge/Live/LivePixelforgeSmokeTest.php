@@ -8,8 +8,10 @@ use App\Domain\Billing\Actions\CalculateProviderCostAction;
 use App\Domain\Billing\Actions\EstimateGenerationCostAction;
 use App\Domain\Billing\DataTransferObjects\GenerationCostEstimate;
 use App\Domain\Billing\Enums\TokenType;
+use App\Domain\Billing\ValueObjects\Nanodollars;
 use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Reporting\ValueObjects\ReportRange;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
@@ -21,6 +23,7 @@ use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -119,6 +122,42 @@ final class LivePixelforgeSmokeTest extends TestCase
             self::sortedByKey(['rates' => $this->pinnedRates(), 'tokens' => $this->pinnedTokens()]),
             self::sortedByKey(['rates' => $pricing['rates'] ?? null, 'tokens' => $pricing['tokens'] ?? null]),
             'Pixelforge\'s pricing drifted from config/pricing.php.',
+        );
+    }
+
+    /**
+     * PE-018: the real `/v1/usage` for the last 7 UTC days reads strictly (D-73), with every
+     * date exactly once, and its days sum exactly to its total. It is the dev key's usage,
+     * so it is never compared with our records.
+     */
+    public function test_usage_reports_every_day_in_exact_integers(): void
+    {
+        $today = CarbonImmutable::now()->utc();
+        $range = ReportRange::fromDates($today->subDays(6)->format(ReportRange::DATE_FORMAT), $today->format(ReportRange::DATE_FORMAT));
+
+        $usage = $this->client->retrieveUsage($range->startDate(), $range->endDate());
+
+        $this->assertSame(200, $this->lastResponse()->status());
+        $this->assertSame(array_reverse($range->dates()), array_keys($usage->days));
+
+        $cost = Nanodollars::zero();
+        $tokens = [0, 0, 0, 0];
+
+        foreach ($usage->days as $day) {
+            $cost = $cost->plus($day->cost);
+            $tokens = [
+                $tokens[0] + $day->tokens->inputTextTokens,
+                $tokens[1] + $day->tokens->inputImageTokens,
+                $tokens[2] + $day->tokens->outputTokens,
+                $tokens[3] + $day->tokens->reasoningTokens,
+            ];
+        }
+
+        $this->assertSame($usage->total->cost->amount, $cost->amount, 'The days\' costs do not sum to the total.');
+        $this->assertSame(
+            [$usage->total->tokens->inputTextTokens, $usage->total->tokens->inputImageTokens, $usage->total->tokens->outputTokens, $usage->total->tokens->reasoningTokens],
+            $tokens,
+            'The days\' tokens do not sum to the total.',
         );
     }
 

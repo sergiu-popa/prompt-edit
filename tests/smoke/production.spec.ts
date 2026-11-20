@@ -1,10 +1,11 @@
 import { expect, test } from '../e2e/fixtures';
 
 /**
- * The production smoke (PE-004 AC17, PE-015), run after every deploy with `make smoke-production`.
- * It never registers a user and writes nothing beyond one reviewer session. It also checks
- * the reconciler's health (D-59) and that Pixelforge's webhook URL answers without a redirect.
- * Importing the E2E fixtures fails every test on a browser console or page error.
+ * The production smoke (PE-004 AC17, PE-015, PE-018), run after every deploy with `make smoke-production`.
+ * It never registers a user and writes nothing beyond one reviewer session: signed in, it only
+ * reads History and the operator report (D-76). It also checks the reconciler's health (D-59)
+ * and that Pixelforge's webhook URL answers without a redirect. Importing the E2E fixtures
+ * fails every test on a browser console or page error.
  */
 const reviewer = {
     email: process.env.E2E_REVIEWER_EMAIL ?? '',
@@ -12,6 +13,9 @@ const reviewer = {
 };
 
 const LEAKS = ['Whoops', 'Stack trace', 'vendor/', 'SQLSTATE', 'APP_KEY', 'DB_PASSWORD'];
+
+/** How long the report may take to match: past the 60 s usage cache, with room for a catch-up (D-76). */
+const REPORT_MATCH_TIMEOUT_MS = 180_000;
 
 test('the health check answers 200', async ({ request }) => {
     const response = await request.get('/up');
@@ -92,7 +96,16 @@ test('the sign-in page renders over https with secure cookies', async ({ page, c
     expect(insecure, 'requests that are not https').toEqual([]);
 });
 
-test('the reviewer signs in and out', async ({ page }) => {
+test('the reviewer sees History and a matching report, read-only, then signs out', async ({ page }) => {
+    test.setTimeout(REPORT_MATCH_TIMEOUT_MS + 60_000);
+
+    const writes: string[] = [];
+    page.on('request', (request) => {
+        if (request.method() !== 'GET') {
+            writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+        }
+    });
+
     await page.goto('/login');
     await page.getByLabel('Email').fill(reviewer.email);
     await page.getByLabel('Password').fill(reviewer.password);
@@ -105,10 +118,54 @@ test('the reviewer signs in and out', async ({ page }) => {
     const signOut = page.getByRole('button', { name: 'Sign out' });
     await expect(signOut).toBeVisible();
 
+    // History: the demo set's images are live for 24 h after a refresh (D-76).
+    await page.goto('/generations');
+    const succeeded = page
+        .getByRole('main')
+        .getByRole('listitem')
+        .filter({ has: page.locator('[data-tone]', { hasText: /^Succeeded$/ }) });
+    await expect(succeeded.first()).toBeVisible();
+    await expect(succeeded.locator('[data-charge]')).toHaveCount(await succeeded.count());
+
+    // History lazy-loads its images, so each is asked to load now; the page itself is unchanged.
+    const images = succeeded.locator('img');
+    await expect
+        .poll(
+            async () =>
+                images.evaluateAll((elements) =>
+                    elements.some((element) => {
+                        const image = element as HTMLImageElement;
+                        image.loading = 'eager';
+
+                        return image.complete && image.naturalWidth > 0;
+                    }),
+                ),
+            { message: 'a succeeded generation shows a loaded image' },
+        )
+        .toBe(true);
+
+    // The report's default range matches /v1/usage on every day and in total (AC 16).
+    await page.goto('/report');
+    const reconciliation = page.getByRole('table', { name: 'Pixelforge reconciliation (per UTC day)' });
+    await expect(async () => {
+        await page.reload();
+        await expect(reconciliation).toBeVisible({ timeout: 5_000 });
+        await expect(page.locator('[data-usage-notice]')).toHaveCount(0, { timeout: 1_000 });
+        await expect(reconciliation.locator('[data-status]', { hasText: 'Mismatch' })).toHaveCount(0, { timeout: 1_000 });
+        const days = await reconciliation.locator('tr[data-usage-day]').count();
+        expect(days).toBeGreaterThan(0);
+        await expect(reconciliation.locator('tr[data-usage-day] [data-status]', { hasText: /^Match$/ })).toHaveCount(days, {
+            timeout: 1_000,
+        });
+        await expect(reconciliation.locator('tr[data-usage-total] [data-status]')).toHaveText('Match', { timeout: 1_000 });
+    }).toPass({ timeout: REPORT_MATCH_TIMEOUT_MS, intervals: [5_000, 10_000, 15_000] });
+
     await signOut.click();
 
     await expect(page).toHaveURL('/');
 
     await page.goto('/dashboard');
     await expect(page).toHaveURL('/login');
+
+    expect(writes, 'the only writes are sign-in and sign-out').toEqual(['POST /login', 'POST /logout']);
 });

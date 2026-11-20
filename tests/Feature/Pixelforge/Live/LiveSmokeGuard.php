@@ -78,6 +78,7 @@ final readonly class LiveSmokeGuard
             $apiKey,
             (int) $config->get('pixelforge.connect_timeout_seconds'),
             (int) $config->get('pixelforge.request_timeout_seconds'),
+            (int) $config->get('pixelforge.usage.timeout_seconds'),
         );
     }
 }

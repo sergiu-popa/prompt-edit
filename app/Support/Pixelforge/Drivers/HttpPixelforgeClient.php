@@ -8,8 +8,10 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\DataTransferObjects\UsageReportData;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
+use App\Support\Pixelforge\Exceptions\InvalidUsageReportException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
@@ -48,6 +50,8 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         private int $connectTimeoutSeconds,
         #[Config('pixelforge.request_timeout_seconds')]
         private int $requestTimeoutSeconds,
+        #[Config('pixelforge.usage.timeout_seconds')]
+        private int $usageTimeoutSeconds,
     ) {}
 
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
@@ -96,6 +100,31 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         }
 
         return $this->generationFrom($response);
+    }
+
+    /**
+     * A page waits on it, so it has its own, shorter request timeout (D-74). The answer must
+     * be for the very range asked.
+     */
+    public function retrieveUsage(string $startDate, string $endDate): UsageReportData
+    {
+        if (! $this->isConfigured()) {
+            throw PixelforgeNotConfiguredException::missingApiKey();
+        }
+
+        try {
+            $response = $this->request()
+                ->timeout($this->usageTimeoutSeconds)
+                ->get('usage', ['start_date' => $startDate, 'end_date' => $endDate]);
+        } catch (ConnectionException|RequestException $exception) {
+            throw AmbiguousPixelforgeOutcomeException::transportFailed($exception);
+        }
+
+        if (! $response->successful()) {
+            throw $this->errorFrom($response);
+        }
+
+        return $this->usageFrom($response, $startDate, $endDate);
     }
 
     /**
@@ -151,6 +180,30 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
             return GenerationSnapshot::from($generation);
         } catch (JsonException|InvalidGenerationSnapshotException $exception) {
             throw AmbiguousPixelforgeOutcomeException::unreadableGeneration($response->status(), $exception);
+        }
+    }
+
+    /**
+     * @throws AmbiguousPixelforgeOutcomeException
+     */
+    private function usageFrom(Response $response, string $startDate, string $endDate): UsageReportData
+    {
+        try {
+            $report = json_decode($response->body(), associative: true, flags: JSON_THROW_ON_ERROR);
+
+            if (! is_array($report)) {
+                throw AmbiguousPixelforgeOutcomeException::unreadableUsage($response->status());
+            }
+
+            $usage = UsageReportData::from($report);
+
+            if ($usage->startDate !== $startDate || $usage->endDate !== $endDate) {
+                throw InvalidUsageReportException::invalidField('range', "{$startDate} to {$endDate}", "{$usage->startDate} to {$usage->endDate}");
+            }
+
+            return $usage;
+        } catch (JsonException|InvalidUsageReportException $exception) {
+            throw AmbiguousPixelforgeOutcomeException::unreadableUsage($response->status(), $exception);
         }
     }
 }

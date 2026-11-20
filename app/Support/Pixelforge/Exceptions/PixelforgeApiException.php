@@ -109,6 +109,7 @@ abstract class PixelforgeApiException extends RuntimeException implements Report
             PixelforgeErrorCode::ConcurrencyLimitExceeded => new ConcurrencyLimitExceededException($type, $message, $param, $errors, $retryAfterSeconds),
             PixelforgeErrorCode::DailyLimitExceeded => new DailyLimitExceededException($type, $message, $param, $errors, $retryAfterSeconds),
             PixelforgeErrorCode::Overloaded => new OverloadedException($type, $message, $param, $errors, $retryAfterSeconds),
+            PixelforgeErrorCode::DateRangeTooLong => new DateRangeTooLongException($type, $message, $param, $errors, $retryAfterSeconds),
         };
     }
 

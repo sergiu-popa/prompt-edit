@@ -7,7 +7,9 @@ namespace App\Support\Pixelforge\Contracts;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\DataTransferObjects\UsageReportData;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
+use App\Support\Pixelforge\Exceptions\DateRangeTooLongException;
 use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
@@ -43,6 +45,19 @@ interface PixelforgeClient
      * @throws RateBudgetExhaustedException when the account-wide budget is spent, so nothing was sent
      */
     public function retrieveGeneration(string $providerId): GenerationSnapshot;
+
+    /**
+     * `GET /v1/usage`: what Pixelforge billed this key on each UTC day from the start date
+     * to the end date, both inclusive `Y-m-d` dates, and in total. Like every call, it takes
+     * one unit of the shared budget.
+     *
+     * @throws DateRangeTooLongException when the range covers more than 92 days
+     * @throws PixelforgeApiException for any other documented error envelope
+     * @throws AmbiguousPixelforgeOutcomeException when no complete response arrived, or it is no readable usage report for the range
+     * @throws PixelforgeNotConfiguredException when nothing can be sent
+     * @throws RateBudgetExhaustedException when the account-wide budget is spent, so nothing was sent
+     */
+    public function retrieveUsage(string $startDate, string $endDate): UsageReportData;
 
     /**
      * Whether `createGeneration` can send anything at all. Until it can, Generate stays

@@ -7,7 +7,7 @@ namespace App\Support\Pixelforge\Enums;
 /**
  * The documented `error.code` values of the API calls we make, spelled as the
  * docs spell them. Callers branch on the code, never on the `type`.
- * `date_range_too_long` is left to PE-018, its only caller.
+ * `date_range_too_long` only ever answers `/v1/usage` (PE-018).
  */
 enum PixelforgeErrorCode: string
 {
@@ -20,6 +20,7 @@ enum PixelforgeErrorCode: string
     case ConcurrencyLimitExceeded = 'concurrency_limit_exceeded';
     case DailyLimitExceeded = 'daily_limit_exceeded';
     case Overloaded = 'overloaded';
+    case DateRangeTooLong = 'date_range_too_long';
 
     /**
      * The only HTTP status the docs give the code. An envelope with any other
@@ -32,7 +33,7 @@ enum PixelforgeErrorCode: string
             self::InvalidApiKey => 401,
             self::NotFound => 404,
             self::IdempotencyKeyReused => 409,
-            self::ValidationFailed => 422,
+            self::ValidationFailed, self::DateRangeTooLong => 422,
             self::RateLimitExceeded, self::ConcurrencyLimitExceeded, self::DailyLimitExceeded => 429,
             self::Overloaded => 503,
         };

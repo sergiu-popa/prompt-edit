@@ -49,6 +49,24 @@ return [
     'request_timeout_seconds' => filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => $submitJobTimeoutSeconds - 1, 'default' => 30]]),
 
     /**
+     * The operator report's `/v1/usage` call (D-74). Every default is production's.
+     */
+    'usage' => [
+        /**
+         * Replaces the request timeout, because a page waits on it. Anything but an
+         * integer from 1 to 10 means the default.
+         */
+        'timeout_seconds' => filter_var(env('PIXELFORGE_USAGE_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10, 'default' => 5]]),
+
+        /**
+         * How long a successful answer is reused per range, on the default cache store.
+         * Dev and E2E use 1, so a catch-up shows at once. Anything but a positive integer
+         * means the default.
+         */
+        'cache_seconds' => filter_var(env('PIXELFORGE_USAGE_CACHE_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 60]]),
+    ],
+
+    /**
      * The account-wide budget every call through the client takes from (D-44),
      * below Pixelforge's 60 requests a minute, which dev and production keys
      * share. Anything but a positive integer means the default.

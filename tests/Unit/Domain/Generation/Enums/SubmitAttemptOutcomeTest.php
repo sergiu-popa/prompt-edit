@@ -10,6 +10,7 @@ use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
 use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
 use App\Support\Pixelforge\Exceptions\DailyLimitExceededException;
+use App\Support\Pixelforge\Exceptions\DateRangeTooLongException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\InvalidApiKeyException;
 use App\Support\Pixelforge\Exceptions\NotFoundException;
@@ -41,6 +42,7 @@ final class SubmitAttemptOutcomeTest extends TestCase
         yield '422 validation failed' => [new ValidationFailedException('invalid_request_error', 'Invalid.'), SubmitAttemptOutcome::Rejected];
         yield '409 idempotency key reused' => [new IdempotencyKeyReusedException('idempotency_error', 'Reused.'), SubmitAttemptOutcome::Rejected];
         yield 'a 404 at create, undocumented' => [new NotFoundException('invalid_request_error', 'Not found.'), SubmitAttemptOutcome::Ambiguous];
+        yield 'a 422 date range too long at create, undocumented' => [new DateRangeTooLongException('invalid_request_error', 'Too many days.'), SubmitAttemptOutcome::Ambiguous];
         yield 'a timeout' => [AmbiguousPixelforgeOutcomeException::transportFailed(new ConnectionException('cURL error 28')), SubmitAttemptOutcome::Ambiguous];
         yield 'a 502 page' => [AmbiguousPixelforgeOutcomeException::undocumentedResponse(502), SubmitAttemptOutcome::Ambiguous];
     }

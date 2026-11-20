@@ -10,6 +10,7 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\DataTransferObjects\UsageReportData;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
 use App\Support\Pixelforge\PixelforgeRequestBudget;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
@@ -34,6 +35,8 @@ final class ThrottledPixelforgeClientTest extends TestCase
     private int $innerConfiguredChecks = 0;
 
     private int $innerRetrieves = 0;
+
+    private int $innerUsageCalls = 0;
 
     private ThrottledPixelforgeClient $client;
 
@@ -113,6 +116,30 @@ final class ThrottledPixelforgeClientTest extends TestCase
         $this->assertSame(0, $this->innerRetrieves);
     }
 
+    public function test_a_usage_call_takes_one_unit_of_the_same_budget(): void
+    {
+        $this->createTimes(self::LIMIT - 1);
+
+        $this->client->retrieveUsage('2026-11-01', '2026-11-02');
+
+        $this->assertSame(1, $this->innerUsageCalls);
+        $this->exhaustedCreate();
+    }
+
+    public function test_a_usage_call_past_the_budget_reaches_nothing(): void
+    {
+        $this->createTimes(self::LIMIT);
+
+        try {
+            $this->client->retrieveUsage('2026-11-01', '2026-11-02');
+            $this->fail('Expected the budget to be spent.');
+        } catch (RateBudgetExhaustedException $exception) {
+            $this->assertSame(60, $exception->retryAfterSeconds);
+        }
+
+        $this->assertSame(0, $this->innerUsageCalls);
+    }
+
     public function test_asking_whether_it_is_configured_takes_no_unit(): void
     {
         for ($check = 0; $check < 10; $check++) {
@@ -159,10 +186,15 @@ final class ThrottledPixelforgeClientTest extends TestCase
     private function recordingClient(): PixelforgeClient
     {
         $snapshot = GenerationSnapshot::from(self::pixelforgeFixture('generation-queued'));
+        $usage = UsageReportData::from(self::pixelforgeFixture('usage'));
 
-        return new class($this, $snapshot) implements PixelforgeClient
+        return new class($this, $snapshot, $usage) implements PixelforgeClient
         {
-            public function __construct(private readonly ThrottledPixelforgeClientTest $test, private readonly GenerationSnapshot $snapshot) {}
+            public function __construct(
+                private readonly ThrottledPixelforgeClientTest $test,
+                private readonly GenerationSnapshot $snapshot,
+                private readonly UsageReportData $usage,
+            ) {}
 
             public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
             {
@@ -176,6 +208,13 @@ final class ThrottledPixelforgeClientTest extends TestCase
                 $this->test->recordRetrieve();
 
                 return $this->snapshot;
+            }
+
+            public function retrieveUsage(string $startDate, string $endDate): UsageReportData
+            {
+                $this->test->recordUsageCall();
+
+                return $this->usage;
             }
 
             public function isConfigured(): bool
@@ -200,5 +239,10 @@ final class ThrottledPixelforgeClientTest extends TestCase
     public function recordRetrieve(): void
     {
         $this->innerRetrieves++;
+    }
+
+    public function recordUsageCall(): void
+    {
+        $this->innerUsageCalls++;
     }
 }

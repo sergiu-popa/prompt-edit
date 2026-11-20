@@ -26,6 +26,8 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_SUBMIT_WINDOW',
         'PIXELFORGE_OVERLOADED_DEADLINE',
         'PIXELFORGE_CONCURRENCY_MAX_WAIT',
+        'PIXELFORGE_USAGE_TIMEOUT',
+        'PIXELFORGE_USAGE_CACHE_SECONDS',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -133,6 +135,70 @@ final class PixelforgeConfigTest extends TestCase
     public function test_the_suite_runs_with_the_production_reconcile_bounds(): void
     {
         $this->assertSame(self::RECONCILE_DEFAULTS, array_intersect_key((array) config('pixelforge.reconcile'), self::RECONCILE_DEFAULTS));
+    }
+
+    /**
+     * D-74: the report waits on the usage call, so the suite runs with production's 5 s.
+     */
+    public function test_the_suite_runs_with_the_production_usage_timeout(): void
+    {
+        $this->assertSame(5, config('pixelforge.usage.timeout_seconds'));
+    }
+
+    public function test_the_usage_timeout_defaults_to_5_seconds(): void
+    {
+        $this->assertSame(5, $this->usageTimeoutWith(''));
+    }
+
+    public function test_a_set_usage_timeout_applies(): void
+    {
+        $this->assertSame(8, $this->usageTimeoutWith('8'));
+        $this->assertSame(10, $this->usageTimeoutWith('10'));
+    }
+
+    /**
+     * A page waits on it, so it may not exceed 10 s.
+     */
+    #[DataProvider('invalidUsageTimeouts')]
+    public function test_a_usage_timeout_outside_1_to_10_means_the_default(string $value): void
+    {
+        $this->assertSame(5, $this->usageTimeoutWith($value));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidUsageTimeouts(): array
+    {
+        return [
+            'zero' => ['0'],
+            'eleven' => ['11'],
+            'a word' => ['abc'],
+            'a fraction' => ['2.5'],
+        ];
+    }
+
+    /**
+     * The dev containers reuse a usage answer for 1 s (D-74); the suite runs with 60.
+     */
+    public function test_the_suite_runs_with_the_production_usage_cache(): void
+    {
+        $this->assertSame(60, config('pixelforge.usage.cache_seconds'));
+    }
+
+    public function test_the_usage_cache_defaults_to_60_seconds_and_a_set_value_applies(): void
+    {
+        $this->assertSame(60, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', '')['cache_seconds']);
+        $this->assertSame(1, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', '1')['cache_seconds']);
+    }
+
+    /**
+     * 0 would cache nothing and send a request on every load.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_usage_cache_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(60, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', $value)['cache_seconds']);
     }
 
     public function test_empty_reconcile_bounds_mean_the_production_defaults(): void
@@ -510,6 +576,22 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertIsArray($reconcile);
 
         return $reconcile['every_seconds'] ?? null;
+    }
+
+    private function usageTimeoutWith(string $value): mixed
+    {
+        return $this->usageConfigWith('PIXELFORGE_USAGE_TIMEOUT', $value)['timeout_seconds'] ?? null;
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private function usageConfigWith(string $name, string $value): array
+    {
+        $usage = $this->pixelforgeConfigWith([$name => $value])['usage'];
+        $this->assertIsArray($usage);
+
+        return $usage;
     }
 
     private function submitReserveWith(string $value): mixed

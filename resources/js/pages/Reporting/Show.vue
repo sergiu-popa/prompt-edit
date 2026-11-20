@@ -5,14 +5,17 @@ import { computed } from 'vue';
 import ReportRangeForm from '@/components/report/ReportRangeForm.vue';
 import ReportSummary from '@/components/report/ReportSummary.vue';
 import ReportTable from '@/components/report/ReportTable.vue';
+import UsageComparisonTable from '@/components/report/UsageComparisonTable.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { OperatorReport, ReportLimits, ReportRange, ReportTableRow } from '@/types/report';
+import type { UsageComparison } from '@/types/usage';
 
 const props = defineProps<{
     range: ReportRange;
     limits: ReportLimits;
     report: OperatorReport;
+    usage: UsageComparison;
 }>();
 
 const dayRows = computed<ReportTableRow[]>(() => props.report.days.map((day) => ({ key: day.date, label: day.date, figures: day })));
@@ -42,6 +45,8 @@ const userRows = computed<ReportTableRow[]>(() =>
                 :totals="report.totals"
                 note="Succeeded counts every generation Pixelforge billed, including any we failed locally and never charged."
             />
+
+            <UsageComparisonTable :usage="usage" />
 
             <ReportTable caption="Per user" label-header="User" :rows="userRows" empty-text="No billed generations in this range." />
         </div>
