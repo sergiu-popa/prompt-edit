@@ -57,8 +57,8 @@ enum SubmitAttemptOutcome: string
 
     /**
      * The outcome of a create that failed. A documented code that is not one of ours
-     * (a `404` at create) and every ambiguous answer may have created the generation,
-     * so they are ambiguous (D-31).
+     * (a `404` or a `422 date_range_too_long` at create) and every ambiguous answer may
+     * have created the generation, so they are ambiguous (D-31, D-73).
      */
     public static function fromFailure(ReportsPixelforgeContext $failure): self
     {
@@ -81,7 +81,7 @@ enum SubmitAttemptOutcome: string
             PixelforgeErrorCode::DailyLimitExceeded => self::DailyLimited,
             PixelforgeErrorCode::Overloaded => self::Overloaded,
             PixelforgeErrorCode::InvalidApiKey => self::InvalidApiKey,
-            PixelforgeErrorCode::NotFound => self::Ambiguous,
+            PixelforgeErrorCode::NotFound, PixelforgeErrorCode::DateRangeTooLong => self::Ambiguous,
         };
     }
 

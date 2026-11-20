@@ -8,6 +8,7 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
 use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
 use App\Support\Pixelforge\Exceptions\DailyLimitExceededException;
+use App\Support\Pixelforge\Exceptions\DateRangeTooLongException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\InvalidApiKeyException;
 use App\Support\Pixelforge\Exceptions\NotFoundException;
@@ -61,6 +62,7 @@ final class PixelforgeApiExceptionTest extends TestCase
             'concurrency limit exceeded' => [PixelforgeErrorCode::ConcurrencyLimitExceeded, 429, 'rate_limit_error', ConcurrencyLimitExceededException::class],
             'daily limit exceeded' => [PixelforgeErrorCode::DailyLimitExceeded, 429, 'rate_limit_error', DailyLimitExceededException::class],
             'overloaded' => [PixelforgeErrorCode::Overloaded, 503, 'api_error', OverloadedException::class],
+            'date range too long' => [PixelforgeErrorCode::DateRangeTooLong, 422, 'invalid_request_error', DateRangeTooLongException::class],
         ];
     }
 
@@ -205,6 +207,7 @@ final class PixelforgeApiExceptionTest extends TestCase
             'an undocumented code' => [429, self::envelope(['type' => 'rate_limit_error', 'code' => 'quota_exceeded', 'message' => 'Quota exceeded.'])],
             'a code differing in case' => [400, self::envelope([...$valid, 'code' => 'Content_Policy_Violation'])],
             'overloaded at 400' => [400, self::envelope(['type' => 'api_error', 'code' => 'overloaded', 'message' => 'Overloaded.'])],
+            'date range too long at 400' => [400, self::envelope(['type' => 'invalid_request_error', 'code' => 'date_range_too_long', 'message' => 'Too many days.'])],
             'validation failed at 500' => [500, self::envelope(['type' => 'invalid_request_error', 'code' => 'validation_failed', 'message' => 'Invalid.'])],
             'a NUL byte in the code' => [400, self::envelope([...$valid, 'code' => "content_policy_violation\0"])],
             'a NUL byte in the message' => [400, self::envelope([...$valid, 'message' => "Rejected\0 here."])],

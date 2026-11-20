@@ -119,7 +119,8 @@ trait InteractsWithPixelforgeApi
     {
         return match ($code) {
             PixelforgeErrorCode::InvalidApiKey => 'authentication_error',
-            PixelforgeErrorCode::ContentPolicyViolation, PixelforgeErrorCode::NotFound, PixelforgeErrorCode::ValidationFailed => 'invalid_request_error',
+            PixelforgeErrorCode::ContentPolicyViolation, PixelforgeErrorCode::NotFound, PixelforgeErrorCode::ValidationFailed,
+            PixelforgeErrorCode::DateRangeTooLong => 'invalid_request_error',
             PixelforgeErrorCode::IdempotencyKeyReused => 'idempotency_error',
             PixelforgeErrorCode::RateLimitExceeded, PixelforgeErrorCode::ConcurrencyLimitExceeded, PixelforgeErrorCode::DailyLimitExceeded => 'rate_limit_error',
             PixelforgeErrorCode::Overloaded => 'api_error',
