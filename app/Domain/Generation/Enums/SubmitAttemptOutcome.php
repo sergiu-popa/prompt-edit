@@ -48,4 +48,18 @@ enum SubmitAttemptOutcome: string
      * Nothing could be sent: no key, or no webhook secret for the fake.
      */
     case NotConfigured = 'not_configured';
+
+    /**
+     * What History says while the generation waits after this outcome: null for an
+     * outcome that ends the waiting, so the note of the wait before it stays.
+     */
+    public function retryNote(): ?SubmitRetryNote
+    {
+        return match ($this) {
+            self::Accepted, self::Rejected => null,
+            self::ConcurrencyLimited => SubmitRetryNote::WaitingForSlot,
+            self::BudgetExhausted, self::RateLimited, self::DailyLimited, self::Overloaded,
+            self::Ambiguous, self::InvalidApiKey, self::NotConfigured => SubmitRetryNote::Retrying,
+        };
+    }
 }
