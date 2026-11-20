@@ -107,21 +107,20 @@ final class ReportRangeTest extends TestCase
             'start after end' => ['2026-11-18', '2026-11-17'],
             'an impossible date' => ['2026-02-30', '2026-03-01'],
             'an unpadded date' => ['2026-1-5', '2026-01-06'],
+            'a leap day in a common year' => ['2026-02-28', '2026-02-29'],
+            'a leading space' => [' 2026-11-17', '2026-11-18'],
+            'a trailing newline' => ['2026-11-17', "2026-11-18\n"],
+            'an empty date' => ['', '2026-11-18'],
             'a date with a time' => ['2026-11-01', '2026-11-02 00:00:00'],
             'not a date' => ['yesterday', '2026-11-02'],
         ];
     }
 
-    public function test_dates_are_validated_strictly_as_utc_calendar_dates(): void
+    public function test_a_leap_day_is_accepted(): void
     {
-        $this->assertTrue(ReportRange::isDate('2026-11-18'));
-        $this->assertTrue(ReportRange::isDate('2028-02-29'));
-        $this->assertFalse(ReportRange::isDate('2026-02-29'));
-        $this->assertFalse(ReportRange::isDate('2026-02-30'));
-        $this->assertFalse(ReportRange::isDate('2026-1-5'));
-        $this->assertFalse(ReportRange::isDate(' 2026-11-18'));
-        $this->assertFalse(ReportRange::isDate("2026-11-18\n"));
-        $this->assertFalse(ReportRange::isDate(''));
+        $range = ReportRange::fromDates('2028-02-28', '2028-03-01');
+
+        $this->assertSame(['2028-03-01', '2028-02-29', '2028-02-28'], $range->dates());
     }
 
     public function test_the_day_count_spans_a_month_and_dst_changes_exactly(): void

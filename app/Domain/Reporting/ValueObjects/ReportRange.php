@@ -66,14 +66,6 @@ final readonly class ReportRange
     }
 
     /**
-     * A strict `Y-m-d` calendar date: zero-padded, nothing around it, and a real day.
-     */
-    public static function isDate(string $date): bool
-    {
-        return self::tryParse($date) !== null;
-    }
-
-    /**
      * How many dates the range from the start to the end holds, both inclusive; 0 or less
      * when the start is after the end.
      *
