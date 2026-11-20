@@ -70,8 +70,11 @@ export interface Generation {
     /** Why it failed, in plain words (App\Domain\Generation\Enums\GenerationFailureCode); null unless it failed. */
     failure_message: string | null;
     /**
-     * Why a queued generation is waiting, such as "Waiting for a free slot"
-     * (App\Domain\Generation\Enums\SubmitRetryNote); null unless it is waiting to be retried.
+     * Why a generation is not done yet: on any non-terminal generation 15 min after its
+     * creation, "Taking longer than usual — we're checking with Pixelforge"
+     * (App\Domain\Generation\ValueObjects\ReconcilePolicy, D-56); else, while it waits to be
+     * retried, why, such as "Waiting for a free slot" (App\Domain\Generation\Enums\SubmitRetryNote);
+     * else null.
      */
     status_note: string | null;
 }
