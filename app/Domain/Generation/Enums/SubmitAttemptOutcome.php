@@ -62,4 +62,19 @@ enum SubmitAttemptOutcome: string
             self::Ambiguous, self::InvalidApiKey, self::NotConfigured => SubmitRetryNote::Retrying,
         };
     }
+
+    /**
+     * Why the generation fails free when the window ends after this outcome (AC 17).
+     * Null when it may exist at Pixelforge, or was answered, so it is handed over
+     * instead: the safe side.
+     */
+    public function windowEndReason(): ?LocalFailureReason
+    {
+        return match ($this) {
+            self::BudgetExhausted, self::RateLimited, self::ConcurrencyLimited, self::DailyLimited => LocalFailureReason::ProviderBusy,
+            self::Overloaded => LocalFailureReason::ProviderOverloaded,
+            self::InvalidApiKey, self::NotConfigured => LocalFailureReason::ServiceUnavailable,
+            self::Accepted, self::Rejected, self::Ambiguous => null,
+        };
+    }
 }

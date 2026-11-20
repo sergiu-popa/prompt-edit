@@ -9,6 +9,7 @@ use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Enums\SubmitAttemptOutcome;
 use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\QueryBuilders\GenerationQueryBuilder;
+use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Carbon\CarbonImmutable;
@@ -113,6 +114,26 @@ final class Generation extends Model
 {
     /** @use HasFactory<GenerationFactory> */
     use HasFactory, HasUlids;
+
+    /**
+     * Writes the submit bookkeeping in one UPDATE of the `submit_*` columns alone
+     * (D-45), through the casts and the offset-carrying date format. It never
+     * touches status, costs or `updated_at`, so it is never a transition.
+     */
+    public function recordSubmitBookkeeping(SubmitBookkeeping $bookkeeping): void
+    {
+        $columns = $bookkeeping->toAttributes();
+
+        $this->forceFill($columns);
+        $changed = array_intersect_key($this->getDirty(), $columns);
+
+        if ($changed === []) {
+            return;
+        }
+
+        self::query()->whereKey($this->getKey())->toBase()->update($changed);
+        $this->syncOriginalAttributes(array_keys($changed));
+    }
 
     /**
      * @return array<string, string>
