@@ -6,8 +6,13 @@ Run on branch `pe-017-credit-balances-buy-credits` at `d4e11c5` in lane l17. Pre
 
 ## Failing items
 
-- **AC 19 (operator report ignores grants and purchases): no test and no operator report on this branch.** Plan tasks 24 and 25 are unchecked and marked "deferred until PE-016 has merged" (review W1). `tests/Feature/Reporting/` does not exist.
-- **AC 2, operator-seeder path: not built.** PE-016's operator seeder does not call `GrantStarterCreditsAction` on this branch (plan task 25).
+- [x] **AC 19 (operator report ignores grants and purchases): no test and no operator report on this branch.** Plan tasks 24 and 25 are unchecked and marked "deferred until PE-016 has merged" (review W1). `tests/Feature/Reporting/` does not exist.
+- [x] **AC 2, operator-seeder path: not built.** PE-016's operator seeder does not call `GrantStarterCreditsAction` on this branch (plan task 25).
+
+Engineer fix round (after the rebase onto `main`):
+- AC 19: fixed in `f6c2cb0`, `tests/Feature/Reporting/OperatorReportIgnoresCreditTopUpsTest.php` (plan task 24).
+- AC 2, operator seeder: fixed in `35646f3`, `OperatorUserSeeder` calls `GrantStarterCreditsAction`, covered by `OperatorUserSeederTest` (plan task 25). After `lane-make.sh l17 seed`, the lane's operator has one grant.
+- `lane-make.sh l17 check`: exit 0, PHPUnit 1,924 passed (38,006 assertions), Vitest 644 passed (40 files).
 
 Everything else in the story was verified (below). Status stays `qa-ready`. Once tasks 24 and 25 land after the rebase onto `main`, re-run QA.
 
