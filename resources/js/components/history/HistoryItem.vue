@@ -14,7 +14,8 @@ import type { Generation, GenerationStatus } from '@/types/generation';
 /**
  * One generation on History: its status, the prompt (clamped to two lines), what was
  * asked for, the estimate the user saw and when; once it succeeded, its image, what it
- * was actually charged and when it completed. Every time is read on `now`, the
+ * was actually charged and when it completed; once it failed, that it was free and the
+ * server's one message saying why, rendered as text. Every time is read on `now`, the
  * server-aligned clock History ticks, so a processing badge counts up live. From `sm`
  * the badge has its own column, with the image under it, and the time sits on the
  * right; on a phone the image comes first, then the badge and time share a line. It owns
@@ -75,6 +76,7 @@ const createdAgo = computed(() => formatRelativeTime(props.generation.created_at
 const createdExactly = computed(() => formatExactTimestamp(props.generation.created_at));
 
 const isSucceeded = computed(() => props.generation.status === 'succeeded');
+const isFailed = computed(() => props.generation.status === 'failed');
 
 /** What the user paid; the server sends it for a succeeded generation only. */
 const charge = computed(() => (isSucceeded.value ? props.generation.user_charge_nanodollars : null));
@@ -136,6 +138,7 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
                     Charged
                     <MoneyAmount :nanodollars="charge" />
                 </p>
+                <p v-else-if="isFailed" data-charge class="text-sm font-medium text-zinc-900">Not charged</p>
                 <p data-estimate class="text-sm text-zinc-600">
                     Est.
                     <AmountRange :min="generation.user_estimate_nanodollars.min" :max="generation.user_estimate_nanodollars.max" />
@@ -144,6 +147,9 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
             <p v-if="completedAt !== null" data-completed class="text-sm text-zinc-600">
                 Completed
                 <time :datetime="completedAt" :title="completedExactly">{{ completedClock }}</time>
+            </p>
+            <p v-if="isFailed && generation.failure_message" data-failure-message class="text-sm text-red-700">
+                {{ generation.failure_message }}
             </p>
         </div>
     </div>

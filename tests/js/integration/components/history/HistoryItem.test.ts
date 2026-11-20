@@ -49,6 +49,16 @@ const SUCCEEDED: Partial<Generation> = {
     image_expired: false,
 };
 
+const GENERATION_FAILED_COPY = "Pixelforge couldn't produce an image for this prompt. Try rephrasing it.";
+
+const FAILED: Partial<Generation> = {
+    status: 'failed',
+    status_label: 'Failed',
+    started_at: '2026-11-19T11:59:42Z',
+    completed_at: '2026-11-19T11:59:59Z',
+    failure_message: GENERATION_FAILED_COPY,
+};
+
 function badge(wrapper: VueWrapper) {
     return wrapper.get('[data-tone]');
 }
@@ -174,6 +184,43 @@ describe('HistoryItem', () => {
         expect(wrapper.find('[data-completed]').exists()).toBe(false);
         expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
         expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+    });
+
+    it('shows a failed generation as free, with its estimate and why it failed', () => {
+        const wrapper = mountItem(FAILED);
+
+        expect(badge(wrapper).text()).toBe('Failed');
+        expect(badge(wrapper).attributes('data-tone')).toBe('danger');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(GENERATION_FAILED_COPY);
+        expect(wrapper.find('[data-completed]').exists()).toBe(false);
+        expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
+    });
+
+    it('shows a failure message as text, never as markup', () => {
+        const message = mountItem({ ...FAILED, failure_message: 'Pixelforge rejected the request: prompt: <b>x</b>' }).get(
+            '[data-failure-message]',
+        );
+
+        expect(message.text()).toBe('Pixelforge rejected the request: prompt: <b>x</b>');
+        expect(message.find('b').exists()).toBe(false);
+    });
+
+    it('shows a local failure that later succeeded at Pixelforge (D-09) as failed and free', () => {
+        const wrapper = mountItem({
+            ...FAILED,
+            failure_message: 'Something went wrong submitting this generation.',
+            user_charge_nanodollars: null,
+            image_url: null,
+            image_url_expires_at: null,
+            image_expired: false,
+        });
+
+        expect(badge(wrapper).text()).toBe('Failed');
+        expect(visibleText(wrapper)).toContain('Not charged');
+        expect(visibleText(wrapper)).not.toContain('Charged $');
+        expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
     });
 
     it('clamps the prompt to two lines, with the full prompt on hover', () => {
