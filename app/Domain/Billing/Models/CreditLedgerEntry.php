@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?string $generation_id
  * @property CreditLedgerEntryType $type
  * @property int $amount_nanodollars
+ * @property ?string $purchase_token the Buy credits page's token, set on a purchase only
  * @property CarbonImmutable $created_at
  */
 #[DateFormat('Y-m-d H:i:sP')]
@@ -29,6 +30,7 @@ use Illuminate\Database\Eloquent\Model;
     'generation_id',
     'type',
     'amount_nanodollars',
+    'purchase_token',
 ])]
 final class CreditLedgerEntry extends Model
 {
