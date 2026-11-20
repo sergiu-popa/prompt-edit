@@ -35,9 +35,11 @@ final class FortifyServiceProvider extends ServiceProvider
         Fortify::registerView(fn (): Response => Inertia::render('Auth/Register'));
 
         /*
-         * Fortify always registers GET /user/confirm-password, but no page asks for a
-         * password confirmation, so it is not found rather than a missing view.
+         * Fortify always registers GET and POST /user/confirm-password, but no page asks
+         * for a password confirmation, so both are not found. The POST never checks a
+         * password, so it is no unthrottled password oracle for a stolen session (D-61).
          */
         Fortify::confirmPasswordView(fn (): never => abort(404));
+        Fortify::confirmPasswordsUsing(fn (): never => abort(404));
     }
 }
