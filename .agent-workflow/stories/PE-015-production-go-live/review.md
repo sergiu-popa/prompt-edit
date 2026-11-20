@@ -75,3 +75,37 @@ The constant-field check: `/health/reconciler` returns `status` and `last_succee
 - **S2. The default limit of 3 is written twice.** `app/Actions/Fortify/CreateNewUser.php:82` falls back to a literal `3`, and `config/auth.php` already defaults to 3 through `filter_var`. Name it once, for example as a `DEFAULT_REGISTRATIONS_PER_HOUR` constant on `CreateNewUser` that the config references, or cast the config value and drop the fallback.
 - **S3. A guest's Sign out shows "Your session expired. Please try again."** `app/Http/Responses/RedirectExpiredSession.php:40` flashes the notice for any unsafe guest request that `auth` redirects, including `POST /logout` from a tab whose session has expired. The result is harmless but reads oddly ("try again" to sign out). Consider skipping the flash when `$request->routeIs('logout')`, with an `ExpiredSessionTest` row.
 - **S4. The first `make smoke-production` after this deploy can read `stale`.** The heartbeat key does not exist on production until the first scheduled run after the deploy, and the new smoke row (`tests/smoke/production.spec.ts:22`) expects 200 `ok`. In README step 3 ("Deploy"), consider saying to wait a minute after `dep deploy`, or until `/health/reconciler` is `ok`, before running the smoke.
+
+## Round 2
+
+**Verdict: REQUEST CHANGES**
+
+Scope reviewed: the whole `[PE-015]` story diff (`git diff origin/main...HEAD`, `58c95a9..8cf3422`, 29 commits), with a close look at the round 1 fix commits `11f8f96`, `eee26de` and `eb36a1c` and the bookkeeping commit `8cf3422`.
+
+Checks run on HEAD (`8cf3422`):
+- `make check` exits 0. Pint (292 files) and Larastan are clean. PHPUnit runs 1,729 tests (37,027 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 503 tests in 33 files, all passing.
+- `CI=true make live-smoke` now refuses. Both non-skipped live tests fail with "The live smoke never runs in CI (the CI variable is set). Run `make live-smoke` locally." and the other 4 are skipped, so no request reaches the real API. The new `test_the_make_target_forwards_ci_into_the_container` passes on its own.
+- Larastan run on `tests/Feature/Pixelforge/Live/LiveSmokeGuardTest.php` as of `11f8f96` (copied into the container and analysed with the project's `phpstan.neon`) reports 1 error at line 179: "Offset 'recipe' might not exist" (`offsetAccess.notFound`). See W4.
+- `make e2e` was not re-run. Nothing since round 1 touches the UI, the routes or the frontend, and round 1's run (44 passed, 2 skipped) still stands.
+
+### Round 1 follow-up
+
+- **W1, CI forwarding (`11f8f96` + `eee26de`):** `Makefile:99` now runs `docker exec -e CI prompt-edit-app …`. A bare `-e CI` copies the variable only when the host sets it, so a local run without `CI` behaves as before. The Makefile comment says why. `LiveSmokeGuardTest::test_the_make_target_forwards_ci_into_the_container` reads the `live-smoke` recipe and pins `-e CI` together with `--group=live`, so the guard and its entry point stay tied. With `$matches['recipe'] ?? ''`, a missing or renamed target fails the pattern assertion instead of erroring. Fixed.
+- **W2, `elseif` (`eb36a1c`):** `CheckGenerationMoneyAction::holdProblems()` (`app/Domain/Billing/Actions/CheckGenerationMoneyAction.php:80-86`) returns early on a wrong hold count and then checks the amount with a plain `if`. The behaviour is unchanged. The estimate-max problem is still collected first, and the existing `CheckGenerationMoneyActionTest` rows (including the tampered hold) still pass. `app/` has no `elseif` left. The one remaining `else` (`ReconcileGenerationsAction.php:146`) came from PE-014 and is outside this diff. Fixed.
+- **W3, `b6fa7a7` does not pass on its own:** unchanged. `b6fa7a7` and `3976ce2` are still separate, and neither the prompt log nor the story records a decision by the user. It stays open (below).
+- **Suggestions S1–S4:** not taken up. They are optional and do not block.
+
+### Commit hygiene
+
+- Each W fix has its own commit with its test, and its body gives the reason (`11f8f96`, `eee26de`). The bookkeeping `8cf3422` holds only `review.md`. Every subject is `[PE-015] Imperative …`, at most 72 characters, with no trailing period, and every commit carries the trailer.
+- The exception is that `11f8f96` fails `make stan` on its own and `eee26de` is its fix-up (W4). This is the same shape as W3.
+
+### Warnings
+
+- [ ] **W3 (carried over). Commit `b6fa7a7` does not pass on its own (needs the user, not an Engineer task).** See round 1. The fix is to squash `3976ce2` into `b6fa7a7`, keeping `b6fa7a7`'s subject. Pipeline agents may not rebase or amend, so **the Engineer must not attempt this**. The orchestrator raises it with the user. Once the user has squashed the commits or accepted them as they are, the next round ticks this as acknowledged.
+- [ ] **W4. Commit `11f8f96` fails Larastan on its own (needs the user, not an Engineer task).**
+  - At `11f8f96 [PE-015] Forward CI into the container for make live-smoke`, `tests/Feature/Pixelforge/Live/LiveSmokeGuardTest.php:179` reads `$matches['recipe']` straight after `preg_match`. Larastan reports `Offset 'recipe' might not exist on array{}|array{…}` (verified above), so `make stan`, and with it `make check`, fails at that commit. The next commit, `eee26de [PE-015] Read the live-smoke recipe without an unchecked offset`, only fixes that line, and its body says so.
+  - Why it matters: the project rule is that every commit is self-contained and passes its checks (`.agent-workflow/CLAUDE.md` § Git hygiene), and the user reviews commit by commit. `eee26de` reads as a separate change but is a fix-up of the previous commit.
+  - Fix: squash `eee26de` into `11f8f96`, keeping `11f8f96`'s subject and body. This can be done in the same `git rebase -i origin/main` as W3 (`fixup` on `3976ce2` and on `eee26de`). Pipeline agents may not rebase or amend, so **the Engineer must not attempt this**. The orchestrator raises it with the user, together with W3. Once the user has squashed the commits or accepted them as they are, the next round ticks this as acknowledged.
+
+No Critical findings. No code or test change is needed from the Engineer. The two open Warnings are history decisions that only the user can make. When both are resolved, the story can be approved without another code round.
