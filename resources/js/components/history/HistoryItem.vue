@@ -15,13 +15,13 @@ import type { Generation, GenerationStatus } from '@/types/generation';
  * One generation on History: its status, the prompt (clamped to two lines), what was
  * asked for, the estimate the user saw and when; once it succeeded, its image (or, from
  * its expiry on the server's clock, a placeholder), what it was actually charged and
- * when it completed; once it failed, that it was free and the
- * server's one message saying why, rendered as text. Every time is read on `now`, the
- * server-aligned clock History ticks, so a processing badge counts up live. From `sm`
- * the badge has its own column, with the image under it, and the time sits on the
- * right; on a phone the image comes first, then the badge and time share a line. It owns
- * its row's padding, so the highlight fills the row; inside a list's rounded card, the
- * first and last rows round their corners to match.
+ * when it completed; once it failed, that it was free and the server's one message
+ * saying why, rendered as text. Every time is read on `now`, the server-aligned clock
+ * History ticks, so a processing badge counts up live. From `sm` the badge has its own
+ * column, with the image under it, and the time sits on the right; on a phone the image
+ * comes first, then the badge and time share a line. It owns its row's padding, so the
+ * highlight fills the row; inside a list's rounded card, the first and last rows round
+ * their corners to match.
  */
 const props = withDefaults(
     defineProps<{
