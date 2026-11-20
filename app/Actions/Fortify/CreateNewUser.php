@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Fortify;
 
+use App\Domain\Shared\Rules\StorableTextRule;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -19,7 +20,8 @@ final class CreateNewUser implements CreatesNewUsers
      *
      * The email is lowercased before the uniqueness check, so `Ada@…` and `ada@…` can't
      * become two accounts (D-18). Only a string is lowercased: anything else is left for
-     * the `string` rule to reject.
+     * the `string` rule to reject. A name Postgres can't store (invalid UTF-8 or a NUL)
+     * is a field error, not a 500.
      *
      * @param  array<string, mixed>  $input
      *
@@ -33,7 +35,7 @@ final class CreateNewUser implements CreatesNewUsers
 
         /** @var array{name: string, email: string, password: string} $validated */
         $validated = Validator::make($input, [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', new StorableTextRule],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)],
             'password' => ['required', 'string', Password::default(), 'confirmed'],
         ])->validate();
