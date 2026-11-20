@@ -54,23 +54,23 @@ export const LOCAL_FAILURE_TIMEOUT_MS = MARGIN * (WORKER_SLEEP_MS + POLL_INTERVA
 export const EXPIRY_TIMEOUT_MS = MARGIN * (FAKE_EXPIRE_TTL_MS + 1_000);
 
 /**
- * `submit.overloaded_deadline_seconds` as the app reads it: the dev containers' env, which
+ * A `PIXELFORGE_*` seconds value as the app reads it: the dev containers' env, which
  * compose also gives Playwright (D-48), else `.env.example`'s line, which CI's image is
  * built from, beside this checkout.
  */
-function overloadedDeadlineSeconds(): number {
-    const fromTemplate = /^PIXELFORGE_OVERLOADED_DEADLINE=(\d+)$/m.exec(readFileSync('.env.example', 'utf8'))?.[1];
-    const seconds = Number(process.env.PIXELFORGE_OVERLOADED_DEADLINE || fromTemplate);
+function pixelforgeSeconds(name: string): number {
+    const fromTemplate = new RegExp(`^${name}=(\\d+)$`, 'm').exec(readFileSync('.env.example', 'utf8'))?.[1];
+    const seconds = Number(process.env[name] || fromTemplate);
 
     if (!Number.isInteger(seconds) || seconds < 1) {
-        throw new Error('PIXELFORGE_OVERLOADED_DEADLINE is neither in the env nor in .env.example.');
+        throw new Error(`${name} is neither in the env nor in .env.example.`);
     }
 
     return seconds;
 }
 
-/** How long an `[overloaded]` prompt is retried before it fails free. */
-const OVERLOADED_DEADLINE_MS = overloadedDeadlineSeconds() * 1_000;
+/** `submit.overloaded_deadline_seconds`: how long an `[overloaded]` prompt is retried before it fails free. */
+const OVERLOADED_DEADLINE_MS = pixelforgeSeconds('PIXELFORGE_OVERLOADED_DEADLINE') * 1_000;
 
 /** The fake's `Retry-After` for an `[overloaded]` create (FakePixelforgeClient). */
 const OVERLOADED_RETRY_AFTER_MS = 2_000;
@@ -84,6 +84,30 @@ export const RETRY_NOTE_TIMEOUT_MS = MARGIN * (WORKER_SLEEP_MS + POLL_INTERVAL_M
  */
 export const OVERLOADED_FAILURE_TIMEOUT_MS =
     MARGIN * (OVERLOADED_DEADLINE_MS + OVERLOADED_RETRY_AFTER_MS + 2 * WORKER_SLEEP_MS + POLL_INTERVAL_MS);
+
+/** `reconcile.every_seconds`: the scheduler's wait between reconciler runs. */
+const RECONCILE_PERIOD_MS = pixelforgeSeconds('PIXELFORGE_RECONCILE_EVERY') * 1_000;
+
+/** `reconcile.queued_after_seconds`: how long a queued generation goes without news before a poll. */
+const RECONCILE_QUEUED_AFTER_MS = pixelforgeSeconds('PIXELFORGE_RECONCILE_QUEUED_AFTER') * 1_000;
+
+/** `reconcile.processing_after_seconds`: likewise for a processing one. */
+const RECONCILE_PROCESSING_AFTER_MS = pixelforgeSeconds('PIXELFORGE_RECONCILE_PROCESSING_AFTER') * 1_000;
+
+/**
+ * From submit to a terminal badge when no webhook arrives (AC 22): the three jobs as in
+ * untilTerminal(), then the queued threshold, and the processing threshold too if the poll
+ * lands mid-processing, each noticed up to one reconciler period late; then one poll.
+ */
+export const POLLED_TERMINAL_TIMEOUT_MS =
+    MARGIN *
+    (3 * WORKER_SLEEP_MS +
+        FAKE_QUEUE_MS +
+        FAKE_PROCESSING_MS +
+        RECONCILE_QUEUED_AFTER_MS +
+        RECONCILE_PROCESSING_AFTER_MS +
+        2 * RECONCILE_PERIOD_MS +
+        POLL_INTERVAL_MS);
 
 export interface PromptOptions {
     quality?: 'Low' | 'Medium' | 'High';

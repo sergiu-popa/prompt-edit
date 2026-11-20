@@ -11,6 +11,7 @@ use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
+use App\Support\Pixelforge\PixelforgeRequestBudget;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\ArrayStore;
@@ -32,6 +33,8 @@ final class ThrottledPixelforgeClientTest extends TestCase
 
     private int $innerConfiguredChecks = 0;
 
+    private int $innerRetrieves = 0;
+
     private ThrottledPixelforgeClient $client;
 
     protected function setUp(): void
@@ -41,8 +44,7 @@ final class ThrottledPixelforgeClientTest extends TestCase
         CarbonImmutable::setTestNow('2026-11-20T10:00:00Z');
         $this->client = new ThrottledPixelforgeClient(
             $this->recordingClient(),
-            new RateLimiter(new Repository(new ArrayStore)),
-            self::LIMIT,
+            new PixelforgeRequestBudget(new RateLimiter(new Repository(new ArrayStore)), self::LIMIT),
         );
     }
 
@@ -85,6 +87,30 @@ final class ThrottledPixelforgeClientTest extends TestCase
         $this->createTimes(self::LIMIT);
 
         $this->assertSame(2 * self::LIMIT, $this->innerCreates);
+    }
+
+    public function test_a_retrieve_takes_one_unit_of_the_same_budget(): void
+    {
+        $this->createTimes(self::LIMIT - 1);
+
+        $this->client->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K');
+
+        $this->assertSame(1, $this->innerRetrieves);
+        $this->exhaustedCreate();
+    }
+
+    public function test_a_retrieve_past_the_budget_reaches_nothing(): void
+    {
+        $this->createTimes(self::LIMIT);
+
+        try {
+            $this->client->retrieveGeneration('gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K');
+            $this->fail('Expected the budget to be spent.');
+        } catch (RateBudgetExhaustedException $exception) {
+            $this->assertSame(60, $exception->retryAfterSeconds);
+        }
+
+        $this->assertSame(0, $this->innerRetrieves);
     }
 
     public function test_asking_whether_it_is_configured_takes_no_unit(): void
@@ -145,6 +171,13 @@ final class ThrottledPixelforgeClientTest extends TestCase
                 return new CreatedGenerationData($this->snapshot, false);
             }
 
+            public function retrieveGeneration(string $providerId): GenerationSnapshot
+            {
+                $this->test->recordRetrieve();
+
+                return $this->snapshot;
+            }
+
             public function isConfigured(): bool
             {
                 $this->test->recordConfiguredCheck();
@@ -162,5 +195,10 @@ final class ThrottledPixelforgeClientTest extends TestCase
     public function recordConfiguredCheck(): void
     {
         $this->innerConfiguredChecks++;
+    }
+
+    public function recordRetrieve(): void
+    {
+        $this->innerRetrieves++;
     }
 }

@@ -51,6 +51,10 @@ final class GenerationFailureCodeTest extends TestCase
                 GenerationFailureCode::DailyLimit,
                 'Daily capacity reached, try after 00:00 UTC. You were not charged.',
             ],
+            'lost' => [
+                GenerationFailureCode::Lost,
+                'We couldn\'t confirm this generation with Pixelforge. You were not charged.',
+            ],
         ];
     }
 
@@ -107,6 +111,7 @@ final class GenerationFailureCodeTest extends TestCase
                 'provider_busy',
                 'service_unavailable',
                 'daily_limit',
+                'lost',
             ],
             array_column(GenerationFailureCode::cases(), 'value'),
         );

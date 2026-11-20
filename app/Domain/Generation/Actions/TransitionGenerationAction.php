@@ -18,6 +18,7 @@ use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -324,6 +325,9 @@ final class TransitionGenerationAction
     }
 
     /**
+     * An applied snapshot also stamps our clock as the last provider update (D-50),
+     * whatever path brought it; the poller judges staleness by it alone.
+     *
      * @return array<string, mixed>
      */
     private function snapshotAttributes(GenerationSnapshot $snapshot): array
@@ -334,6 +338,7 @@ final class TransitionGenerationAction
             'provider_created_at' => $snapshot->createdAt,
             'started_at' => $snapshot->startedAt,
             'completed_at' => $snapshot->completedAt,
+            'last_provider_update_at' => CarbonImmutable::now(),
         ];
 
         return match ($snapshot->status) {

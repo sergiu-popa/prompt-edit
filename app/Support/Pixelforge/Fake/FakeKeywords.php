@@ -14,8 +14,9 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
  * `[overloaded]` (a chaos 503 follows them). An accepted create's outcome is
  * decided by `[fail]`, else `[succeed]` (a chaos `internal_error` follows
  * them, so `[succeed]` only rules out a random failure). The modifiers
- * `[slow]`, `[duplicate]` and the fake-only `[expire]` combine with any
- * accepted outcome.
+ * `[slow]`, `[duplicate]` and the fake-only `[expire]` and `[no-webhooks]`
+ * combine with any accepted outcome; `[no-webhooks]` also wins over
+ * `[duplicate]`, since nothing is sent to duplicate.
  */
 final readonly class FakeKeywords
 {
@@ -27,6 +28,7 @@ final readonly class FakeKeywords
         public bool $slow,
         public bool $duplicate,
         public bool $expire,
+        public bool $noWebhooks,
     ) {}
 
     public static function fromPrompt(string $prompt): self
@@ -39,6 +41,7 @@ final readonly class FakeKeywords
             self::has($prompt, '[slow]'),
             self::has($prompt, '[duplicate]'),
             self::has($prompt, '[expire]'),
+            self::has($prompt, '[no-webhooks]'),
         );
     }
 

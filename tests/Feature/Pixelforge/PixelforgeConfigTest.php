@@ -36,6 +36,34 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
         'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS',
         'PIXELFORGE_FAKE_CHAOS_PERCENT',
+        'PIXELFORGE_FAKE_DROP_WEBHOOKS',
+    ];
+
+    private const array RECONCILE_VARIABLES = [
+        'PIXELFORGE_RECONCILE_QUEUED_AFTER',
+        'PIXELFORGE_RECONCILE_PROCESSING_AFTER',
+        'PIXELFORGE_RECONCILE_RECHECK',
+        'PIXELFORGE_RECONCILE_RECHECK_MAX',
+        'PIXELFORGE_RECONCILE_BATCH',
+        'PIXELFORGE_SUBMIT_RESERVE',
+        'PIXELFORGE_RECONCILE_EVERY',
+        'PIXELFORGE_REDISPATCH_AFTER',
+        'PIXELFORGE_GIVE_UP_AFTER',
+        'PIXELFORGE_STUCK_AFTER',
+    ];
+
+    /**
+     * Production's reconcile bounds (D-50, D-51), the default of each.
+     */
+    private const array RECONCILE_DEFAULTS = [
+        'queued_after_seconds' => 120,
+        'processing_after_seconds' => 180,
+        'recheck_seconds' => 60,
+        'max_recheck_seconds' => 900,
+        'batch_size' => 20,
+        'redispatch_after_seconds' => 300,
+        'give_up_after_seconds' => 86_400,
+        'stuck_after_seconds' => 900,
     ];
 
     /**
@@ -47,7 +75,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         parent::setUp();
 
-        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES, ...self::RECONCILE_VARIABLES] as $name) {
             $this->savedVariables['env'][$name] = $_ENV[$name] ?? null;
             $this->savedVariables['server'][$name] = $_SERVER[$name] ?? null;
             $this->savedVariables['process'][$name] = getenv($name);
@@ -56,7 +84,7 @@ final class PixelforgeConfigTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES, ...self::RECONCILE_VARIABLES] as $name) {
             self::restore($_ENV, $name, $this->savedVariables['env'][$name]);
             self::restore($_SERVER, $name, $this->savedVariables['server'][$name]);
             $process = $this->savedVariables['process'][$name];
@@ -96,6 +124,96 @@ final class PixelforgeConfigTest extends TestCase
     {
         $this->assertSame(50, config('pixelforge.rate_limit_per_minute'));
         $this->assertSame(120, config('pixelforge.submit.overloaded_deadline_seconds'));
+    }
+
+    /**
+     * The dev containers shorten the reconciler's thresholds in their env (D-48);
+     * the suite always runs with production's.
+     */
+    public function test_the_suite_runs_with_the_production_reconcile_bounds(): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, array_intersect_key((array) config('pixelforge.reconcile'), self::RECONCILE_DEFAULTS));
+    }
+
+    public function test_empty_reconcile_bounds_mean_the_production_defaults(): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, $this->reconcileConfigWith(array_fill_keys(self::RECONCILE_VARIABLES, '')));
+    }
+
+    public function test_set_reconcile_bounds_apply(): void
+    {
+        $this->assertSame(
+            ['queued_after_seconds' => 5, 'processing_after_seconds' => 6, 'recheck_seconds' => 2, 'max_recheck_seconds' => 300, 'batch_size' => 7, 'redispatch_after_seconds' => 90, 'give_up_after_seconds' => 3_600, 'stuck_after_seconds' => 600],
+            $this->reconcileConfigWith([
+                'PIXELFORGE_RECONCILE_QUEUED_AFTER' => '5',
+                'PIXELFORGE_RECONCILE_PROCESSING_AFTER' => '6',
+                'PIXELFORGE_RECONCILE_RECHECK' => '2',
+                'PIXELFORGE_RECONCILE_RECHECK_MAX' => '300',
+                'PIXELFORGE_RECONCILE_BATCH' => '7',
+                'PIXELFORGE_REDISPATCH_AFTER' => '90',
+                'PIXELFORGE_GIVE_UP_AFTER' => '3600',
+                'PIXELFORGE_STUCK_AFTER' => '600',
+            ]),
+        );
+    }
+
+    /**
+     * A threshold or recheck of 0 would poll every row on every run.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_reconcile_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, $this->reconcileConfigWith(array_fill_keys(self::RECONCILE_VARIABLES, $value)));
+    }
+
+    public function test_the_submit_reserve_defaults_to_10_units(): void
+    {
+        $this->assertSame(10, config('pixelforge.reconcile.submit_reserve'));
+        $this->assertSame(10, $this->submitReserveWith(''));
+    }
+
+    /**
+     * 0 keeps nothing back, which is allowed.
+     */
+    public function test_a_set_submit_reserve_applies_including_zero(): void
+    {
+        $this->assertSame(15, $this->submitReserveWith('15'));
+        $this->assertSame(0, $this->submitReserveWith('0'));
+    }
+
+    #[DataProvider('invalidFakeValues')]
+    public function test_a_submit_reserve_that_is_not_a_whole_number_means_the_default(string $value): void
+    {
+        $this->assertSame(10, $this->submitReserveWith($value));
+    }
+
+    public function test_the_reconciler_runs_every_minute_by_default(): void
+    {
+        $this->assertSame(60, config('pixelforge.reconcile.every_seconds'));
+        $this->assertSame(60, $this->reconcileEverySecondsWith(''));
+    }
+
+    #[DataProvider('reconcileFrequencies')]
+    public function test_the_reconciler_frequency_is_a_laravel_frequency_or_a_minute(string $value, int $seconds): void
+    {
+        $this->assertSame($seconds, $this->reconcileEverySecondsWith($value));
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function reconcileFrequencies(): array
+    {
+        return [
+            'every 5 s' => ['5', 5],
+            'every 30 s' => ['30', 30],
+            'every second' => ['1', 1],
+            'a minute' => ['60', 60],
+            'not a divisor of a minute' => ['7', 60],
+            'more than a minute' => ['120', 60],
+            'zero' => ['0', 60],
+            'a word' => ['abc', 60],
+        ];
     }
 
     public function test_empty_values_mean_the_defaults(): void
@@ -202,7 +320,7 @@ final class PixelforgeConfigTest extends TestCase
     public function test_empty_submit_bounds_mean_the_production_defaults(): void
     {
         $this->assertSame(
-            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60, 'create_lock_seconds' => 90],
             $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '', 'PIXELFORGE_OVERLOADED_DEADLINE' => '', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => ''])['submit'],
         );
     }
@@ -210,7 +328,7 @@ final class PixelforgeConfigTest extends TestCase
     public function test_set_submit_bounds_apply(): void
     {
         $this->assertSame(
-            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15, 'concurrency_max_wait_seconds' => 300, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15, 'concurrency_max_wait_seconds' => 300, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60, 'create_lock_seconds' => 90],
             $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '600', 'PIXELFORGE_OVERLOADED_DEADLINE' => '15', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => '300'])['submit'],
         );
     }
@@ -222,7 +340,7 @@ final class PixelforgeConfigTest extends TestCase
     public function test_a_submit_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
     {
         $this->assertSame(
-            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60, 'create_lock_seconds' => 90],
             $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => $value, 'PIXELFORGE_OVERLOADED_DEADLINE' => $value, 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => $value])['submit'],
         );
     }
@@ -351,12 +469,70 @@ final class PixelforgeConfigTest extends TestCase
         ];
     }
 
+    public function test_webhooks_are_never_dropped_by_default(): void
+    {
+        $this->assertFalse($this->fakeConfigWith(['PIXELFORGE_FAKE_DROP_WEBHOOKS' => ''])['drop_webhooks']);
+        $this->assertFalse(config('pixelforge.fake.drop_webhooks'));
+    }
+
+    #[DataProvider('dropWebhooksValues')]
+    public function test_the_drop_switch_is_a_boolean(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, $this->fakeConfigWith(['PIXELFORGE_FAKE_DROP_WEBHOOKS' => $value])['drop_webhooks']);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function dropWebhooksValues(): array
+    {
+        return [
+            'the word true' => ['true', true],
+            'one' => ['1', true],
+            'the word on' => ['on', true],
+            'the word false' => ['false', false],
+            'zero' => ['0', false],
+            'any other word' => ['abc', false],
+        ];
+    }
+
     public function test_a_zero_ttl_means_the_default(): void
     {
         $fake = $this->fakeConfigWith(['PIXELFORGE_FAKE_IMAGE_TTL_SECONDS' => '0', 'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS' => '0']);
 
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
         $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    private function reconcileEverySecondsWith(string $value): mixed
+    {
+        $reconcile = $this->pixelforgeConfigWith(['PIXELFORGE_RECONCILE_EVERY' => $value])['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        return $reconcile['every_seconds'] ?? null;
+    }
+
+    private function submitReserveWith(string $value): mixed
+    {
+        $reconcile = $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_RESERVE' => $value])['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        return $reconcile['submit_reserve'] ?? null;
+    }
+
+    /**
+     * The positive-integer bounds only; the reserve, which may be 0, has its own rows.
+     *
+     * @param  array<string, string>  $variables
+     * @return array<string, mixed>
+     */
+    private function reconcileConfigWith(array $variables): array
+    {
+        $reconcile = $this->pixelforgeConfigWith($variables)['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        /** @var array<string, mixed> $reconcile */
+        return array_intersect_key($reconcile, self::RECONCILE_DEFAULTS);
     }
 
     /**

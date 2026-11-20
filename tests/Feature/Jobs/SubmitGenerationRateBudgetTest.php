@@ -9,7 +9,7 @@ use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Enums\SubmitAttemptOutcome;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
-use App\Support\Pixelforge\ThrottledPixelforgeClient;
+use App\Support\Pixelforge\PixelforgeRequestBudget;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Cache\RateLimiter;
@@ -66,7 +66,7 @@ final class SubmitGenerationRateBudgetTest extends TestCase
         $this->assertSame(GenerationStatus::Queued, $this->reloadedGeneration($first)->status);
         $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($second)->status);
         $this->assertReleasedWithin(1, 60, $job);
-        $this->assertSame(1, DB::table('cache')->where('key', 'like', '%' . ThrottledPixelforgeClient::BUDGET_KEY)->count());
+        $this->assertSame(1, DB::table('cache')->where('key', 'like', '%' . PixelforgeRequestBudget::BUDGET_KEY)->count());
     }
 
     /**
@@ -132,7 +132,7 @@ final class SubmitGenerationRateBudgetTest extends TestCase
      */
     private function takeUnits(int $units): void
     {
-        (new RateLimiter(Cache::store('database')))->increment(ThrottledPixelforgeClient::BUDGET_KEY, ThrottledPixelforgeClient::WINDOW_SECONDS, $units);
+        (new RateLimiter(Cache::store('database')))->increment(PixelforgeRequestBudget::BUDGET_KEY, PixelforgeRequestBudget::WINDOW_SECONDS, $units);
     }
 
     private function assertReleasedWithin(int $min, int $max, SubmitGenerationJob $job): void

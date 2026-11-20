@@ -36,9 +36,31 @@
         <env name="PIXELFORGE_WEBHOOK_SECRET" value="" force="true"/>
         <env name="PIXELFORGE_RATE_LIMIT_PER_MINUTE" value="" force="true"/>
         <env name="PIXELFORGE_OVERLOADED_DEADLINE" value="" force="true"/>
+        <env name="PIXELFORGE_FAKE_DROP_WEBHOOKS" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_QUEUED_AFTER" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_PROCESSING_AFTER" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_RECHECK" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_RECHECK_MAX" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_BATCH" value="" force="true"/>
+        <env name="PIXELFORGE_SUBMIT_RESERVE" value="" force="true"/>
+        <env name="PIXELFORGE_RECONCILE_EVERY" value="" force="true"/>
+        <env name="PIXELFORGE_REDISPATCH_AFTER" value="" force="true"/>
+        <env name="PIXELFORGE_GIVE_UP_AFTER" value="" force="true"/>
+        <env name="PIXELFORGE_STUCK_AFTER" value="" force="true"/>
         <!-- The dev containers set these in the process env, which Laravel reads from $_SERVER first. -->
         <server name="PIXELFORGE_RATE_LIMIT_PER_MINUTE" value=""/>
         <server name="PIXELFORGE_OVERLOADED_DEADLINE" value=""/>
+        <server name="PIXELFORGE_FAKE_DROP_WEBHOOKS" value=""/>
+        <server name="PIXELFORGE_RECONCILE_QUEUED_AFTER" value=""/>
+        <server name="PIXELFORGE_RECONCILE_PROCESSING_AFTER" value=""/>
+        <server name="PIXELFORGE_RECONCILE_RECHECK" value=""/>
+        <server name="PIXELFORGE_RECONCILE_RECHECK_MAX" value=""/>
+        <server name="PIXELFORGE_RECONCILE_BATCH" value=""/>
+        <server name="PIXELFORGE_SUBMIT_RESERVE" value=""/>
+        <server name="PIXELFORGE_RECONCILE_EVERY" value=""/>
+        <server name="PIXELFORGE_REDISPATCH_AFTER" value=""/>
+        <server name="PIXELFORGE_GIVE_UP_AFTER" value=""/>
+        <server name="PIXELFORGE_STUCK_AFTER" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="INERTIA_SSR_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>

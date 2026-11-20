@@ -28,6 +28,10 @@ use Throwable;
  * backoff applies only to an unexpected exception. The timeout sits between the
  * HTTP client's and the queue's `retry_after`, so a hung request never overlaps
  * its own retry (AC 19).
+ *
+ * The reconciler re-dispatches it with the same ULID and the re-dispatch instant
+ * (D-52): such a job is owed one run that the window does not stop, while no
+ * attempt has started since that instant.
  */
 #[Backoff(5, 15, 30, 60)]
 final class SubmitGenerationJob implements ShouldQueueAfterCommit
@@ -41,8 +45,12 @@ final class SubmitGenerationJob implements ShouldQueueAfterCommit
 
     public int $timeout;
 
+    /**
+     * @param  ?CarbonImmutable  $redispatchedAt  when the reconciler re-dispatched it, in whole seconds; null for the first dispatch
+     */
     public function __construct(
         public readonly string $generationId,
+        public readonly ?CarbonImmutable $redispatchedAt = null,
     ) {
         $this->timeout = config()->integer('pixelforge.submit.job_timeout_seconds');
     }
@@ -52,7 +60,7 @@ final class SubmitGenerationJob implements ShouldQueueAfterCommit
      */
     public function handle(SubmitGenerationAction $submitGeneration): void
     {
-        $retryInSeconds = $submitGeneration->execute($this->generationId);
+        $retryInSeconds = $submitGeneration->execute($this->generationId, $this->redispatchedAt);
 
         if ($retryInSeconds !== null) {
             $this->release($retryInSeconds);

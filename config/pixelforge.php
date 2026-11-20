@@ -11,6 +11,11 @@ declare(strict_types=1);
 $fakeChaosPercent = filter_var(env('PIXELFORGE_FAKE_CHAOS_PERCENT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100, 'default' => 0]]);
 
 /**
+ * How often the reconciler runs: one of Laravel's sub-minute frequencies, else a minute.
+ */
+$reconcileEverySeconds = filter_var(env('PIXELFORGE_RECONCILE_EVERY'), FILTER_VALIDATE_INT);
+
+/**
  * The submit job's own timeout. The request timeout stays below it (AC 19).
  */
 $submitJobTimeoutSeconds = 60;
@@ -51,8 +56,9 @@ return [
     'rate_limit_per_minute' => filter_var(env('PIXELFORGE_RATE_LIMIT_PER_MINUTE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 50]]),
 
     /**
-     * The cache store that counts the budget: one every process shares (D-20),
-     * pinned here, whatever CACHE_STORE says.
+     * The cache store that counts the budget and holds each generation's create
+     * lock (D-53): one every process shares (D-20), pinned here, whatever
+     * CACHE_STORE says.
      */
     'rate_limit_store' => 'database',
 
@@ -87,6 +93,72 @@ return [
          * so one job never runs twice at once (AC 19).
          */
         'job_timeout_seconds' => $submitJobTimeoutSeconds,
+
+        /**
+         * How long a run's create lock lives (D-53): past the job's timeout, so a
+         * run killed at it still holds off the next until it is surely dead.
+         */
+        'create_lock_seconds' => $submitJobTimeoutSeconds + 30,
+    ],
+
+    /**
+     * The scheduled reconciler (PE-014), in seconds unless named otherwise. Every
+     * default is production's, and production sets none of them; anything but a
+     * positive integer means the default.
+     */
+    'reconcile' => [
+        /**
+         * A confirmed row is polled once its last provider update (D-50) is older
+         * than this: 2 min while `queued`, 3 min while `processing`.
+         */
+        'queued_after_seconds' => filter_var(env('PIXELFORGE_RECONCILE_QUEUED_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 120]]),
+
+        'processing_after_seconds' => filter_var(env('PIXELFORGE_RECONCILE_PROCESSING_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 180]]),
+
+        /**
+         * After a poll or a re-dispatch, a row waits a quarter of its age before
+         * the next one, at least this and at most the max (D-50).
+         */
+        'recheck_seconds' => filter_var(env('PIXELFORGE_RECONCILE_RECHECK'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 60]]),
+
+        'max_recheck_seconds' => filter_var(env('PIXELFORGE_RECONCILE_RECHECK_MAX'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 900]]),
+
+        /**
+         * The most rows one run handles, across polls and re-dispatches (D-51).
+         */
+        'batch_size' => filter_var(env('PIXELFORGE_RECONCILE_BATCH'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 20]]),
+
+        /**
+         * Units of the request budget polls always leave to submits (D-51): a poll
+         * is sent only while more than this is left in the minute. 0 is allowed.
+         */
+        'submit_reserve' => filter_var(env('PIXELFORGE_SUBMIT_RESERVE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 10]]),
+
+        /**
+         * How often the scheduler runs the reconciler (D-54): every minute in
+         * production; dev and E2E may name 1, 2, 5, 10, 15, 20 or 30 seconds.
+         * Anything else means 60.
+         */
+        'every_seconds' => in_array($reconcileEverySeconds, [1, 2, 5, 10, 15, 20, 30, 60], true) ? $reconcileEverySeconds : 60,
+
+        /**
+         * A generation Pixelforge never confirmed is re-dispatched once its last
+         * submit attempt, else its creation, is older than this (D-52), so a job
+         * that may still be retrying is left alone. A handed-over one is due at once.
+         */
+        'redispatch_after_seconds' => filter_var(env('PIXELFORGE_REDISPATCH_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 300]]),
+
+        /**
+         * A generation Pixelforge never confirmed is failed `lost`, free, this long
+         * after its creation (D-49). One Pixelforge confirmed is never given up.
+         */
+        'give_up_after_seconds' => filter_var(env('PIXELFORGE_GIVE_UP_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),
+
+        /**
+         * A non-terminal generation this long after its creation shows History's
+         * "Taking longer than usual" note, and is logged once (D-56).
+         */
+        'stuck_after_seconds' => filter_var(env('PIXELFORGE_STUCK_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 900]]),
     ],
 
     /**
@@ -138,6 +210,13 @@ return [
          * expiry without touching the images of tests running beside it.
          */
         'expire_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
+
+        /**
+         * Drops the webhooks of every generation created while it is on, so the
+         * reconciler is the only signal (D-55). For manual local testing only:
+         * E2E uses the per-prompt `[no-webhooks]`. Off by default.
+         */
+        'drop_webhooks' => filter_var(env('PIXELFORGE_FAKE_DROP_WEBHOOKS'), FILTER_VALIDATE_BOOLEAN, ['options' => ['default' => false]]),
 
         /**
          * Unprompted chaos, as the real API has it: the percent of creates

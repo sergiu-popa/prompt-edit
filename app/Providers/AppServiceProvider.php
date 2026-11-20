@@ -10,6 +10,7 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\PixelforgeRequestBudget;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -31,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
             fn (Application $app): PricingTable => PricingTable::fromSnapshot($app->make('config')->array('pricing')),
         );
 
+        $this->app->bind(PixelforgeRequestBudget::class, $this->pixelforgeRequestBudget(...));
         $this->app->bind(PixelforgeClient::class, $this->pixelforgeClient(...));
     }
 
@@ -53,8 +55,18 @@ class AppServiceProvider extends ServiceProvider
             default => throw PixelforgeNotConfiguredException::unknownDriver($driver),
         };
 
-        return new ThrottledPixelforgeClient(
-            $client,
+        return new ThrottledPixelforgeClient($client, $app->make(PixelforgeRequestBudget::class));
+    }
+
+    /**
+     * Built from config on every resolution, counting in the pinned store every
+     * process shares (D-44), whatever CACHE_STORE says.
+     */
+    private function pixelforgeRequestBudget(Application $app): PixelforgeRequestBudget
+    {
+        $config = $app->make('config');
+
+        return new PixelforgeRequestBudget(
             new CacheRateLimiter($app->make('cache')->store($config->string('pixelforge.rate_limit_store'))),
             $config->integer('pixelforge.rate_limit_per_minute'),
         );

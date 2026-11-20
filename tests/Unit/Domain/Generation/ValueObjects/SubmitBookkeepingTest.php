@@ -189,6 +189,31 @@ final class SubmitBookkeepingTest extends TestCase
         $this->assertSame($ambiguous, $bookkeeping->isAmbiguous());
     }
 
+    /**
+     * Whether a re-dispatch's owed run has happened (D-52): a run started at or after
+     * the instant, in whole seconds as the columns store them.
+     *
+     * @return array<string, array{?string, bool}>
+     */
+    public static function attemptsSinceTheRedispatch(): array
+    {
+        return [
+            'never attempted' => [null, false],
+            'last attempt a second before' => ['2026-11-20T10:00:04Z', false],
+            'last attempt at the instant' => [self::SECOND, true],
+            'last attempt after' => [self::THIRD, true],
+        ];
+    }
+
+    #[DataProvider('attemptsSinceTheRedispatch')]
+    public function test_it_knows_whether_a_run_started_since_an_instant(?string $lastAttemptedAt, bool $attempted): void
+    {
+        $at = $lastAttemptedAt === null ? null : self::at($lastAttemptedAt);
+        $bookkeeping = new SubmitBookkeeping($at === null ? null : self::at(self::FIRST), $at, SubmitAttemptOutcome::Ambiguous);
+
+        $this->assertSame($attempted, $bookkeeping->hasAttemptedSince(self::at(self::SECOND)));
+    }
+
     public function test_it_reads_from_and_writes_to_the_generations_columns(): void
     {
         $attributes = [

@@ -10,6 +10,7 @@ use App\Domain\Generation\Enums\GenerationTransitionOutcome;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -251,6 +252,66 @@ final class TransitionGenerationActionTest extends TestCase
         $this->assertNull($row->rates);
         $this->assertNull($row->image_url);
         $this->assertNull($row->local_failure_reason);
+    }
+
+    /**
+     * Our clock when a snapshot applied, whatever brought it: the poller judges
+     * staleness by it alone (D-50).
+     *
+     * @return array<string, array{GenerationStatus, GenerationStatus}>
+     */
+    public static function appliedSnapshots(): array
+    {
+        return [
+            'queued over pending' => [GenerationStatus::Pending, GenerationStatus::Queued],
+            'processing over queued' => [GenerationStatus::Queued, GenerationStatus::Processing],
+            'succeeded over processing' => [GenerationStatus::Processing, GenerationStatus::Succeeded],
+            'failed over processing' => [GenerationStatus::Processing, GenerationStatus::Failed],
+        ];
+    }
+
+    #[DataProvider('appliedSnapshots')]
+    public function test_an_applied_snapshot_stamps_the_last_provider_update_now(GenerationStatus $rowStatus, GenerationStatus $incomingStatus): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $generation = $this->givenAGenerationIn($rowStatus);
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:03:10Z'));
+
+        $this->transitionGeneration($generation, self::snapshotFor($generation, $incomingStatus));
+
+        $this->assertSameInstant('2026-11-20T10:03:10Z', $this->reloadedGeneration($generation)->last_provider_update_at);
+    }
+
+    public function test_a_refused_snapshot_of_another_generation_leaves_the_raw_row_equal(): void
+    {
+        $generation = Generation::factory()->processing()->create();
+        $other = Generation::factory()->processing()->create();
+        $before = $this->rawGenerationRow($generation);
+        $this->travel(5)->minutes();
+
+        $outcome = $this->transitionGeneration($generation, self::snapshotFor($other, GenerationStatus::Succeeded));
+
+        $this->assertSame(GenerationTransitionOutcome::RefusedConflict, $outcome);
+        $this->assertSame($before, $this->rawGenerationRow($generation));
+    }
+
+    /**
+     * Neither is news from Pixelforge about a generation it is running.
+     */
+    public function test_a_local_failure_and_the_provider_cost_only_write_never_stamp_it(): void
+    {
+        $generation = Generation::factory()->create();
+
+        $this->transitionGeneration($generation, new LocalGenerationFailureData(LocalFailureReason::ContentPolicyViolation, null, null, null));
+        $this->assertNull($this->reloadedGeneration($generation)->last_provider_update_at);
+
+        $this->travel(1)->minutes();
+        $outcome = $this->transitionGeneration($generation, self::snapshotFor($generation, GenerationStatus::Succeeded));
+
+        $row = $this->reloadedGeneration($generation);
+        $this->assertSame(GenerationTransitionOutcome::IgnoredConflict, $outcome);
+        $this->assertSame(87_450_000, $row->provider_cost_nanodollars);
+        $this->assertNull($row->last_provider_update_at);
     }
 
     public function test_the_given_model_is_never_mutated(): void

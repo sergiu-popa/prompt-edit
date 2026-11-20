@@ -11,8 +11,10 @@ use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Tests\Concerns\CapturesLogMessages;
 use Tests\Concerns\InteractsWithFakePixelforge;
 use Tests\TestCase;
 
@@ -23,6 +25,7 @@ use Tests\TestCase;
  */
 final class FakePixelforgeLifecycleTest extends TestCase
 {
+    use CapturesLogMessages;
     use InteractsWithFakePixelforge;
     use RefreshDatabase;
 
@@ -313,6 +316,61 @@ final class FakePixelforgeLifecycleTest extends TestCase
         $this->assertSame('2026-11-19T12:00:11Z', $row->snapshot['completed_at']);
         $this->assertSame('2026-11-19T12:00:16Z', $row->snapshot['image_url_expires_at']);
         $this->assertCount(4, $this->fakeWebhookRequests());
+    }
+
+    /**
+     * `[no-webhooks]` silences this one generation; one created beside it keeps both
+     * of its webhooks, and retrieve still follows the lifecycle (D-55).
+     */
+    public function test_a_no_webhooks_generation_advances_without_sending_any_webhook(): void
+    {
+        $silent = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [No-Webhooks]'));
+        $normal = $this->createThroughFake(self::lighthousePayload());
+
+        $this->runFakeLifecycle();
+
+        $this->assertTrue($this->fakeGenerationRow($silent->snapshot->id)->drops_webhooks);
+        $this->assertSame(GenerationStatus::Succeeded, $this->fakeGenerationRow($silent->snapshot->id)->status());
+        $this->assertSame(GenerationStatus::Succeeded, $this->fakeGenerationRow($normal->snapshot->id)->status());
+        $this->assertSame(
+            [$normal->snapshot->id, $normal->snapshot->id],
+            array_map(fn (Request $request): mixed => self::decoded($request)['data']['object']['id'], $this->fakeWebhookRequests()),
+        );
+
+        $dropped = array_values(array_filter(
+            $this->loggedMessages(),
+            fn (MessageLogged $message): bool => $message->level === 'info' && str_contains($message->message, 'dropped'),
+        ));
+        $this->assertSame(
+            [
+                ['provider_id' => $silent->snapshot->id, 'type' => 'generation.processing'],
+                ['provider_id' => $silent->snapshot->id, 'type' => 'generation.succeeded'],
+            ],
+            array_map(fn (MessageLogged $message): array => $message->context, $dropped),
+        );
+    }
+
+    /**
+     * The switch is read at create: a generation created before it was turned on
+     * keeps its webhooks.
+     */
+    public function test_the_drop_switch_silences_every_generation_created_while_it_is_on(): void
+    {
+        $before = $this->createThroughFake(self::lighthousePayload());
+        config(['pixelforge.fake.drop_webhooks' => true]);
+        $first = $this->createThroughFake(self::lighthousePayload());
+        $second = $this->createThroughFake(self::lighthousePayload(prompt: 'A lighthouse [fail]'));
+
+        $this->runFakeLifecycle();
+
+        $this->assertFalse($this->fakeGenerationRow($before->snapshot->id)->drops_webhooks);
+        $this->assertTrue($this->fakeGenerationRow($first->snapshot->id)->drops_webhooks);
+        $this->assertTrue($this->fakeGenerationRow($second->snapshot->id)->drops_webhooks);
+        $this->assertSame(GenerationStatus::Failed, $this->fakeGenerationRow($second->snapshot->id)->status());
+        $this->assertSame(
+            [$before->snapshot->id, $before->snapshot->id],
+            array_map(fn (Request $request): mixed => self::decoded($request)['data']['object']['id'], $this->fakeWebhookRequests()),
+        );
     }
 
     public function test_a_job_for_a_terminal_or_missing_generation_does_nothing(): void

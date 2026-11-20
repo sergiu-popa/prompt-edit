@@ -9,6 +9,7 @@ import {
     historyItems,
     markNoReload,
     OVERLOADED_FAILURE_TIMEOUT_MS,
+    POLLED_TERMINAL_TIMEOUT_MS,
     PROCESSING_TIMEOUT_MS,
     RETRY_NOTE_TIMEOUT_MS,
     SLOW_TERMINAL_TIMEOUT_MS,
@@ -180,4 +181,35 @@ test('an [overloaded] prompt reads retrying, then fails free once the overload d
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
     await expect(note).toHaveCount(0);
     await expectNoReload(page);
+});
+
+test('a [no-webhooks] generation still reaches Succeeded, its image and its charge through the reconciler, with no reload', async ({
+    page,
+}, testInfo) => {
+    test.setTimeout(POLLED_TERMINAL_TIMEOUT_MS + 30_000);
+    const prompt = '[succeed] [no-webhooks] a red fox';
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, prompt, { quality: 'Low', size: 'Square' });
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0140 – $0.0219', { useInnerText: true });
+    await expect(statusOf(item)).toHaveText('Succeeded', { timeout: POLLED_TERMINAL_TIMEOUT_MS });
+
+    const image = item.getByRole('img', { name: prompt });
+    await expect(image).toBeVisible();
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+    await expect(item.locator('[data-charge]')).toHaveText(/^Charged \$\d+\.\d{4}$/, { useInnerText: true });
+    const { charge, min, max } = await exactChargeAndEstimate(item);
+    expect(charge).toBeGreaterThanOrEqual(min);
+    expect(charge).toBeLessThanOrEqual(max);
+    await expectNoReload(page);
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expectInsideContentBox(
+        item.locator(':scope > div'),
+        item.locator('img, [data-tone], time, [data-prompt], [data-charge], [data-estimate]'),
+    );
+    await expectNoHorizontalScroll(page);
 });

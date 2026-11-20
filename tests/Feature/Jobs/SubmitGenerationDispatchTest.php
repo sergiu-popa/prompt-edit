@@ -157,6 +157,7 @@ final class SubmitGenerationDispatchTest extends TestCase
         $this->assertLessThanOrEqual($requestTimeout, $connectTimeout);
         $this->assertLessThan($jobTimeout, $requestTimeout);
         $this->assertLessThan($retryAfter, $jobTimeout);
+        $this->assertLessThan(config()->integer('pixelforge.submit.create_lock_seconds'), $jobTimeout, 'A run killed at its timeout still holds its create lock (D-53).');
     }
 
     private function createThroughTheAction(): Generation

@@ -215,6 +215,18 @@ final class SubmitGenerationJobTest extends TestCase
         $this->assertNull($row->submit_retry_note);
     }
 
+    public function test_an_accepted_create_stamps_the_last_provider_update(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:07Z'));
+        Http::fake(['*' => self::pixelforgeAccepted(self::generationObjectFor($lighthouse, GenerationStatus::Queued))]);
+
+        $this->runSubmitJob($lighthouse);
+
+        $this->assertSameInstant('2026-11-20T10:00:07Z', $this->reloadedGeneration($lighthouse)->last_provider_update_at);
+    }
+
     public function test_a_definitive_rejection_is_recorded_as_rejected(): void
     {
         $lighthouse = $this->givenTheLighthouseGeneration();

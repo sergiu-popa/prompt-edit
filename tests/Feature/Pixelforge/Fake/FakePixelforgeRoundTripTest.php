@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithFakePixelforge;
+use Tests\Concerns\RunsTheReconciler;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ final class FakePixelforgeRoundTripTest extends TestCase
     use InteractsWithCreditLedger;
     use InteractsWithFakePixelforge;
     use RefreshDatabase;
+    use RunsTheReconciler;
 
     private const string FROZEN_NOW = '2026-11-19T12:00:00Z';
 
@@ -117,6 +119,36 @@ final class FakePixelforgeRoundTripTest extends TestCase
         );
         $this->assertGreaterThanOrEqual(347_750_000, $charge);
         $this->assertLessThanOrEqual(457_150_000, $charge);
+    }
+
+    /**
+     * AC 22's prompt, end to end in-process: the fake sends no webhook, so the row
+     * stays queued until the reconciler polls it past the queued threshold, and the
+     * fake's own usage then prices it.
+     */
+    public function test_a_no_webhooks_generation_is_settled_by_the_reconciler(): void
+    {
+        $request = new NewGenerationData('[succeed] [no-webhooks] a red fox', ImageSize::Square, ImageQuality::Low, []);
+        $generation = $this->app->make(CreateGenerationAction::class)->execute(User::factory()->create(), $request);
+        $providerId = $this->reloadedGeneration($generation)->provider_id;
+        $this->assertNotNull($providerId);
+
+        $this->assertSame([], $this->fakeWebhookRequests());
+        $this->assertSame(GenerationStatus::Succeeded, $this->fakeGenerationRow($providerId)->status());
+        $this->assertSame(GenerationStatus::Queued, $this->reloadedGeneration($generation)->status);
+
+        $this->travel(121)->seconds();
+        $this->runReconciler();
+
+        $usage = $this->fakeGenerationRow($providerId)->usage;
+        $provider = $usage['input_text_tokens'] * 5_000 + $usage['input_image_tokens'] * 10_000 + $usage['output_tokens'] * 40_000 + $usage['reasoning_tokens'] * 12_500;
+        $charge = intdiv($provider * 125 + 99, 100);
+        $settled = $this->reloadedGeneration($generation);
+        $this->assertSame(GenerationStatus::Succeeded, $settled->status);
+        $this->assertSame($provider, $settled->provider_cost_nanodollars);
+        $this->assertSame($charge, $settled->user_charge_nanodollars);
+        $this->assertSame([['hold', -21_881_250], ['release', 21_881_250], ['charge', -$charge]], $this->ledgerEntriesFor($generation));
+        $this->assertSame([], $this->fakeWebhookRequests());
     }
 
     /**

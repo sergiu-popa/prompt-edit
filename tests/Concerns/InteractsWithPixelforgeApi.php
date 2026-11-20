@@ -7,6 +7,7 @@ namespace Tests\Concerns;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use Carbon\CarbonImmutable;
 use Closure;
 use GuzzleHttp\Exception\ResponseTransferException;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -64,6 +65,16 @@ trait InteractsWithPixelforgeApi
     }
 
     /**
+     * A `200` carrying the generation object, as a retrieve answers.
+     *
+     * @param  array<string, mixed>  $object
+     */
+    protected static function pixelforgeRetrieved(array $object): PromiseInterface
+    {
+        return Http::response(json_encode($object, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), 200, ['Content-Type' => 'application/json']);
+    }
+
+    /**
      * The docs-shaped error envelope for the code, at the code's status, with
      * the docs' `type` for it. The error's fields replace the defaults.
      *
@@ -118,11 +129,12 @@ trait InteractsWithPixelforgeApi
     /**
      * One attempt of the submit job, resolved through the container as the
      * worker runs it, with its queue interactions faked so a test can assert
-     * the release. Whatever the attempt throws is rethrown.
+     * the release. Whatever the attempt throws is rethrown. With an instant, it
+     * is the reconciler's re-dispatch of that instant.
      */
-    protected function runSubmitJob(Generation $generation): SubmitGenerationJob
+    protected function runSubmitJob(Generation $generation, ?CarbonImmutable $redispatchedAt = null): SubmitGenerationJob
     {
-        $job = (new SubmitGenerationJob($generation->id))->withFakeQueueInteractions();
+        $job = (new SubmitGenerationJob($generation->id, $redispatchedAt))->withFakeQueueInteractions();
         $this->app->call([$job, 'handle']);
 
         return $job;
@@ -153,6 +165,19 @@ trait InteractsWithPixelforgeApi
         return array_values(Http::recorded()
             ->map(fn (array $pair): Request => $pair[0])
             ->filter(fn (Request $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/generations'))
+            ->all());
+    }
+
+    /**
+     * Every recorded `GET …/generations/{id}`, in the order it was sent.
+     *
+     * @return list<Request>
+     */
+    protected function recordedRetrieveRequests(): array
+    {
+        return array_values(Http::recorded()
+            ->map(fn (array $pair): Request => $pair[0])
+            ->filter(fn (Request $request): bool => $request->method() === 'GET' && str_contains($request->url(), '/generations/'))
             ->all());
     }
 }

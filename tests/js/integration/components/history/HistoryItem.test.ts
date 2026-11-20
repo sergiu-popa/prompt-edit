@@ -246,6 +246,37 @@ describe('HistoryItem', () => {
         expect(wrapper.find('[data-charge]').exists()).toBe(false);
     });
 
+    it('shows a processing generation that takes longer than usual with the stuck note, its estimate and no charge', () => {
+        const note = "Taking longer than usual — we're checking with Pixelforge";
+        const wrapper = mountItem({
+            status: 'processing',
+            status_label: 'Processing',
+            started_at: '2026-11-19T11:40:00Z',
+            created_at: '2026-11-19T11:39:58Z',
+            status_note: note,
+        });
+
+        expect(badge(wrapper).text()).toMatch(/^Processing/);
+        expect(badge(wrapper).attributes('data-tone')).toBe('info');
+        expect(visibleText(wrapper.get('[data-status-note]'))).toBe(note);
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(wrapper.find('[data-charge]').exists()).toBe(false);
+        expect(wrapper.find('[data-failure-message]').exists()).toBe(false);
+    });
+
+    it('shows a generation given up as lost as failed, not charged, with its estimate and why', () => {
+        const message = "We couldn't confirm this generation with Pixelforge. You were not charged.";
+        const wrapper = mountItem({ ...FAILED, started_at: null, completed_at: null, failure_message: message });
+
+        expect(badge(wrapper).text()).toBe('Failed');
+        expect(badge(wrapper).attributes('data-tone')).toBe('danger');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(message);
+        expect(wrapper.find('[data-status-note]').exists()).toBe(false);
+        expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
+    });
+
     it('places the note under what was asked for and above the money', () => {
         const wrapper = mountItem({ status_note: 'Waiting for a free slot' });
         const meta = wrapper.get('[data-meta]').element;

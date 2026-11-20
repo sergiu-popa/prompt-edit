@@ -39,12 +39,22 @@ final readonly class FakeWebhookSender
     /**
      * One event about the generation as it is now. A `[duplicate]`
      * generation's event is sent twice: one body and one event id, each copy
-     * signed at its own send time.
+     * signed at its own send time. A generation that drops its webhooks
+     * (`[no-webhooks]` or the switch) sends nothing and signs nothing.
      *
      * @throws WebhookSecretNotConfiguredException before anything is sent
      */
     public function deliver(FakePixelforgeGeneration $generation, WebhookEventType $type): void
     {
+        if ($generation->drops_webhooks) {
+            Log::info('The fake Pixelforge dropped a webhook; the reconciler is the only signal.', [
+                'provider_id' => $generation->id,
+                'type' => $type->value,
+            ]);
+
+            return;
+        }
+
         $eventId = 'evt_' . Str::ulid();
 
         $body = json_encode([

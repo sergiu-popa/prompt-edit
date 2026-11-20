@@ -223,7 +223,9 @@ final class SubmitGenerationRetriesTest extends TestCase
     }
 
     /**
-     * AC 13: at the window's end it stays pending with its hold, for PE-014.
+     * AC 13: at the window's end it stays pending with its hold, for PE-014. Its
+     * retry note stays stored, but 30 min in, History shows PE-014's stuck note
+     * ahead of it (D-56).
      */
     public function test_a_latched_generation_is_handed_over_at_its_windows_end(): void
     {
@@ -239,7 +241,7 @@ final class SubmitGenerationRetriesTest extends TestCase
         $this->assertSame(SubmitRetryNote::Retrying, $row->submit_retry_note);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
         $this->assertCount($runs, $this->recordedCreateRequests());
-        $this->assertSame('Pixelforge is busy — retrying automatically', $this->onlyHistoryItemOf(User::query()->findOrFail($row->user_id))['status_note']);
+        $this->assertSame('Taking longer than usual — we\'re checking with Pixelforge', $this->onlyHistoryItemOf(User::query()->findOrFail($row->user_id))['status_note']);
     }
 
     /**
