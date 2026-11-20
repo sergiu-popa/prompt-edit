@@ -20,8 +20,8 @@ function tokens(figures: UsageFigures): string {
     return TOKEN_FIELDS.map((field) => formatCount(figures[field])).join(' / ');
 }
 
-const cell = 'px-3 py-2.5 text-right whitespace-nowrap tabular-nums';
-const missing = 'px-3 py-2.5 text-right whitespace-nowrap text-zinc-400';
+const cell = 'px-2 py-2.5 text-right whitespace-nowrap tabular-nums';
+const missing = 'px-2 py-2.5 text-right whitespace-nowrap text-zinc-400';
 </script>
 
 <template>
@@ -47,7 +47,7 @@ const missing = 'px-3 py-2.5 text-right whitespace-nowrap text-zinc-400';
     </td>
     <td v-else data-tokens-delta :class="missing">—</td>
 
-    <td data-status class="px-4 py-2.5 text-left whitespace-nowrap">
+    <td data-status class="px-3 py-2.5 text-left whitespace-nowrap">
         <Badge v-if="line.matches === true" tone="success">Match</Badge>
         <Badge v-else-if="line.matches === false" tone="danger">Mismatch</Badge>
         <span v-else class="text-zinc-400">—</span>
