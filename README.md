@@ -36,7 +36,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 | --- | --- |
 | Bootstrap (stack switch, Docker, CI, test harness, worker and scheduler) | Done as stacked PRs, to merge in order: #3 → #2 → #4 → #5 → #6 |
 | Product features | Planned as 18 stories (below); each is delivered as one reviewable PR |
-| Deployment | Live at https://prompt.sergiupopa.dev (Deployer, see [Production](#production)) since PE-004; real Pixelforge in PE-015 |
+| Deployment | Live at https://prompt.sergiupopa.dev (Deployer, see [Production](#production)) since PE-004, on the real Pixelforge API since PE-015 |
 
 ### Required scope
 
@@ -287,7 +287,7 @@ The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.
 
 **Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.
 
-The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
+The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, `/health/reconciler`, that the webhook URL answers an unsigned delivery with a 400 and no redirect, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in and out. It never registers users.
 
 ```bash
 export E2E_BASE_URL=https://prompt.sergiupopa.dev   # plus E2E_REVIEWER_EMAIL and E2E_REVIEWER_PASSWORD, as above
@@ -296,9 +296,79 @@ make smoke-production
 
 ### Pixelforge on production
 
-Production needs its **own** Pixelforge key, because the webhook URL, the signing secret and `/v1/usage` are all per key. PE-015 sets it up. Until then `shared/.env` has no `PIXELFORGE_*` variables, and every page and `/up` work without them. `POST /webhooks/pixelforge` answers 500 and logs a critical line until the secret is set.
+Production runs the real API with its **own dedicated key**. The webhook URL, the signing secret and `/v1/usage` are all per key, so production's usage report only ever counts production's generations. Rate limits are per account, so every key shares the 60 requests a minute, 3 in flight and 500 a day.
 
-**Don't submit generations on production before PE-015.**
+#### Per-environment runbook
+
+Variable names only: no key or secret is ever committed, echoed, logged or put on a command line.
+
+- **Local with the fake driver** (the default): `make setup` fills `PIXELFORGE_WEBHOOK_SECRET` with a random local value (PE-010) and `PIXELFORGE_DRIVER=fake` needs no key. Nothing is configured in the dashboard.
+- **Local against the real Pixelforge:** use a **dev** key. Set `PIXELFORGE_DRIVER=http`, the dev key as `PIXELFORGE_API_KEY`, and, to receive webhooks, a tunnel plus the dev key's webhook URL and its `whsec_…` as `PIXELFORGE_WEBHOOK_SECRET` (see [Real webhooks locally](#real-webhooks-locally)), then `make restart-worker`. The dev key must never be the production key: `/v1/usage` and the webhook URL are per key, so dev traffic would land in production's usage report and production's webhooks would go to your tunnel. `make live-smoke` uses this dev key too.
+- **Production**, in this order:
+  1. **Dashboard.** Create a dedicated production key. Set its webhook URL to exactly `https://prompt.sergiupopa.dev/webhooks/pixelforge`: https, no trailing slash, nothing that redirects, because Pixelforge follows no redirect. Keep its `whsec_…` secret.
+  2. **`shared/.env`.** From the domain folder, `grep -c '^PIXELFORGE_' shared/.env` must print 0; a `.env` made from the current template has the three names blank, so remove them first with `sed -i '/^PIXELFORGE_/d' shared/.env`. Then, from your machine, send the values over stdin, never argv:
+
+     ```bash
+     read -rs PF_KEY; read -rs PF_SECRET        # the production key, then its whsec_…; not echoed
+     printf 'PIXELFORGE_DRIVER=http\nPIXELFORGE_API_KEY=%s\nPIXELFORGE_WEBHOOK_SECRET=%s\n' "$PF_KEY" "$PF_SECRET" \
+       | ssh admin@164.90.236.77 'cat >> /home/admin/web/prompt.sergiupopa.dev/shared/.env'
+     unset PF_KEY PF_SECRET
+     ```
+
+     `grep -c '^PIXELFORGE_' shared/.env` now prints 3, and `stat -c '%a %U:%G' shared/.env` prints `600 admin:admin`.
+  3. **Deploy.** `dep deploy`, then `make smoke-production`. The smoke also checks `/health/reconciler` and that an unsigned `POST /webhooks/pixelforge` answers 400 with no redirect, which proves the URL and that the secret is set.
+  4. **Config**, as `admin` in `current/`. Never `config:show pixelforge`, which would print the key.
+
+     ```bash
+     php8.4 artisan tinker --execute 'var_dump(config("pixelforge.driver"), filled(config("pixelforge.api_key")), filled(config("pixelforge.webhook_secret")));'   # "http", true, true
+     php8.4 artisan about --only=environment     # production, debug OFF
+     php8.4 artisan tinker --execute 'echo implode(" ", [config("pixelforge.connect_timeout_seconds"), config("pixelforge.request_timeout_seconds"), config("pixelforge.submit.job_timeout_seconds"), config("queue.connections.database.retry_after"), config("pixelforge.submit.window_seconds")]);'   # 5 30 60 90 1800
+     systemctl cat prompt-edit-worker            # ExecStart as in step 5 of the provisioning above
+     ```
+
+     The HTTP client's 30 s stays below the submit job's 60 s, which stays below the queue's `retry_after` of 90 s, so a job is never run twice at once.
+  5. **Webhook.** `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -X POST https://prompt.sergiupopa.dev/webhooks/pixelforge` prints `400` and no redirect. Press **Send test event** in the dashboard: its delivery log shows a 2xx within 10 s, and `php8.4 artisan tinker --execute 'echo DB::table("pixelforge_webhook_events")->where("type", "ping")->count();'` is at least 1.
+- **Changing the secret**, if it is ever regenerated in the dashboard: replace the line over stdin and redeploy straight away.
+
+  ```bash
+  read -rs PF_SECRET
+  printf 'PIXELFORGE_WEBHOOK_SECRET=%s\n' "$PF_SECRET" | ssh admin@164.90.236.77 \
+    'f=/home/admin/web/prompt.sergiupopa.dev/shared/.env; { grep -v "^PIXELFORGE_WEBHOOK_SECRET=" "$f"; cat; } > "$f.new" && chmod 600 "$f.new" && mv "$f.new" "$f"'
+  unset PF_SECRET
+  dep deploy
+  ```
+
+  Deliveries signed with the old secret get a 400 in the gap, and Pixelforge retries each for up to 27 min 40 s (10 s, 30 s, 2 min, 10 min and 15 min). The reconciler catches any that give up.
+- **How to check it works:** the dashboard's delivery log (every attempt and our status code), the failed-jobs listing (`php8.4 artisan queue:failed` in `current/`; `queue:retry <id>` or `queue:forget <id>` after reading one), and the reconciler's health check below.
+
+#### Reconciler health
+
+`GET /health/reconciler` answers `200 {"status":"ok","last_succeeded_at":"…Z"}` while the reconciler's last completed run is at most 5 min old, and `503` `stale` otherwise, including before the first run or for a minute after a `cache:clear` (D-59). It has no session or cookie and is never cached, so any uptime check can poll it. `/up` keeps meaning "the app boots".
+
+```bash
+curl -s -w ' %{http_code}\n' https://prompt.sergiupopa.dev/health/reconciler
+```
+
+#### Deploys and webhooks
+
+A deploy's PHP-FPM reload, or a short outage of the droplet, can miss Pixelforge's 10 s webhook window. Pixelforge retries the delivery, and the reconciler polls any generation that hears nothing for 2–3 min, so a deploy never loses a status or a charge.
+
+#### Go-live checks
+
+Verified on production at go-live (PE-015) and worth repeating after any change to the server:
+
+| Check | How |
+| --- | --- |
+| Production settings | `about --only=environment`: production, debug off. An unknown URL renders the plain 404 page; a 500 shows the generic page with no trace (`ProductionErrorPagesTest`) |
+| No fake driver | The app refuses to boot with `PIXELFORGE_DRIVER=fake` in production (`RefusesFakePixelforgeInProductionTest`) |
+| HTTPS | Plain http redirects to https, generated URLs are https, and the session cookie is `Secure` and `HttpOnly` (`make smoke-production`) |
+| Abuse limits | 5 failed sign-ins a minute per email and IP, shown inline; 10 generations a minute per user (D-39); 3 new accounts an hour per IP (D-57). The account limit uses the same client IP as the sign-in throttle: repeat the [Client IP](#first-deploy) check |
+| Timeouts | The step 4 echo prints `5 30 60 90 1800` |
+| Worker and scheduler | `systemctl is-active prompt-edit-worker` prints `active`; `/health/reconciler` is `ok`; as root, the last `CRON … (admin) CMD (cd /home/admin/web/prompt.sergiupopa.dev…` line in `/var/log/syslog` is within the last minute |
+| Failed jobs | `php8.4 artisan queue:failed` lists none, or each is explained |
+| No secrets in logs | From the domain folder, each prints `:0` for every file: `grep -c -F -f <(sed -n 's/^PIXELFORGE_API_KEY=//p' shared/.env) shared/storage/logs/laravel-*.log`, the same with `PIXELFORGE_WEBHOOK_SECRET`, and `grep -c -E 'whsec_\|Authorization\|Bearer ' shared/storage/logs/laravel-*.log`. As root, pipe `journalctl -u prompt-edit-worker --since today` through the same three |
+| No arguments in traces | As root: `grep -rhsE 'zend\.exception_ignore_args' /etc/php/8.4/fpm/php.ini /etc/php/8.4/fpm/conf.d /etc/php/8.4/fpm/pool.d` shows `On`, and `php8.4 -r 'var_dump(ini_get("zend.exception_ignore_args"));'` prints `"1"` |
+| Money on real generations | Note `date -u +%FT%TZ`, create generations with the [test keywords](#reviewer-guide), then `php8.4 artisan app:check-generation-money --since=<that instant>`: every row `OK`, exit 0. It prints the keywords, never the prompt |
 
 ### Logs
 
