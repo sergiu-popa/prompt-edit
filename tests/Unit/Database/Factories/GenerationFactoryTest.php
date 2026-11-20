@@ -123,6 +123,31 @@ final class GenerationFactoryTest extends TestCase
     }
 
     /**
+     * D-09: failed here, yet billed by Pixelforge, with the usage and completion the
+     * transition action records and no provider id.
+     */
+    public function test_a_provider_cost_only_row_is_failed_locally_with_pixelforges_usage(): void
+    {
+        $generation = $this->reloadedGeneration(Generation::factory()->providerCostOnly()->create());
+
+        $this->assertSame(GenerationStatus::Failed, $generation->status);
+        $this->assertSame(LocalFailureReason::IdempotencyKeyReused, $generation->local_failure_reason);
+        $this->assertNull($generation->provider_id);
+        $this->assertNotNull($generation->completed_at);
+        $this->assertNull($generation->image_url);
+
+        $usage = TokenUsage::from([
+            'input_text_tokens' => $generation->input_text_tokens,
+            'input_image_tokens' => $generation->input_image_tokens,
+            'output_tokens' => $generation->output_tokens,
+            'reasoning_tokens' => $generation->reasoning_tokens,
+        ]);
+        $providerCost = $this->app->make(CalculateProviderCostAction::class)->execute($usage, TokenRates::from((array) $generation->rates));
+
+        $this->assertSame($providerCost->amount, $generation->provider_cost_nanodollars);
+    }
+
+    /**
      * @return array<string, array{Closure(GenerationFactory): GenerationFactory, ?int, ?int, list<array{string, int}>}>
      */
     public static function statesWithTheirMoney(): array
@@ -142,6 +167,7 @@ final class GenerationFactoryTest extends TestCase
             ],
             'failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failed(), 0, 0, $released],
             'locally failed' => [fn (GenerationFactory $factory): GenerationFactory => $factory->failedLocally(), 0, 0, $released],
+            'provider cost only' => [fn (GenerationFactory $factory): GenerationFactory => $factory->providerCostOnly(), 87_450_000, 0, $released],
         ];
     }
 

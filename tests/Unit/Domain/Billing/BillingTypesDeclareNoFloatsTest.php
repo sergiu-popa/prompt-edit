@@ -17,16 +17,22 @@ use ReflectionUnionType;
 use SplFileInfo;
 
 /**
- * Money must never pass through a float (D-03): no public Billing signature may
- * declare `float`, fall back to `mixed`, or leave a type out.
+ * Money must never pass through a float (D-03): no public signature in Billing, or in
+ * Reporting, which sums it, may declare `float`, fall back to `mixed`, or leave a type out.
  */
 final class BillingTypesDeclareNoFloatsTest extends TestCase
 {
-    public function test_billing_public_signatures_declare_no_float_mixed_or_missing_types(): void
-    {
-        $classes = $this->billingClasses();
+    private const array MONEY_DOMAINS = ['Billing', 'Reporting'];
 
-        $this->assertNotEmpty($classes, 'No classes found under app/Domain/Billing.');
+    public function test_money_public_signatures_declare_no_float_mixed_or_missing_types(): void
+    {
+        $classes = [];
+
+        foreach (self::MONEY_DOMAINS as $domain) {
+            $domainClasses = $this->classesIn($domain);
+            $this->assertNotEmpty($domainClasses, "No classes found under app/Domain/{$domain}.");
+            array_push($classes, ...$domainClasses);
+        }
 
         $violations = [];
 
@@ -64,9 +70,9 @@ final class BillingTypesDeclareNoFloatsTest extends TestCase
     /**
      * @return list<ReflectionClass>
      */
-    private function billingClasses(): array
+    private function classesIn(string $domain): array
     {
-        $root = dirname(__DIR__, 4) . '/app/Domain/Billing';
+        $root = dirname(__DIR__, 4) . '/app/Domain/' . $domain;
         $classes = [];
 
         /** @var SplFileInfo $file */
@@ -76,7 +82,7 @@ final class BillingTypesDeclareNoFloatsTest extends TestCase
             }
 
             $relativePath = substr($file->getPathname(), strlen($root) + 1, -strlen('.php'));
-            $className = 'App\\Domain\\Billing\\' . str_replace('/', '\\', $relativePath);
+            $className = 'App\\Domain\\' . $domain . '\\' . str_replace('/', '\\', $relativePath);
 
             if (! class_exists($className)) {
                 $this->fail(sprintf('%s does not declare %s.', $file->getPathname(), $className));

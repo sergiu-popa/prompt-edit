@@ -10,6 +10,15 @@ export const DEMO_USER = {
 } as const;
 
 /**
+ * Mirrors Database\Seeders\OperatorUserSeeder: the local operator, who may open Report.
+ */
+export const OPERATOR_USER = {
+    name: 'Operator',
+    email: 'operator@promptedit.test',
+    password: 'promptedit-operator',
+} as const;
+
+/**
  * An email no other test, project, worker or run uses. Wrong-credential tests use one
  * too, so their failures never count towards the demo user's sign-in throttle.
  */

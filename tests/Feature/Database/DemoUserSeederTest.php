@@ -22,8 +22,7 @@ final class DemoUserSeederTest extends TestCase
         $this->seed();
         $this->seed();
 
-        $demoUser = User::query()->sole();
-        $this->assertSame(DemoUserSeeder::EMAIL, $demoUser->email);
+        $demoUser = User::query()->where('email', DemoUserSeeder::EMAIL)->sole();
         $this->assertSame(DemoUserSeeder::NAME, $demoUser->name);
 
         $this->attemptSignIn(DemoUserSeeder::EMAIL, DemoUserSeeder::PASSWORD)

@@ -4,15 +4,20 @@ import { vi } from 'vitest';
 import { reactive } from 'vue';
 
 import type { AuthProps, AuthUser } from '@/types/auth';
+import type { NavigationLink } from '@/types/navigation';
 
 /**
  * The page `usePage()` returns in integration tests (see setup.ts). Core's `router` is the
  * same object pages reach through `@inertiajs/vue3` and `useForm`, so spying on it here
  * sees every visit.
  */
-export const page = reactive<{ url: string; props: { auth: AuthProps; errors: Record<string, string> }; flash: FlashData }>({
+export const page = reactive<{
+    url: string;
+    props: { auth: AuthProps; operator_navigation: NavigationLink[]; errors: Record<string, string> };
+    flash: FlashData;
+}>({
     url: '/',
-    props: { auth: { user: null }, errors: {} },
+    props: { auth: { user: null }, operator_navigation: [], errors: {} },
     flash: {},
 });
 
@@ -30,12 +35,21 @@ export function givenThePageIsAt(url: string): void {
     page.url = url;
 }
 
+/** A guest, who never receives the operator's nav links. */
 export function givenAGuest(): void {
     page.props.auth = { user: null };
+    page.props.operator_navigation = [];
 }
 
+/** A signed-in non-operator; add `givenOperatorNavigation()` for an operator. */
 export function givenSignedInAs(user: AuthUser): void {
     page.props.auth = { user };
+    page.props.operator_navigation = [];
+}
+
+/** The nav links the server shares with an operator. */
+export function givenOperatorNavigation(links: NavigationLink[] = [{ label: 'Report', href: '/report' }]): void {
+    page.props.operator_navigation = links;
 }
 
 const pendingVisit = {} as PendingVisit;
@@ -57,12 +71,30 @@ export function givenVisitsStayPending() {
  * errors that belong to no form field.
  */
 export function givenVisitsFailWith(errors: Record<string, string>) {
-    return vi.spyOn(router, 'post').mockImplementation((_url, _data, options: VisitOptions = {}) => {
+    return vi.spyOn(router, 'post').mockImplementation((_url, _data, options: VisitOptions = {}) => failWith(errors, options));
+}
+
+/**
+ * Every GET starts and never finishes, as while the request is in flight.
+ */
+export function givenGetVisitsStayPending() {
+    return vi.spyOn(router, 'get').mockImplementation((_url, _data, options: VisitOptions = {}) => {
         options.onStart?.(pendingVisit);
-        page.props.errors = errors;
-        options.onError?.(errors);
-        options.onFinish?.(finishedVisit);
     });
+}
+
+/**
+ * Every GET comes back with these validation errors, like `givenVisitsFailWith()` for a POST.
+ */
+export function givenGetVisitsFailWith(errors: Record<string, string>) {
+    return vi.spyOn(router, 'get').mockImplementation((_url, _data, options: VisitOptions = {}) => failWith(errors, options));
+}
+
+function failWith(errors: Record<string, string>, options: VisitOptions): void {
+    options.onStart?.(pendingVisit);
+    page.props.errors = errors;
+    options.onError?.(errors);
+    options.onFinish?.(finishedVisit);
 }
 
 export function givenNoErrors(): void {

@@ -5,6 +5,7 @@ import { computed, ref } from 'vue';
 import Button from '@/components/ui/Button.vue';
 import Notice from '@/components/ui/Notice.vue';
 import { paths } from '@/lib/paths';
+import type { NavigationLink } from '@/types/navigation';
 
 defineSlots<{
     default?(): unknown;
@@ -14,10 +15,13 @@ const page = usePage();
 const userName = computed(() => page.props.auth.user?.name ?? '');
 const notice = computed(() => page.flash.notice);
 
-const navItems = [
+const STATIC_NAV_ITEMS: readonly NavigationLink[] = [
     { label: 'Generate', href: paths.dashboard },
     { label: 'History', href: paths.generations },
-] as const;
+];
+
+/** The operator's links come from the server, which sends them only to operators (D-63). */
+const navItems = computed(() => [...STATIC_NAV_ITEMS, ...page.props.operator_navigation]);
 
 /** Inertia's page URL is the path plus any query string or fragment. */
 const currentPath = computed(() => page.url.split(/[?#]/, 1)[0]);

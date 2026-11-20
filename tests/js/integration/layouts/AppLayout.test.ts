@@ -4,7 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 
-import { givenFlash, givenNoFlash, givenSignedInAs, givenThePageIsAt, givenVisitsStayPending } from '../support/inertia';
+import {
+    givenFlash,
+    givenNoFlash,
+    givenOperatorNavigation,
+    givenSignedInAs,
+    givenThePageIsAt,
+    givenVisitsStayPending,
+} from '../support/inertia';
 
 describe('AppLayout', () => {
     beforeEach(() => {
@@ -117,5 +124,32 @@ describe('AppLayout', () => {
         givenThePageIsAt('/dashboard');
 
         expect(mount(AppLayout).findAll('header nav a')[1]!.attributes('aria-current')).toBeUndefined();
+    });
+
+    it('shows no Report link to a non-operator', () => {
+        const links = mount(AppLayout).findAll('header nav a');
+
+        expect(links.map((link) => link.text())).toStrictEqual(['Generate', 'History']);
+    });
+
+    it("links to Report after History for an operator, from the server's nav links", () => {
+        givenOperatorNavigation();
+
+        const links = mount(AppLayout).findAll('header nav a');
+
+        expect(links.map((link) => [link.text(), link.attributes('href')])).toStrictEqual([
+            ['Generate', '/dashboard'],
+            ['History', '/generations'],
+            ['Report', '/report'],
+        ]);
+    });
+
+    it.each(['/report', '/report?start_date=2026-11-01&end_date=2026-11-18'])('marks Report, and only Report, current at %s', (url) => {
+        givenOperatorNavigation();
+        givenThePageIsAt(url);
+
+        const links = mount(AppLayout).findAll('header nav a');
+
+        expect(links.map((link) => link.attributes('aria-current'))).toStrictEqual([undefined, undefined, 'page']);
     });
 });

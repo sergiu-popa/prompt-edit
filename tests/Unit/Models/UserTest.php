@@ -25,4 +25,22 @@ final class UserTest extends TestCase
         $this->assertArrayNotHasKey('password', $serialized);
         $this->assertArrayNotHasKey('remember_token', $serialized);
     }
+
+    public function test_a_user_is_not_an_operator_by_default(): void
+    {
+        $this->assertFalse(User::factory()->make()->is_operator);
+        $this->assertTrue(User::factory()->operator()->make()->is_operator);
+    }
+
+    /**
+     * Only `app:grant-operator` and the local seeder grant operator access (D-62), so mass
+     * assignment, as registration and `app:upsert-user` use it, never sets the flag.
+     */
+    public function test_operator_access_is_never_mass_assigned(): void
+    {
+        $user = new User(['name' => 'Ada', 'email' => 'ada@example.com', 'password' => 'secret-password', 'is_operator' => true]);
+
+        $this->assertFalse($user->is_operator);
+        $this->assertSame('ada@example.com', $user->email);
+    }
 }

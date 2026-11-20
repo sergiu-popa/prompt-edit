@@ -264,6 +264,52 @@ final class GenerationQueryBuilderTest extends TestCase
         $this->assertStringContainsString('generations_stuck_unwarned_index', $plan);
     }
 
+    /**
+     * Pixelforge billed a row when its usage is recorded: a success, or D-09's provider cost
+     * on a row we failed locally. Nothing in flight, and no failure, is billed.
+     */
+    public function test_billed_by_pixelforge_keeps_succeeded_and_provider_cost_only_rows(): void
+    {
+        $succeeded = Generation::factory()->succeeded()->create();
+        $providerCostOnly = Generation::factory()->providerCostOnly()->create();
+        Generation::factory()->create();
+        Generation::factory()->queued()->create();
+        Generation::factory()->processing()->create();
+        Generation::factory()->failed()->create();
+        Generation::factory()->failedLocally()->create();
+
+        $ids = Generation::query()->billedByPixelforge()->pluck('id')->sort()->values()->all();
+
+        $this->assertSame(collect([$succeeded->id, $providerCostOnly->id])->sort()->values()->all(), $ids);
+    }
+
+    #[DataProvider('completions')]
+    public function test_completed_between_is_inclusive_at_its_start_and_exclusive_at_its_end(string $completedAt, bool $selected): void
+    {
+        DB::statement("SET TIME ZONE 'Pacific/Kiritimati'");
+        Generation::factory()->succeeded()->create(['completed_at' => CarbonImmutable::parse($completedAt)]);
+
+        $count = Generation::query()
+            ->completedBetween(CarbonImmutable::parse('2026-11-16T00:00:00Z'), CarbonImmutable::parse('2026-11-18T00:00:00Z'))
+            ->count();
+
+        $this->assertSame($selected ? 1 : 0, $count);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function completions(): array
+    {
+        return [
+            'at the start' => ['2026-11-16T00:00:00Z', true],
+            'a second before the end' => ['2026-11-17T23:59:59Z', true],
+            'a second before the start' => ['2026-11-15T23:59:59Z', false],
+            'at the end' => ['2026-11-18T00:00:00Z', false],
+            'the start, written with an offset' => ['2026-11-16T14:00:00+14:00', true],
+        ];
+    }
+
     private function awaitingRedispatchSelection(): GenerationQueryBuilder
     {
         return Generation::query()

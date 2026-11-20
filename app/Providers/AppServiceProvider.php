@@ -6,17 +6,21 @@ namespace App\Providers;
 
 use App\Domain\Billing\ValueObjects\PricingTable;
 use App\Http\Controllers\Generation\CreateGenerationController;
+use App\Http\Controllers\Reporting\ShowOperatorReportController;
+use App\Models\User;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
 use App\Support\Pixelforge\PixelforgeRequestBudget;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -91,6 +95,18 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->refuseFakeDriverInProduction();
         $this->limitGenerationSubmissions();
+        $this->defineOperatorReportGate();
+    }
+
+    /**
+     * Only an operator may open the report (D-63). Everyone else is denied with the message
+     * the stock 403 page shows.
+     */
+    private function defineOperatorReportGate(): void
+    {
+        Gate::define(ShowOperatorReportController::ABILITY, fn (User $user): Response => $user->is_operator
+            ? Response::allow()
+            : Response::deny(ShowOperatorReportController::FORBIDDEN_MESSAGE));
     }
 
     /**
