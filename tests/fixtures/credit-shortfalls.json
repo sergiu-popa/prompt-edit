@@ -1,0 +1,13 @@
+{
+    "description": "What a request needs beyond the available balance, in integer n$ (D-69). PHP's CreditBalance::shortfallFor and TS's creditShortfall must both give `shortfall`; money.ts's formatUsdRoundedUp must show it as `display`, rounded up to the next $0.0001. `required` is AC 6's max user price unless a case says otherwise.",
+    "cases": [
+        { "name": "equal: the balance covers the max exactly (AC 10)", "available": 86312500, "required": 86312500, "shortfall": 0, "display": "$0.0000" },
+        { "name": "1 n$ short (AC 10)", "available": 86312499, "required": 86312500, "shortfall": 1, "display": "$0.0001" },
+        { "name": "the worked shortfall (AC 11)", "available": 6312500, "required": 86312500, "shortfall": 80000000, "display": "$0.0800" },
+        { "name": "the second of two concurrent creates (AC 12)", "available": 13687500, "required": 86312500, "shortfall": 72625000, "display": "$0.0727" },
+        { "name": "the E2E account's starter (D-71)", "available": 10000000, "required": 86312500, "shortfall": 76312500, "display": "$0.0764" },
+        { "name": "nothing available", "available": 0, "required": 86312500, "shortfall": 86312500, "display": "$0.0864" },
+        { "name": "a negative balance after an above-hold charge (AC 13)", "available": -1000000, "required": 86312500, "shortfall": 87312500, "display": "$0.0874" },
+        { "name": "surplus", "available": 1000000000, "required": 86312500, "shortfall": 0, "display": "$0.0000" }
+    ]
+}
