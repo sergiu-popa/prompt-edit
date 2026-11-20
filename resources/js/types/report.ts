@@ -45,3 +45,10 @@ export interface OperatorReport {
     /** The sum of the days, which equals the sum of the users. */
     totals: ReportFigures;
 }
+
+/** One row of a report table: a day or a user, labelled by its date or email. */
+export interface ReportTableRow {
+    key: string | number;
+    label: string;
+    figures: ReportFigures;
+}
