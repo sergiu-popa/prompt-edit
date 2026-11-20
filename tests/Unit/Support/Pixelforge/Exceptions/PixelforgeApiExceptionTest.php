@@ -142,6 +142,31 @@ final class PixelforgeApiExceptionTest extends TestCase
         ];
     }
 
+    #[DataProvider('retryAfterValues')]
+    public function test_a_retry_after_header_is_read_as_whole_seconds_or_not_at_all(?string $header, ?int $seconds): void
+    {
+        $this->assertSame($seconds, PixelforgeApiException::retryAfterSecondsFrom($header));
+    }
+
+    /**
+     * @return array<string, array{?string, ?int}>
+     */
+    public static function retryAfterValues(): array
+    {
+        return [
+            'twelve' => ['12', 12],
+            'zero' => ['0', 0],
+            'nine digits' => ['123456789', 123_456_789],
+            'absent' => [null, null],
+            'a fraction' => ['12.5', null],
+            'a leading space' => [' 12', null],
+            'negative' => ['-1', null],
+            'an HTTP date' => ['Fri, 20 Nov 2026 10:00:00 GMT', null],
+            'empty' => ['', null],
+            'ten digits' => ['1234567890', null],
+        ];
+    }
+
     #[DataProvider('undocumentedResponses')]
     public function test_anything_but_a_documented_envelope_is_null(int $status, string $body): void
     {

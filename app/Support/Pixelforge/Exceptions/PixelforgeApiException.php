@@ -97,9 +97,7 @@ abstract class PixelforgeApiException extends RuntimeException implements Report
             return null;
         }
 
-        $retryAfterSeconds = $retryAfterHeader !== null && preg_match('/^\d{1,9}\z/', $retryAfterHeader) === 1
-            ? (int) $retryAfterHeader
-            : null;
+        $retryAfterSeconds = self::retryAfterSecondsFrom($retryAfterHeader);
 
         return match ($errorCode) {
             PixelforgeErrorCode::ContentPolicyViolation => new ContentPolicyViolationException($type, $message, $param, $errors, $retryAfterSeconds),
@@ -112,6 +110,15 @@ abstract class PixelforgeApiException extends RuntimeException implements Report
             PixelforgeErrorCode::DailyLimitExceeded => new DailyLimitExceededException($type, $message, $param, $errors, $retryAfterSeconds),
             PixelforgeErrorCode::Overloaded => new OverloadedException($type, $message, $param, $errors, $retryAfterSeconds),
         };
+    }
+
+    /**
+     * A `Retry-After` header as whole seconds, or null when it is absent or any other
+     * form: a fraction, a sign, padding, an HTTP date, or more than 9 digits.
+     */
+    public static function retryAfterSecondsFrom(?string $header): ?int
+    {
+        return $header !== null && preg_match('/^\d{1,9}\z/', $header) === 1 ? (int) $header : null;
     }
 
     /**

@@ -289,8 +289,42 @@ final class HttpPixelforgeClientTest extends TestCase
         return [
             'a 502 HTML page' => [502, '<html><body><h1>502 Bad Gateway</h1></body></html>', ['Content-Type' => 'text/html']],
             'an empty 500' => [500, '', []],
-            'an undocumented code' => [429, '{"error":{"type":"rate_limit_error","code":"quota_exceeded","message":"Quota exceeded."}}', ['Content-Type' => 'application/json']],
             'a documented code at another status' => [500, '{"error":{"type":"api_error","code":"overloaded","message":"Overloaded."}}', ['Content-Type' => 'application/json']],
+            'a 503 whose code is not overloaded' => [503, '{"error":{"type":"api_error","code":"maintenance","message":"Down for maintenance."}}', ['Content-Type' => 'application/json', 'Retry-After' => '30']],
+        ];
+    }
+
+    /**
+     * A 429 never creates anything, so one without a documented 429 envelope is
+     * a rate limit, keeping any whole-second `Retry-After` (AC 4).
+     *
+     * @param  array<string, string>  $headers
+     */
+    #[DataProvider('undocumentedRateLimits')]
+    public function test_a_429_without_a_documented_envelope_is_a_rate_limit(string $body, array $headers, ?int $retryAfterSeconds): void
+    {
+        Http::fake(['*' => Http::response($body, 429, $headers)]);
+
+        try {
+            $this->client()->createGeneration(self::lighthousePayload());
+            $this->fail('Expected a rate limit.');
+        } catch (RateLimitExceededException $exception) {
+            $this->assertSame(PixelforgeErrorCode::RateLimitExceeded, $exception->errorCode());
+            $this->assertSame(429, $exception->status());
+            $this->assertSame($retryAfterSeconds, $exception->retryAfterSeconds);
+        }
+    }
+
+    /**
+     * @return array<string, array{string, array<string, string>, ?int}>
+     */
+    public static function undocumentedRateLimits(): array
+    {
+        return [
+            'an undocumented code' => ['{"error":{"type":"rate_limit_error","code":"quota_exceeded","message":"Quota exceeded."}}', ['Content-Type' => 'application/json'], null],
+            'an HTML page with Retry-After 9' => ['<html><body><h1>429 Too Many Requests</h1></body></html>', ['Content-Type' => 'text/html', 'Retry-After' => '9'], 9],
+            'overloaded sent with a 429' => ['{"error":{"type":"api_error","code":"overloaded","message":"Overloaded."}}', ['Content-Type' => 'application/json', 'Retry-After' => '2'], 2],
+            'an HTTP-date Retry-After' => ['', ['Retry-After' => 'Fri, 20 Nov 2026 10:00:00 GMT'], null],
         ];
     }
 
