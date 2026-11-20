@@ -11,6 +11,9 @@
  * - `formatBalance` shows a balance: a negative one rounds away from zero, so a
  *   debt never reads as `-$0.0000`; any other is `formatUsd`.
  *
+ * - `formatUsdCents` shows a whole number of cents to 2 decimals, such as a credit
+ *   pack's `$1.00`; anything finer throws.
+ *
  * A negative amount keeps the ASCII hyphen-minus sign.
  */
 
@@ -22,6 +25,8 @@ const NANODOLLARS_PER_DISPLAY_UNIT = 100_000n;
 const DISPLAY_UNITS_PER_DOLLAR = NANODOLLARS_PER_DOLLAR / NANODOLLARS_PER_DISPLAY_UNIT;
 
 const HALF_DISPLAY_UNIT = NANODOLLARS_PER_DISPLAY_UNIT / 2n;
+
+const NANODOLLARS_PER_CENT = 10_000_000n;
 
 interface SignedAmount {
     sign: '' | '-';
@@ -71,6 +76,19 @@ export function formatUsdRoundedUp(nanodollars: number): string {
 /** `$0.9137` for 913,687,500 n$, and `-$0.0010` for −1,000,000 n$. */
 export function formatBalance(nanodollars: number): string {
     return nanodollars < 0 ? formatUsdRoundedUp(nanodollars) : formatUsd(nanodollars);
+}
+
+/** `$1.00` for 1,000,000,000 n$. */
+export function formatUsdCents(nanodollars: number): string {
+    const { sign, magnitude } = signedAmount(nanodollars);
+
+    if (magnitude % NANODOLLARS_PER_CENT !== 0n) {
+        throw new RangeError(`An amount shown in cents must be a whole number of cents, got ${String(nanodollars)} n$.`);
+    }
+
+    const cents = magnitude / NANODOLLARS_PER_CENT;
+
+    return dollarsAndFraction(sign, cents / 100n, cents % 100n, 2);
 }
 
 /** `$0.373875000` for 373,875,000 n$. */

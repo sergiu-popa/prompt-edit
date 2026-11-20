@@ -12,9 +12,9 @@ use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 
 /**
- * Buy credits' Add: the request, the one purchase action, then back with the amount
- * the stored purchase added flashed, in integer n$. A replay of the same token ends
- * the same way, with the first purchase's amount.
+ * Buy credits' Add: the request, the one purchase action, then the Buy credits page
+ * with the amount the stored purchase added flashed, in integer n$. A replay of the
+ * same token ends the same way, with the first purchase's amount.
  */
 final class PurchaseCreditsController extends Controller
 {
@@ -27,6 +27,6 @@ final class PurchaseCreditsController extends Controller
 
         Inertia::flash('purchased_nanodollars', $purchase->amount_nanodollars);
 
-        return back();
+        return to_route('credits.index');
     }
 }

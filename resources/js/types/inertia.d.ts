@@ -20,6 +20,8 @@ declare module '@inertiajs/core' {
             highlighted_generation_id?: string;
             /** Why the server refused a generation the balance can't hold (D-68), with the `balance` error. */
             credit_shortfall?: CreditShortfall;
+            /** What the Buy credits purchase just added, in integer n$ (the first purchase's on a replay). */
+            purchased_nanodollars?: number;
             /** The server's one-off notice, such as "Your session expired. Please try again." (D-60). */
             notice?: string;
         };

@@ -17,3 +17,8 @@ export interface CreditShortfall {
     available_nanodollars: number;
     shortfall_nanodollars: number;
 }
+
+/** The Buy credits page's props: the fixed packs, each a whole number of cents in n$. */
+export interface BuyCreditsPageProps {
+    packs_nanodollars: number[];
+}
