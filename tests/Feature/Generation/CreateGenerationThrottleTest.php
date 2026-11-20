@@ -56,7 +56,7 @@ final class CreateGenerationThrottleTest extends TestCase
         $this->submitGeneration(as: $user)->assertSessionHasErrors('submission');
 
         $this->assertSame(10, DB::table('credit_ledger_entries')->where('type', CreditLedgerEntryType::Hold->value)->count());
-        $this->assertSame(10, DB::table('credit_ledger_entries')->count());
+        $this->assertSame(10, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count());
         Queue::assertPushed(SubmitGenerationJob::class, 10);
     }
 

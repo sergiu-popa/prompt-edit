@@ -11,7 +11,8 @@ use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\TestCase;
 
 /**
- * AC 2: one starter grant per account, whatever creates it (D-70).
+ * AC 2: one starter grant per account, whatever creates it (D-70). The users are
+ * made without the factory's own grant, so only the action writes one.
  */
 final class GrantStarterCreditsActionTest extends TestCase
 {
@@ -20,7 +21,7 @@ final class GrantStarterCreditsActionTest extends TestCase
 
     public function test_it_grants_the_default_starter_of_one_dollar(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
 
         $this->grant($user);
 
@@ -29,7 +30,7 @@ final class GrantStarterCreditsActionTest extends TestCase
 
     public function test_a_second_call_adds_nothing(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
         $this->grant($user);
 
         $this->grant($user);
@@ -44,7 +45,7 @@ final class GrantStarterCreditsActionTest extends TestCase
     {
         $action = $this->app->make(GrantStarterCreditsAction::class);
         config(['credits.starter_grant_nanodollars' => 10_000_000]);
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
 
         $action->execute($user);
 

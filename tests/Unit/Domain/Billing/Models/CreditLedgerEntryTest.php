@@ -63,7 +63,7 @@ final class CreditLedgerEntryTest extends TestCase
 
     public function test_top_ups_without_a_generation_never_collide_on_the_generation_index(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
 
         foreach (['3f6c1a52-0d6b-4e43-9a51-6c2b8e0f7a11', '9b2e4d70-5c1f-4a8e-b3d6-1e7f0a9c2b44'] as $token) {
             CreditLedgerEntry::query()->create([
@@ -108,7 +108,7 @@ final class CreditLedgerEntryTest extends TestCase
     #[DataProvider('rowsTheChecksRefuse')]
     public function test_the_database_refuses_an_entry_its_checks_forbid(array $row): void
     {
-        $generation = Generation::factory()->create();
+        $generation = Generation::factory()->create(['user_id' => User::factory()->withoutCredits()]);
 
         if (($row['generation_id'] ?? null) === true) {
             $row['generation_id'] = $generation->id;
@@ -119,8 +119,8 @@ final class CreditLedgerEntryTest extends TestCase
 
     public function test_a_user_has_at_most_one_grant_and_another_users_grant_is_fine(): void
     {
-        $first = User::factory()->create();
-        $second = User::factory()->create();
+        $first = User::factory()->withoutCredits()->create();
+        $second = User::factory()->withoutCredits()->create();
         $this->insertEntry(['user_id' => $first->id, 'type' => 'grant', 'amount_nanodollars' => 1_000_000_000]);
         $this->insertEntry(['user_id' => $second->id, 'type' => 'grant', 'amount_nanodollars' => 1_000_000_000]);
 
@@ -130,8 +130,8 @@ final class CreditLedgerEntryTest extends TestCase
 
     public function test_a_purchase_token_is_unique_per_user_and_another_user_may_repeat_it(): void
     {
-        $first = User::factory()->create();
-        $second = User::factory()->create();
+        $first = User::factory()->withoutCredits()->create();
+        $second = User::factory()->withoutCredits()->create();
         $purchase = ['type' => 'purchase', 'amount_nanodollars' => 1_000_000_000, 'purchase_token' => self::TOKEN];
         $this->insertEntry(['user_id' => $first->id, ...$purchase]);
         $this->insertEntry(['user_id' => $second->id, ...$purchase]);
@@ -157,7 +157,7 @@ final class CreditLedgerEntryTest extends TestCase
     #[DataProvider('topUps')]
     public function test_top_ups_are_append_only_too(array $row): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
         $this->insertEntry(['user_id' => $user->id, ...$row]);
         $entry = CreditLedgerEntry::query()->where('user_id', $user->id)->sole();
 
@@ -175,7 +175,7 @@ final class CreditLedgerEntryTest extends TestCase
 
     public function test_an_entry_for_an_unknown_generation_is_refused(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
 
         try {
             CreditLedgerEntry::query()->create([

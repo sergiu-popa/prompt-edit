@@ -188,14 +188,14 @@ final class ShowOperatorReportActionTest extends TestCase
     }
 
     /**
-     * Spend is the generation's own `charge` entry only (D-64): the user's top-ups, a grant
-     * and a purchase (D-67), are never spend.
+     * Spend is the generation's own `charge` entry only (D-64): the user's top-ups, the
+     * factory's starter grant and a purchase (D-67), are never spend.
      */
     public function test_spend_reads_only_the_generations_charge_entry(): void
     {
         $generation = $this->givenASucceededGeneration('2026-11-16T09:00:00Z');
+        $this->assertDatabaseHas('credit_ledger_entries', ['user_id' => $generation->user_id, 'type' => 'grant']);
         DB::table('credit_ledger_entries')->insert([
-            ['user_id' => $generation->user_id, 'type' => 'grant', 'amount_nanodollars' => 5_000_000, 'purchase_token' => null, 'created_at' => '2026-11-16 09:00:01+00:00'],
             ['user_id' => $generation->user_id, 'type' => 'purchase', 'amount_nanodollars' => 1_000_000_000, 'purchase_token' => '0b6d6b6e-4a35-4c6e-9d0a-6f1c2e3d4b5a', 'created_at' => '2026-11-16 09:00:03+00:00'],
         ]);
 

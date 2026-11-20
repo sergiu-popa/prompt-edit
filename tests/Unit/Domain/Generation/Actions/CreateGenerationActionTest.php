@@ -144,21 +144,25 @@ final class CreateGenerationActionTest extends TestCase
         $this->assertSame([['hold', -467_343_750]], $this->ledgerEntriesFor($generation));
     }
 
+    /**
+     * The user, and so their starter grant, exists before the hook that fails every write.
+     */
     public function test_a_failing_hold_write_leaves_no_row_and_no_entry(): void
     {
+        $user = User::factory()->create();
         CreditLedgerEntry::created(function (): void {
             throw new RuntimeException('The hold write failed.');
         });
 
         try {
-            $this->givenTheLighthouseGeneration();
+            $this->createGenerationFor($user, self::lighthouseRequest());
             $this->fail('The creation did not fail.');
         } catch (RuntimeException $exception) {
             $this->assertSame('The hold write failed.', $exception->getMessage());
         }
 
         $this->assertSame(0, DB::table('generations')->count());
-        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count());
     }
 
     /**

@@ -33,13 +33,13 @@ final class CreditLedgerEntryQueryBuilderTest extends TestCase
 
     public function test_the_balance_sums_top_ups_active_holds_and_charges_but_not_released_holds(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
         $this->givenATopUp($user, CreditLedgerEntryType::Grant, 1_000_000_000);
         $this->givenATopUp($user, CreditLedgerEntryType::Purchase, 5_000_000_000);
         Generation::factory()->create(['user_id' => $user->id]);
         Generation::factory()->succeeded()->create(['user_id' => $user->id]);
         Generation::factory()->failed()->create(['user_id' => $user->id]);
-        $someoneElse = User::factory()->create();
+        $someoneElse = User::factory()->withoutCredits()->create();
         $this->givenATopUp($someoneElse, CreditLedgerEntryType::Grant, 7);
         Generation::factory()->count(2)->create(['user_id' => $someoneElse->id]);
 
@@ -50,7 +50,7 @@ final class CreditLedgerEntryQueryBuilderTest extends TestCase
 
     public function test_owned_by_accepts_a_user_id(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
         $this->givenATopUp($user, CreditLedgerEntryType::Purchase, 1_000_000_000);
 
         $this->assertBalance(1_000_000_000, 0, 0, CreditLedgerEntry::query()->ownedBy($user->id)->balance());
@@ -58,7 +58,7 @@ final class CreditLedgerEntryQueryBuilderTest extends TestCase
 
     public function test_a_user_without_entries_has_nothing(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->withoutCredits()->create();
 
         $this->assertBalance(0, 0, 0, CreditLedgerEntry::query()->ownedBy($user)->balance());
     }

@@ -66,7 +66,7 @@ trait SubmitsGenerations
     protected function assertNothingWasCreated(): void
     {
         $this->assertSame(0, DB::table('generations')->count(), 'A generation was created.');
-        $this->assertSame(0, DB::table('credit_ledger_entries')->count(), 'A ledger entry was written.');
+        $this->assertSame(0, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count(), 'A generation\'s ledger entry was written.');
         Queue::assertNotPushed(SubmitGenerationJob::class);
     }
 }
