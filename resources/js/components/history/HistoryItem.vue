@@ -101,7 +101,7 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
         ]"
     >
         <ResultImage
-            v-if="isSucceeded && (generation.image_url !== null || isExpired)"
+            v-if="isSucceeded"
             :src="isExpired ? null : generation.image_url"
             :alt="generation.prompt"
             :expired="isExpired"

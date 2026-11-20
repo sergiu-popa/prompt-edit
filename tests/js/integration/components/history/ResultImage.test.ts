@@ -62,4 +62,41 @@ describe('ResultImage', () => {
         expect(wrapper.find('img').exists()).toBe(false);
         expect(visibleText(wrapper)).toBe('Image expired');
     });
+
+    it('shows Image unavailable instead of a broken image when it fails to load', async () => {
+        const wrapper = mountImage();
+
+        await wrapper.get('img').trigger('error');
+
+        expect(wrapper.attributes('data-state')).toBe('unavailable');
+        expect(visibleText(wrapper)).toBe('Image unavailable');
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(wrapper.find('a').exists()).toBe(false);
+    });
+
+    it('stays unavailable when the same URL arrives again', async () => {
+        const wrapper = mountImage();
+        await wrapper.get('img').trigger('error');
+
+        await wrapper.setProps({ src: SRC });
+
+        expect(wrapper.find('img').exists()).toBe(false);
+    });
+
+    it('shows Image unavailable when a succeeded generation has no usable URL', () => {
+        const wrapper = mountImage({ src: null });
+
+        expect(wrapper.attributes('data-state')).toBe('unavailable');
+        expect(visibleText(wrapper)).toBe('Image unavailable');
+        expect(wrapper.find('img').exists()).toBe(false);
+    });
+
+    it('says expired rather than unavailable once an image that failed to load expires', async () => {
+        const wrapper = mountImage();
+        await wrapper.get('img').trigger('error');
+
+        await wrapper.setProps({ expired: true });
+
+        expect(visibleText(wrapper)).toBe('Image expired');
+    });
 });

@@ -175,6 +175,14 @@ describe('HistoryItem', () => {
         expect(mountItem(SUCCEEDED).find('[data-image-note]').exists()).toBe(false);
     });
 
+    it('shows the image box of a succeeded generation the server sent no URL for', () => {
+        const wrapper = mountItem({ ...SUCCEEDED, image_url: null });
+
+        expect(wrapper.getComponent(ResultImage).props()).toMatchObject({ src: null, expired: false });
+        expect(visibleText(wrapper.getComponent(ResultImage))).toBe('Image unavailable');
+        expect(wrapper.find('[data-image-note]').exists()).toBe(false);
+    });
+
     it('shows an image the server found expired as expired, with how long images are kept', () => {
         const wrapper = mountItem({ ...SUCCEEDED, image_url: null, image_url_expires_at: '2026-11-19T11:59:00Z', image_expired: true });
 
