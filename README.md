@@ -19,7 +19,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
   | `[slow]` | Processing for 60–90 s, then Succeeded without a reload |
   | `[duplicate]` | Every webhook arrives twice, and the generation is still charged once |
 
-  The reviewer account's History holds a few real generations made with them at go-live.
+  The reviewer account's History holds a few real generations made with them. The demo set is refreshed shortly before hand-in, because Pixelforge's images expire 24 h after completion.
 - **The money model:**
   - amounts are integer nanodollars (1 n$ = $0.000000001), never floats;
   - you pay Pixelforge's exact cost + 25 %, rounded up to the next nanodollar;
@@ -27,8 +27,8 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
   - a failed or rejected generation is free and its hold is released.
 
   Details are in [How the money works](#how-the-money-works).
-- **Operator report:** the reviewer account is an operator: Report shows spend, Pixelforge cost and profit per UTC day and per user, exact to the nanodollar on hover.
-- **Why it is built this way:** every choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
+- **Operator report:** the reviewer account is an operator: Report shows spend, Pixelforge cost and profit per UTC day and per user, exact to the nanodollar on hover. It also reconciles every day with Pixelforge's own `GET /v1/usage`, with a Match badge only when the cost and all four token counts are exactly equal: see [Reading the operator report](#reading-the-operator-report).
+- **Why it is built this way:** every choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log), D-01 to D-76.
 - **Running the tests:** see [Testing](#testing). `make check` runs PHP lint, static analysis, PHPUnit, the frontend checks and Vitest; `make e2e` runs Playwright against the in-app fake. `make live-smoke` is the one opt-in test against the real API (D-58): it reads a **dev** key from `.env` as `PIXELFORGE_API_KEY`, never the production key, because that would add to production's `/v1/usage` and break its reconciliation (PE-018). It refuses to run in production, in CI and without a key, and costs at most $0.0175 a run.
 
 ## Status
@@ -74,7 +74,7 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 - **User price = ⌈provider × 125 / 100⌉.** It rounds up to the next nanodollar, so it never under-charges and over-charges by at most 0.75 n$.
 - **The upfront estimate is an honest range.** Text tokens are ±15% of ⌈code points / 4⌉ and reasoning tokens vary by quality. One shared JSON fixture keeps the PHP and TypeScript estimators identical.
 - **Exactly once, enforced by the database.** An append-only ledger holds the maximum at submit, charges the actual once on success (a unique constraint, not a convention) and releases the hold on failure.
-- **Reconciles with Pixelforge.** The operator report buckets costs by Pixelforge's `completed_at` UTC day, the same way `/v1/usage` does.
+- **Reconciles with Pixelforge.** The operator report buckets costs by Pixelforge's `completed_at` UTC day, the same way `/v1/usage` does, and checks every day against `/v1/usage`, exact to the nanodollar.
 
 Worked examples and the full model are in [`requirements.md` §3](.agent-workflow/requirements.md#3-money-model).
 
@@ -98,6 +98,26 @@ Worked examples and the full model are in [`requirements.md` §3](.agent-workflo
 - **Taking longer than usual.** After 15 min, a generation that is not done says "Taking longer than usual — we're checking with Pixelforge" on History.
 
 Every failure mode is covered in the [robustness matrix](.agent-workflow/requirements.md#4-robustness-matrix). The reasoning behind each choice is in the [decisions log](.agent-workflow/requirements.md#5-decisions-log).
+
+## Reading the operator report
+
+Report is open to operators only (`app:grant-operator`, see [Operator access](#operator-access)).
+
+- **The range** is two UTC dates, both inclusive: by default the last 30 days ending today, at most 92 days, never past today (D-65). These are `/v1/usage`'s own rules, so the report asks Pixelforge for exactly the same range; a longer one is refused before anything is sent.
+- **Three tables.** *Per day* and *Per user* show succeeded generations, spend (what users were charged), Pixelforge's cost and profit. *Pixelforge reconciliation* puts Pixelforge's own usage report for this API key ("Pixelforge says") beside what we recorded ("We recorded"), per UTC day and in total. Hover, focus or tap an amount for its exact 9-decimal value.
+- **Match, Mismatch and Δ.** A day is a **Match** only when its provider cost and all four token counts (text, image, output, reasoning) are exactly equal integers: no tolerance, to the nanodollar (D-72). Anything else is a **Mismatch**, with its non-zero deltas in red. Δ is Pixelforge − ours, so `+` means Pixelforge billed more than we recorded. The total gets its own badge, against Pixelforge's own total.
+- **In progress.** Today (UTC) is labelled In progress: generations still processing may complete later today and move its figures.
+- **Why a mismatch happens.** Pixelforge counts every generation made with the API key. A mismatch usually means the key was used outside this app (for example a local test), generations were recorded before a database reset, or a generation finished at Pixelforge that we haven't recorded yet; the reconciler catches that up within minutes. This is why each environment has its own key.
+- **Counts are not compared.** Generation counts are shown on both sides, but the docs don't say whether Pixelforge's count includes failed generations ([requirements §6](.agent-workflow/requirements.md#6-open-questions--known-unknowns)).
+- **Caching and outages.** A successful answer is reused for 60 s per range, so reloads stay off Pixelforge's 60 requests a minute; a failure is never cached (D-74). If Pixelforge is unreachable, slow (5 s), rate-limited or refuses the key, the page still renders our figures with "Pixelforge usage is unavailable right now…" and no badges.
+- **Locally,** the fake Pixelforge answers `/v1/usage` from its own state, priced in decimals independently of our integer code (D-75), so a local or E2E report shows real parity.
+
+## Stretch features
+
+- **Operator report (PE-016):** spend, Pixelforge cost and profit per UTC day and per user, for any range up to 92 days.
+- **Reconciliation with `/v1/usage` (PE-018):** every day and the total checked exactly against Pixelforge's own billing, with deltas and an explanation of any mismatch. Both are described in [Reading the operator report](#reading-the-operator-report).
+
+Credit balances and Buy credits (PE-017) are described in their own section.
 
 ## Local development
 
@@ -311,7 +331,7 @@ The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.
 
 **Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.
 
-The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, `/health/reconciler`, that the webhook URL answers an unsigned delivery with a 400 and no redirect, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in, checks History and the operator report read-only, and signs out (D-76). History must show a succeeded generation with its charge and a loaded image, so that check needs an image less than 24 h old; the report must show every day and the total as Match against `/v1/usage`, reloading for up to 3 min. Its only writes are sign-in and sign-out. It never registers users.
+The smoke runs Playwright in the `playwright` service (`make up` first) against production. It checks `/up`, `/health/reconciler`, that the webhook URL answers an unsigned delivery with a 400 and no redirect, the http → https redirect, a plain 404, that a spoofed `X-Forwarded-Host` never reaches a URL, the sign-in page and its cookie flags, no mixed content and no console errors, then signs the reviewer in, checks History and the operator report read-only, and signs out (D-76). History must show a succeeded generation with its charge and a loaded image, so that check needs an image less than 24 h old (see [Demo refresh and sign-off](#demo-refresh-and-sign-off)); the report must show every day and the total as Match against `/v1/usage`, reloading for up to 3 min. Its only writes are sign-in and sign-out. It never registers users.
 
 ```bash
 export E2E_BASE_URL=https://prompt.sergiupopa.dev   # plus E2E_REVIEWER_EMAIL and E2E_REVIEWER_PASSWORD, as above
@@ -394,6 +414,18 @@ Verified on production at go-live (PE-015) and worth repeating after any change 
 | No secrets in logs | From the domain folder, each prints `:0` for every file: `grep -c -F -f <(sed -n 's/^PIXELFORGE_API_KEY=//p' shared/.env) shared/storage/logs/laravel-*.log`, the same with `PIXELFORGE_WEBHOOK_SECRET`, and `grep -c -E 'whsec_\|Authorization\|Bearer ' shared/storage/logs/laravel-*.log`. As root, pipe `journalctl -u prompt-edit-worker --since today` through the same three |
 | No arguments in traces | As root: `grep -rhsE 'zend\.exception_ignore_args' /etc/php/8.4/fpm/php.ini /etc/php/8.4/fpm/conf.d /etc/php/8.4/fpm/pool.d` shows `On`, and `php8.4 -r 'var_dump(ini_get("zend.exception_ignore_args"));'` prints `"1"` |
 | Money on real generations | Note `date -u +%FT%TZ`, create generations with the [test keywords](#reviewer-guide), then `php8.4 artisan app:check-generation-money --since=<that instant>`: every row `OK`, exit 0. It prints the keywords, never the prompt |
+
+#### Demo refresh and sign-off
+
+Shortly before hand-in, within 24 h so the images are still live, after `dep deploy` of the current `main` and a first `make smoke-production` (PE-018). No password ever goes on a command line: `E2E_REVIEWER_PASSWORD` comes from `read -rs`, as in [Reviewer account](#reviewer-account).
+
+1. **Operator.** `ssh admin@164.90.236.77 "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:grant-operator '$E2E_REVIEWER_EMAIL'"` prints "… is already an operator." and exits 0.
+2. **Balance.** Signed in as the reviewer, an available balance must be at least $0.7119, the demo set's holds (711,850,000 n$). If it is lower, buy one credits pack first.
+3. **Note the instant.** `export SINCE=$(date -u +%FT%TZ)`.
+4. **Demo set.** As the reviewer, on Generate, submit PE-015's 8 rows, each prompt at most 40 code points: `[succeed] a lighthouse at dawn` (Square, Low); `[succeed] a red fox in fresh snow` (Landscape, Medium, refs `https://example.com/ref-1.png` and `https://example.com/ref-2.png`); `[succeed] a mountain lake at noon` (Portrait, High); then `[fail] a broken pocket watch`, `[blocked] a forbidden scene`, `[overloaded] a busy harbour`, `[succeed] [duplicate] two moons` and `[succeed] [slow] a slow sunrise`, each Square, Low, no refs.
+5. **Each status and one charge.** The three `[succeed]` rows succeed with an image and a charge; `[fail]` fails and `[blocked]` is rejected, both "Not charged"; `[overloaded]` shows the retry note, then fails after about 2 min, "Not charged"; `[duplicate]` succeeds, with two deliveries per event on the dashboard; `[slow]` processes for 60–90 s, then succeeds without a reload. Then `ssh admin@164.90.236.77 "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:check-generation-money --since=$SINCE"` prints 8 rows, every check `OK`, exit 0, with at most 516,950,000 n$ of provider cost and 646,187,500 n$ charged.
+6. **Report parity.** At least 60 s after the last generation is terminal, Report's default range shows no notice, every day Match (today In progress and Match) and Total Match; hovering a "Pixelforge says" cost shows the same 9 decimals as "We recorded".
+7. **Final smoke.** `make smoke-production` passes, History's image check included. The results go into a PR comment as a ticked list, with dates and no credentials.
 
 ### Logs
 
