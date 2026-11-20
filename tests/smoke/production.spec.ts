@@ -1,8 +1,9 @@
 import { expect, test } from '../e2e/fixtures';
 
 /**
- * The production smoke (AC17), run after every deploy with `make smoke-production`.
- * It never registers a user and writes nothing beyond one reviewer session.
+ * The production smoke (PE-004 AC17, PE-015), run after every deploy with `make smoke-production`.
+ * It never registers a user and writes nothing beyond one reviewer session. It also checks
+ * the reconciler's health (D-59) and that Pixelforge's webhook URL answers without a redirect.
  * Importing the E2E fixtures fails every test on a browser console or page error.
  */
 const reviewer = {
@@ -16,6 +17,22 @@ test('the health check answers 200', async ({ request }) => {
     const response = await request.get('/up');
 
     expect(response.status()).toBe(200);
+});
+
+test('the reconciler health check answers 200 ok', async ({ request }) => {
+    const response = await request.get('/health/reconciler');
+
+    expect(response.status()).toBe(200);
+    expect((await response.json()) as { status: string }).toMatchObject({ status: 'ok' });
+});
+
+test('the webhook URL refuses an unsigned delivery itself, with no redirect', async ({ request }) => {
+    // Pixelforge follows no redirect, so the exact URL must answer; a 400 (not a 500)
+    // also proves the signing secret is set.
+    const response = await request.post('/webhooks/pixelforge', { data: {}, maxRedirects: 0 });
+
+    expect(response.status()).toBe(400);
+    expect(response.headers()['location']).toBeUndefined();
 });
 
 test('plain http redirects to https', async ({ request, baseURL }) => {
