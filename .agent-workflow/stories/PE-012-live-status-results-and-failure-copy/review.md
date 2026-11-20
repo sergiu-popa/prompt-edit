@@ -41,7 +41,7 @@ The constant-field check: no new field is constant under `ownedBy`. `server_time
 
 ### Warnings
 
-- [ ] **W1. Going Back to History restores a stale `server_time`, so the server clock runs behind for as long as the page stays open.**
+- [x] **W1. Going Back to History restores a stale `server_time`, so the server clock runs behind for as long as the page stays open.**
   - `resources/js/composables/useServerClock.ts:23-30` re-measures the offset from whatever `server_time` the page mounts with. On a browser Back or Forward, Inertia 3.11 does not ask the server. `handlePopstateEvent` (`node_modules/@inertiajs/core/dist/index.js:1959-1997`) remounts the page from the props saved in `history.state` with `setQuietly(data, { preserveState: false })`. `server_time` is then as old as the user's time away, and `offsetMs` puts "now" that far in the past.
   - Example: a user lands on History, then opens Generate, waits 10 minutes and presses Back. Every item reads its created time 10 minutes too young, because `HistoryItem.vue:76` now uses `new Date(props.now)` where PE-011 used the browser clock. That is a regression of PE-011's AC 13 time. If the page has an in-progress item, the first poll after 3 s corrects the clock. If every item is terminal, nothing polls (AC 2), so the clock stays wrong until the page is left.
   - The same stale clock defeats D-42's guarantee that "a page never requests an expired URL". If an image URL dies while the user is away (24 h in production, 5 s for `[expire]`), the restored props still say `image_expired: false` with the URL. `isImageExpired(…, now)` at `HistoryItem.vue:83-85` reads the stale clock, so the card renders the `img`. The browser then requests the dead URL, which fails with a 403 and a console error, and the card shows "Image unavailable" instead of AC 9's "Image expired".
@@ -63,3 +63,10 @@ Optional; none blocks QA.
 - **S1.** `app/Http/Resources/GenerationResource.php:93`: `/\host/a.png` passes the root-relative check, but browsers parse `\` as `/` in http(s) URLs, so it loads from `host`, the same as `//host`. It is not a `javascript:` vector, and `https://` to any host is already allowed, so the risk is low. Rejecting a second character of `\` (`str_starts_with($url, '/\\')`) would make the check match its docblock. A data-provider row would pin it.
 - **S2.** `resources/js/components/history/HistoryItem.vue:15-23`: the docblock was extended in place and now wraps unevenly. Line 18 breaks after "and the" at about 60 characters, while its neighbours run to about 90. Rewrap it, or leave it.
 - **S3.** `resources/js/components/history/ResultImage.vue`: an `error` latches `unavailable` for good, as the plan intends. If PE-013 or a later story ever re-signs a URL, the card will need a remount, or a reset when `src` changes, to show the new image. It is recorded here so that story doesn't trip on it. No change is needed now.
+
+### Resolution (engineer, round 1)
+
+- **W1:** fixed in `415796d`. The offset is kept at module level in `useServerClock.ts` and re-measured only from a `server_time` newer than any seen, so a restored snapshot keeps the last fresh offset and nothing extra is requested. Covered by a `useServerClock.test.ts` row, an `Index.test.ts` remount row and a `live-status.spec.ts` Back row; all three fail on the previous clock. The E2E row reads the card once as soon as the restored page shows, because a stale clock only flips the card a few seconds later. The remaining gap (a restore into a freshly loaded document) is documented in the composable's docblock and in D-42 (`bbe1f8e`).
+- **S1:** done in `1e8de89`, with a data-provider row.
+- **S2:** done in `5b2167d`.
+- **S3:** no change, as noted.
