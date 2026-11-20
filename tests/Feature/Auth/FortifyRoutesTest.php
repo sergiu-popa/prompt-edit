@@ -153,21 +153,29 @@ final class FortifyRoutesTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_a_wrong_password_confirmation_goes_back_with_a_password_error(): void
+    /**
+     * No page asks for a password confirmation, so the endpoint never checks a password
+     * (D-61): a wrong and a right one both get 404, and nothing is confirmed.
+     */
+    #[DataProvider('passwordConfirmations')]
+    public function test_a_password_confirmation_is_not_found_and_confirms_nothing(string $password): void
     {
         $this->actingAs(User::factory()->create(['password' => 'correct-password']))
             ->from('/dashboard')
-            ->post('/user/confirm-password', ['password' => 'wrong-password'])
-            ->assertRedirect('/dashboard')
-            ->assertSessionHasErrors(['password' => 'The provided password was incorrect.']);
+            ->post('/user/confirm-password', ['password' => $password])
+            ->assertNotFound()
+            ->assertSessionMissing('auth.password_confirmed_at');
     }
 
-    public function test_a_correct_password_confirmation_goes_to_the_signed_in_home(): void
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function passwordConfirmations(): array
     {
-        $this->actingAs(User::factory()->create(['password' => 'correct-password']))
-            ->post('/user/confirm-password', ['password' => 'correct-password'])
-            ->assertRedirect(route('dashboard'))
-            ->assertSessionHasNoErrors();
+        return [
+            'a wrong password' => ['wrong-password'],
+            'the right password' => ['correct-password'],
+        ];
     }
 
     public function test_the_password_confirmation_status_answers_json_for_a_signed_in_user(): void

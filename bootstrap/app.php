@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Responses\RedirectExpiredSession;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,10 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
-        // Webhooks and the fake Pixelforge's images sit outside every middleware group, so no
-        // session cookie or CSRF check applies.
+        // Webhooks, the fake Pixelforge's images and the reconciler's health sit outside every
+        // middleware group, so no session cookie or CSRF check applies.
         then: function (): void {
             Route::group([], __DIR__ . '/../routes/webhooks.php');
+            Route::group([], __DIR__ . '/../routes/health.php');
             Route::group([], __DIR__ . '/../routes/fake-pixelforge.php');
         },
     )
@@ -33,5 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // An expired session lands back on its page, or on Sign in, with a notice instead of a
+        // 419 page or Inertia's error modal (D-60). The app's only respond() callback.
+        $exceptions->respond(new RedirectExpiredSession);
     })->create();

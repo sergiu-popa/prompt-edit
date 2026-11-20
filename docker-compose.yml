@@ -1,7 +1,8 @@
-# Dev and E2E bounds for the Pixelforge client (D-48). An existing `.env` lacks these names,
-# so each is defaulted here to `.env.example`'s value; a value in `.env` still wins. Playwright
-# gets them too, to derive its timeouts from the same values.
-x-pixelforge-dev-bounds: &pixelforge-dev-bounds
+# Dev and E2E bounds for the Pixelforge client and sign-up (D-48, D-57). An existing `.env`
+# lacks these names, so each is defaulted here to `.env.example`'s value; a value in `.env`
+# still wins. Playwright gets them too, to derive its timeouts from the same values.
+x-dev-bounds: &dev-bounds
+  AUTH_REGISTRATIONS_PER_HOUR: ${AUTH_REGISTRATIONS_PER_HOUR:-1000}
   PIXELFORGE_RATE_LIMIT_PER_MINUTE: ${PIXELFORGE_RATE_LIMIT_PER_MINUTE:-600}
   PIXELFORGE_OVERLOADED_DEADLINE: ${PIXELFORGE_OVERLOADED_DEADLINE:-15}
   PIXELFORGE_RECONCILE_EVERY: ${PIXELFORGE_RECONCILE_EVERY:-5}
@@ -76,7 +77,7 @@ services:
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
       ENABLE_NPM_FRONTEND: '${ENABLE_NPM_FRONTEND:-true}'
-      <<: *pixelforge-dev-bounds
+      <<: *dev-bounds
     volumes:
       - '.:/var/www'
     networks:
@@ -104,7 +105,7 @@ services:
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
-      <<: *pixelforge-dev-bounds
+      <<: *dev-bounds
     volumes:
       - '.:/var/www'
     networks:
@@ -132,7 +133,7 @@ services:
       XDEBUG_MODE: '${XDEBUG_MODE:-off}'
       XDEBUG_CONFIG: '${XDEBUG_CONFIG:-client_host=host.docker.internal}'
       PHP_OPCACHE_VALIDATE_TIMESTAMPS: '1'
-      <<: *pixelforge-dev-bounds
+      <<: *dev-bounds
     volumes:
       - '.:/var/www'
     networks:
@@ -166,7 +167,7 @@ services:
     environment:
       E2E_BASE_URL: 'http://127.0.0.1:8080'
       CI: '${CI:-}'
-      <<: *pixelforge-dev-bounds
+      <<: *dev-bounds
     volumes:
       - '.:/var/www'
     depends_on:

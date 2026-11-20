@@ -4,11 +4,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 
-import { givenSignedInAs, givenThePageIsAt, givenVisitsStayPending } from '../support/inertia';
+import { givenFlash, givenNoFlash, givenSignedInAs, givenThePageIsAt, givenVisitsStayPending } from '../support/inertia';
 
 describe('AppLayout', () => {
     beforeEach(() => {
         givenSignedInAs({ id: 1, name: 'Ada Lovelace', email: 'ada@example.com' });
+        givenNoFlash();
+    });
+
+    it('shows the server notice as a status at the top of <main>', () => {
+        givenFlash({ notice: 'Your session expired. Please try again.' });
+
+        const wrapper = mount(AppLayout, { slots: { default: '<p>Page content</p>' } });
+
+        const status = wrapper.get('main > [role="status"]');
+        expect(status.text()).toBe('Your session expired. Please try again.');
+        expect(status.element).toBe(wrapper.get('main').element.firstElementChild);
+    });
+
+    it('shows no status without a notice', () => {
+        expect(mount(AppLayout).find('[role="status"]').exists()).toBe(false);
     });
 
     it('links the app name to the signed-in home', () => {

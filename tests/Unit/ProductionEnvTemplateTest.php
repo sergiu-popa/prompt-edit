@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * `.env.production.example` is the template for the server's `shared/.env`: every production
- * name, every non-secret value, blank secrets and no Pixelforge configuration before PE-015.
+ * name, every non-secret value, blank secrets and production's own Pixelforge key (PE-015).
  */
 final class ProductionEnvTemplateTest extends TestCase
 {
@@ -48,6 +48,9 @@ final class ProductionEnvTemplateTest extends TestCase
         'MAIL_MAILER',
         'INERTIA_SSR_ENABLED',
         'VITE_APP_NAME',
+        'PIXELFORGE_DRIVER',
+        'PIXELFORGE_API_KEY',
+        'PIXELFORGE_WEBHOOK_SECRET',
     ];
 
     public function test_it_names_exactly_the_production_variables(): void
@@ -55,11 +58,14 @@ final class ProductionEnvTemplateTest extends TestCase
         $this->assertSame(self::NAMES, array_keys(self::template()));
     }
 
-    public function test_it_has_no_pixelforge_variable_before_pe_015(): void
+    /**
+     * Every other Pixelforge setting keeps its production default from config/pixelforge.php.
+     */
+    public function test_it_has_exactly_the_three_pixelforge_variables(): void
     {
-        foreach (array_keys(self::template()) as $name) {
-            $this->assertStringStartsNotWith('PIXELFORGE_', $name);
-        }
+        $pixelforge = array_values(array_filter(array_keys(self::template()), fn (string $name): bool => str_starts_with($name, 'PIXELFORGE_')));
+
+        $this->assertSame(['PIXELFORGE_DRIVER', 'PIXELFORGE_API_KEY', 'PIXELFORGE_WEBHOOK_SECRET'], $pixelforge);
     }
 
     #[DataProvider('secrets')]
@@ -76,6 +82,8 @@ final class ProductionEnvTemplateTest extends TestCase
         return [
             'app key' => ['APP_KEY'],
             'database password' => ['DB_PASSWORD'],
+            'Pixelforge API key' => ['PIXELFORGE_API_KEY'],
+            'Pixelforge webhook secret' => ['PIXELFORGE_WEBHOOK_SECRET'],
         ];
     }
 
@@ -103,6 +111,7 @@ final class ProductionEnvTemplateTest extends TestCase
             'daily log files' => ['LOG_CHANNEL', 'daily'],
             'logs kept 14 days' => ['LOG_DAILY_DAYS', '14'],
             'info lines kept' => ['LOG_LEVEL', 'info'],
+            'the real Pixelforge' => ['PIXELFORGE_DRIVER', 'http'],
         ];
     }
 

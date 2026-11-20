@@ -95,3 +95,12 @@ steer the work.
 
 > Merged. The UI might need some more spacing, polish
 > Let's continue with the next stories
+
+**Answers to clarifying questions** (before PE-015, the go-live story)
+
+| Question | Answer |
+|---|---|
+| Should public registration stay open on production, now that every account can spend real Pixelforge money? | Pixelforge is a fictional AI image-generation API we built for this assessment. |
+| How should the dedicated production key and webhook secret get into the droplet's `shared/.env`? | SSH yourself |
+| Who may run the opt-in live smoke against the real API with the dev key, and how often? | Allow everything, no limit, it's fictional; you kinda missed the point there |
+| Deploy the PE-015 branch and run the production checks before the merge, or merge first? | Merge first, check after |

@@ -4,7 +4,7 @@
 Go live with real Pixelforge: live smoke, production webhooks, hardening and first real generations
 
 ## Status
-`draft`
+`done`
 
 ## Description
 Every required feature now works against the fake driver. The walking skeleton has been deployed continuously since PE-004, with Pixelforge left unconfigured. This story turns the real integration on and ships the required scope publicly before any stretch work starts (D-19).

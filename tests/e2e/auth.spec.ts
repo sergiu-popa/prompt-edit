@@ -1,7 +1,7 @@
 import type { Locator } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { DEMO_USER, signIn, uniqueEmail } from './support/auth';
+import { DEMO_USER, registerNewUser, signIn, uniqueEmail } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 
 test('signs up, lands on the signed-in home and signs out', async ({ page }, testInfo) => {
@@ -30,6 +30,20 @@ test('signs up, lands on the signed-in home and signs out', async ({ page }, tes
 
     await page.goto('/dashboard');
     await expect(page).toHaveURL('/login');
+});
+
+test('an expired session on Generate lands on Sign in with the session-expired notice', async ({ page, context }, testInfo) => {
+    await registerNewUser(page, testInfo);
+    await page.getByLabel('Prompt').fill('[succeed] a lighthouse at dawn');
+
+    // The session cookie goes, as when it expires; Chromium's same-origin fetch metadata
+    // takes the guest path, which gets the same notice as a 419 (D-60).
+    await context.clearCookies();
+    await page.getByRole('button', { name: 'Generate' }).click();
+
+    await expect(page).toHaveURL('/login');
+    await expect(page.getByRole('status')).toHaveText('Your session expired. Please try again.');
+    await expectNoHorizontalScroll(page);
 });
 
 test('shows the credentials message for a wrong password', async ({ page }, testInfo) => {

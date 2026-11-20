@@ -73,6 +73,32 @@ final class RegistrationTest extends TestCase
         ];
     }
 
+    /**
+     * Postgres refuses invalid UTF-8 (error 22021) and cuts a value at a NUL, so
+     * either is a field error before anything is stored.
+     */
+    #[DataProvider('unstorableNames')]
+    public function test_a_name_that_cannot_be_stored_is_a_field_error(string $name): void
+    {
+        $this->register(['name' => $name])
+            ->assertRedirect('/register')
+            ->assertSessionHasErrors(['name' => "Name contains characters that can't be sent."]);
+
+        $this->assertSame(0, User::query()->count());
+        $this->assertGuest();
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unstorableNames(): array
+    {
+        return [
+            'invalid UTF-8' => ["A\xFFda"],
+            'a NUL' => ["A\0da"],
+        ];
+    }
+
     public function test_the_email_is_stored_lowercase(): void
     {
         $this->register(['email' => 'Ada@Example.COM'])->assertRedirect(route('dashboard'));

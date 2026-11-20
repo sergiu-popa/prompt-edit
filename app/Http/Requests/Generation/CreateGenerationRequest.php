@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Generation;
 
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
-use App\Domain\Generation\Rules\StorableTextRule;
 use App\Domain\Generation\ValueObjects\GenerationInputLimits;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use App\Domain\Shared\Rules\StorableTextRule;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
