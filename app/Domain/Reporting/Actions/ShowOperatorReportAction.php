@@ -33,8 +33,9 @@ final class ShowOperatorReportAction
     /**
      * `AT TIME ZONE 'UTC'` turns the `timestamptz` into its UTC wall time, whatever the
      * session's timezone; `date_trunc` or a `::date` cast would follow the session.
+     * SumRecordedUsageAction buckets by it too, so both put a generation on the same day.
      */
-    private const string UTC_DATE = "to_char(generations.completed_at at time zone 'UTC', 'YYYY-MM-DD')";
+    public const string UTC_DATE = "to_char(generations.completed_at at time zone 'UTC', 'YYYY-MM-DD')";
 
     /**
      * @throws NanodollarOverflowException
