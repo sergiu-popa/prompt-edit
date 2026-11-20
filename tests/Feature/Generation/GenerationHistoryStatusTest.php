@@ -208,6 +208,18 @@ final class GenerationHistoryStatusTest extends TestCase
                 ['local_failure_reason' => LocalFailureReason::ValidationFailed, 'error_code' => 'validation_failed', 'error_param' => null, 'error_message' => 'The request is invalid.'],
                 'Pixelforge rejected the request: The request is invalid.',
             ],
+            'a local overload past its deadline' => [
+                ['local_failure_reason' => LocalFailureReason::ProviderOverloaded, 'error_code' => 'overloaded', 'error_message' => 'Pixelforge is overloaded.'],
+                'Pixelforge was overloaded and didn\'t accept this request. You were not charged.',
+            ],
+            'a local wait that stayed busy' => [
+                ['local_failure_reason' => LocalFailureReason::ProviderBusy, 'error_code' => null, 'error_message' => null],
+                'Pixelforge stayed busy for too long, so we stopped waiting. You were not charged.',
+            ],
+            'a local failure that was never sent' => [
+                ['local_failure_reason' => LocalFailureReason::ServiceUnavailable, 'error_code' => 'invalid_api_key', 'error_message' => 'Invalid API key.'],
+                'Service unavailable — this generation wasn\'t sent. You were not charged.',
+            ],
             'a provider generation_failed' => [
                 ['local_failure_reason' => null, 'error_code' => 'generation_failed'],
                 'Pixelforge couldn\'t produce an image for this prompt. Try rephrasing it.',

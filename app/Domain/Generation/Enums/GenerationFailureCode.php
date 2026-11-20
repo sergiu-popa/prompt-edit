@@ -20,6 +20,9 @@ enum GenerationFailureCode: string
     case IdempotencyKeyReused = 'idempotency_key_reused';
     case GenerationFailed = 'generation_failed';
     case InternalError = 'internal_error';
+    case ProviderOverloaded = 'provider_overloaded';
+    case ProviderBusy = 'provider_busy';
+    case ServiceUnavailable = 'service_unavailable';
 
     /**
      * What any other, or a missing, code reads.
@@ -59,6 +62,9 @@ enum GenerationFailureCode: string
             self::IdempotencyKeyReused => 'Something went wrong submitting this generation.',
             self::GenerationFailed => 'Pixelforge couldn\'t produce an image for this prompt. Try rephrasing it.',
             self::InternalError => 'Something went wrong on Pixelforge\'s side. Please try again.',
+            self::ProviderOverloaded => 'Pixelforge was overloaded and didn\'t accept this request. You were not charged.',
+            self::ProviderBusy => 'Pixelforge stayed busy for too long, so we stopped waiting. You were not charged.',
+            self::ServiceUnavailable => 'Service unavailable — this generation wasn\'t sent. You were not charged.',
         };
     }
 

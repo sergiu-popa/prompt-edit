@@ -35,6 +35,18 @@ final class GenerationFailureCodeTest extends TestCase
                 GenerationFailureCode::InternalError,
                 'Something went wrong on Pixelforge\'s side. Please try again.',
             ],
+            'provider overloaded' => [
+                GenerationFailureCode::ProviderOverloaded,
+                'Pixelforge was overloaded and didn\'t accept this request. You were not charged.',
+            ],
+            'provider busy' => [
+                GenerationFailureCode::ProviderBusy,
+                'Pixelforge stayed busy for too long, so we stopped waiting. You were not charged.',
+            ],
+            'service unavailable' => [
+                GenerationFailureCode::ServiceUnavailable,
+                'Service unavailable — this generation wasn\'t sent. You were not charged.',
+            ],
         ];
     }
 
@@ -81,7 +93,16 @@ final class GenerationFailureCodeTest extends TestCase
     public function test_the_codes_are_spelled_as_the_local_reasons_and_pixelforges_error_codes(): void
     {
         $this->assertSame(
-            ['content_policy_violation', 'validation_failed', 'idempotency_key_reused', 'generation_failed', 'internal_error'],
+            [
+                'content_policy_violation',
+                'validation_failed',
+                'idempotency_key_reused',
+                'generation_failed',
+                'internal_error',
+                'provider_overloaded',
+                'provider_busy',
+                'service_unavailable',
+            ],
             array_column(GenerationFailureCode::cases(), 'value'),
         );
     }
