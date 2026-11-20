@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Auth;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\InteractsWithAuthentication;
 use Tests\TestCase;
 
@@ -41,6 +42,27 @@ final class LoginThrottleTest extends TestCase
         $this->attemptSignIn('ada@example.com', 'correct-password', self::INERTIA_HEADERS)
             ->assertRedirect('/login')
             ->assertSessionHasErrors(['email' => 'Too many login attempts. Please try again in 60 seconds.']);
+
+        $this->assertGuest();
+    }
+
+    /**
+     * AC 15 (PE-015): the sixth wrong password within a minute is a redirect, never a
+     * 429 page, and Sign in renders the lockout under Email.
+     */
+    public function test_the_sixth_wrong_password_renders_the_lockout_inline_not_a_429(): void
+    {
+        $this->givenFailedSignIns(5, 'ada@example.com');
+
+        $response = $this->attemptSignIn('ada@example.com', 'wrong-password', self::INERTIA_HEADERS);
+
+        $response->assertStatus(302)->assertRedirect('/login');
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Auth/Login')
+                ->where('errors.email', 'Too many login attempts. Please try again in 60 seconds.'));
 
         $this->assertGuest();
     }

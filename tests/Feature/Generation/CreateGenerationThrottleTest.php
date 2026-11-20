@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Generation;
 
+use App\Domain\Billing\Enums\CreditLedgerEntryType;
 use App\Domain\Generation\Models\Generation;
+use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Tests\Concerns\SubmitsGenerations;
 use Tests\TestCase;
 
@@ -38,6 +42,22 @@ final class CreateGenerationThrottleTest extends TestCase
             ->assertSessionHasErrors(['submission' => "You're submitting too quickly. Try again in 42 s."]);
 
         $this->assertSame(10, Generation::query()->count());
+    }
+
+    /**
+     * AC 15 (PE-015): the refused submission holds nothing and sends nothing to Pixelforge,
+     * whose only caller is the submit job.
+     */
+    public function test_the_eleventh_submission_writes_no_hold_and_pushes_no_submit_job(): void
+    {
+        $user = User::factory()->create();
+        $this->givenSubmissions(10, $user);
+
+        $this->submitGeneration(as: $user)->assertSessionHasErrors('submission');
+
+        $this->assertSame(10, DB::table('credit_ledger_entries')->where('type', CreditLedgerEntryType::Hold->value)->count());
+        $this->assertSame(10, DB::table('credit_ledger_entries')->count());
+        Queue::assertPushed(SubmitGenerationJob::class, 10);
     }
 
     public function test_submissions_work_again_once_the_minute_has_passed(): void
