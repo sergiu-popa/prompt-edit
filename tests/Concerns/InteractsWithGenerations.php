@@ -37,6 +37,16 @@ trait InteractsWithGenerations
     protected const string LIGHTHOUSE_PROMPT = 'A lighthouse on a cliff at dawn, oil painting';
 
     /**
+     * PE-014's worked example: 19 code points, so e = 5 and the text bounds are 4 to 6.
+     */
+    protected const string RED_FOX_PROMPT = '[succeed] a red fox';
+
+    /**
+     * The red fox's hold: ceil(17,480,000 × 125 / 100) n$.
+     */
+    protected const int RED_FOX_HOLD = 21_850_000;
+
+    /**
      * The submit job is held back, so the row stays pending with its hold, as
      * a test of anything after creation expects; on the test's `sync` queue
      * it would otherwise run inline. Tests of the dispatch itself call
@@ -71,6 +81,18 @@ trait InteractsWithGenerations
     protected function givenTheLighthouseGeneration(): Generation
     {
         return $this->createGenerationFor(User::factory()->create(), self::lighthouseRequest());
+    }
+
+    /**
+     * PE-014's worked example, created through the action for a new user: low,
+     * 1024x1024 and no references, holding 21,850,000 n$.
+     */
+    protected function givenTheRedFoxGeneration(): Generation
+    {
+        return $this->createGenerationFor(
+            User::factory()->create(),
+            new NewGenerationData(self::RED_FOX_PROMPT, ImageSize::Square, ImageQuality::Low, []),
+        );
     }
 
     /**
@@ -118,6 +140,21 @@ trait InteractsWithGenerations
         return array_filter(
             $this->rawGenerationRow($generation),
             fn (string $column): bool => ! str_starts_with($column, 'submit_') || $column === 'submission_token',
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
+    /**
+     * The raw row without the submit job's and the reconciler's own record (D-45,
+     * PE-014): equal when nothing Pixelforge said, and no money, changed.
+     *
+     * @return array<string, mixed>
+     */
+    protected function rawGenerationRowWithoutBookkeeping(Generation $generation): array
+    {
+        return array_filter(
+            $this->rawGenerationRowWithoutSubmitBookkeeping($generation),
+            fn (string $column): bool => ! str_starts_with($column, 'reconcile_'),
             ARRAY_FILTER_USE_KEY,
         );
     }

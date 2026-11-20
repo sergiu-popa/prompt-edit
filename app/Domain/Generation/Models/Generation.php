@@ -128,8 +128,29 @@ final class Generation extends Model
      */
     public function recordSubmitBookkeeping(SubmitBookkeeping $bookkeeping): void
     {
-        $columns = $bookkeeping->toAttributes();
+        $this->writeColumnsOnly($bookkeeping->toAttributes());
+    }
 
+    /**
+     * Writes the reconciler's own record in one UPDATE of those `reconcile_*`
+     * columns alone, like the submit bookkeeping: never status, costs, the
+     * ledger or `updated_at`, so it never reads as news from Pixelforge.
+     *
+     * @param  array{reconcile_recheck_at?: ?CarbonImmutable}  $columns
+     */
+    public function recordReconcileBookkeeping(array $columns): void
+    {
+        $this->writeColumnsOnly($columns);
+    }
+
+    /**
+     * Through the casts and the offset-carrying date format; only the columns that
+     * changed are written.
+     *
+     * @param  array<string, mixed>  $columns
+     */
+    private function writeColumnsOnly(array $columns): void
+    {
         $this->forceFill($columns);
         $changed = array_intersect_key($this->getDirty(), $columns);
 
