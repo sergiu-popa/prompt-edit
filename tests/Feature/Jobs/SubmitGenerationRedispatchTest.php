@@ -120,6 +120,27 @@ final class SubmitGenerationRedispatchTest extends TestCase
     }
 
     /**
+     * The owed run never weakens PE-013's latch: a latched row's "nothing created"
+     * answer past the window leaves it pending with its hold, handed over, because an
+     * earlier attempt may have created it.
+     */
+    public function test_a_latched_row_whose_owed_run_is_overloaded_stays_handed_over_with_its_hold(): void
+    {
+        $lighthouse = $this->givenTheHandedOverLighthouse(fn (): PromiseInterface => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2']));
+
+        $job = $this->runSubmitJob($lighthouse, CarbonImmutable::now());
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertCount(2, $this->recordedCreateRequests());
+        $this->assertFalse($this->wasReleased($job));
+        $this->assertSame(GenerationStatus::Pending, $row->status);
+        $this->assertSame(SubmitAttemptOutcome::Overloaded, $row->submit_last_outcome);
+        $this->assertNotNull($row->submit_handed_over_at);
+        $this->assertNull($row->local_failure_reason);
+        $this->assertSame([['hold', -self::LIGHTHOUSE_HOLD]], $this->ledgerEntriesFor($lighthouse));
+    }
+
+    /**
      * The owed run is one run: the same job, or a duplicate of it, run again sends
      * nothing.
      */
@@ -134,6 +155,29 @@ final class SubmitGenerationRedispatchTest extends TestCase
 
         $this->assertCount(2, $this->recordedCreateRequests());
         $this->assertFalse($this->wasReleased($job));
+    }
+
+    /**
+     * D-52: two runs of the reconciler re-dispatch the row a minute apart, and a busy
+     * worker runs both jobs only afterwards. The first is the owed run; the second
+     * finds an attempt since its own instant and sends nothing.
+     */
+    public function test_two_redispatches_queued_before_either_runs_send_one_create(): void
+    {
+        $lighthouse = $this->givenTheHandedOverLighthouse();
+        $firstRedispatchedAt = CarbonImmutable::now();
+        $this->travel(1)->minutes();
+        $secondRedispatchedAt = CarbonImmutable::now();
+        $this->travel(30)->seconds();
+
+        $this->runSubmitJob($lighthouse, $firstRedispatchedAt);
+        $second = $this->runSubmitJob($lighthouse, $secondRedispatchedAt);
+
+        $this->assertCount(2, $this->recordedCreateRequests());
+        $this->assertFalse($this->wasReleased($second));
+        $this->assertSame(GenerationStatus::Pending, $this->reloadedGeneration($lighthouse)->status);
+        $this->assertNotNull($this->reloadedGeneration($lighthouse)->submit_handed_over_at);
+        $this->assertSame([['hold', -self::LIGHTHOUSE_HOLD]], $this->ledgerEntriesFor($lighthouse));
     }
 
     public function test_an_ordinary_job_past_its_window_still_stops_without_sending(): void
