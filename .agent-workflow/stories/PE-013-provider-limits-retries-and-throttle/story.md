@@ -4,7 +4,7 @@
 Provider limits, overloads and outages: bounded retries, free failures and a shared rate budget
 
 ## Status
-`qa-passed`
+`done`
 
 ## Description
 Pixelforge allows each account 60 requests per minute, 3 generations queued or processing at once, and 500 generations per UTC day. It sheds load with `503 overloaded`, and the network between us can fail. PE-009 handles the definitive rejections (400, 409, 422). This story covers everything else in the requirements §4 matrix on the submit path. Each generation ends one of two ways: Pixelforge creates it exactly once, or it fails, costs nothing and shows a clear reason. It is never stuck without explanation and never billed twice.
