@@ -2,24 +2,34 @@
 import { computed, ref, useId } from 'vue';
 
 import AmountRange from '@/components/estimate/AmountRange.vue';
+import ResultImage from '@/components/history/ResultImage.vue';
 import Badge from '@/components/ui/Badge.vue';
+import MoneyAmount from '@/components/ui/MoneyAmount.vue';
 import { countCodePoints } from '@/lib/counting';
 import { describeImage } from '@/lib/imageOptions';
-import { formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
+import { elapsedSeconds, isImageExpired } from '@/lib/generationTiming';
+import { formatClockTime, formatElapsed, formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
 import type { Generation, GenerationStatus } from '@/types/generation';
 
 /**
  * One generation on History: its status, the prompt (clamped to two lines), what was
- * asked for, the estimate the user saw and when. From `sm` the badge has its own
- * column and the time sits on the right; on a phone both share the first line. It owns
- * its row's padding, so the highlight fills the row; inside a list's rounded card, the
- * first and last rows round their corners to match.
+ * asked for, the estimate the user saw and when; once it succeeded, its image (or, from
+ * its expiry on the server's clock, a placeholder), what it was actually charged and
+ * when it completed; once it failed, that it was free and the server's one message
+ * saying why, rendered as text. Every time is read on `now`, the server-aligned clock
+ * History ticks, so a processing badge counts up live. From `sm` the badge has its own
+ * column, with the image under it, and the time sits on the right; on a phone the image
+ * comes first, then the badge and time share a line. It owns its row's padding, so the
+ * highlight fills the row; inside a list's rounded card, the first and last rows round
+ * their corners to match.
  */
 const props = withDefaults(
     defineProps<{
         generation: Generation;
         /** The generation just submitted: an accent bar, a tint and a "Just submitted" tag. */
         highlighted?: boolean;
+        /** The server's "now" in epoch ms (useServerClock). */
+        now: number;
     }>(),
     { highlighted: false },
 );
@@ -52,22 +62,55 @@ const references = computed(() => {
     return count === 1 ? '1 reference' : `${count} references`;
 });
 
-/** Read once, when the item renders; History shows a snapshot until PE-012's live updates. */
-const createdAgo = computed(() => formatRelativeTime(props.generation.created_at, new Date()));
+/** "Processing · 14 s" while it runs, else the server's label. */
+const statusText = computed(() => {
+    const { status, status_label: label, started_at: startedAt } = props.generation;
+
+    if (status !== 'processing' || startedAt === null) {
+        return label;
+    }
+
+    return `${label} · ${formatElapsed(elapsedSeconds(startedAt, props.now))}`;
+});
+
+const createdAgo = computed(() => formatRelativeTime(props.generation.created_at, new Date(props.now)));
 const createdExactly = computed(() => formatExactTimestamp(props.generation.created_at));
+
+const isSucceeded = computed(() => props.generation.status === 'succeeded');
+const isFailed = computed(() => props.generation.status === 'failed');
+
+/** The server's flag, or its clock passing the expiry while the page is open (D-42). */
+const isExpired = computed(
+    () => isSucceeded.value && (props.generation.image_expired || isImageExpired(props.generation.image_url_expires_at, props.now)),
+);
+
+/** What the user paid; the server sends it for a succeeded generation only. */
+const charge = computed(() => (isSucceeded.value ? props.generation.user_charge_nanodollars : null));
+
+const completedAt = computed(() => (isSucceeded.value ? props.generation.completed_at : null));
+const completedClock = computed(() => (completedAt.value === null ? '' : formatClockTime(completedAt.value, new Date(props.now))));
+const completedExactly = computed(() => (completedAt.value === null ? '' : formatExactTimestamp(completedAt.value)));
 </script>
 
 <template>
     <div
         :data-highlighted="highlighted ? 'true' : undefined"
         :class="[
-            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[calc(var(--radius-xl)-1px)] group-last:rounded-b-[calc(var(--radius-xl)-1px)] sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:px-5',
+            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[calc(var(--radius-xl)-1px)] group-last:rounded-b-[calc(var(--radius-xl)-1px)] sm:grid sm:grid-cols-[8.5rem_minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] sm:items-start sm:gap-x-4 sm:px-5',
             highlighted && 'bg-sky-50/70 shadow-[inset_4px_0_0_var(--color-sky-600)]',
         ]"
     >
+        <ResultImage
+            v-if="isSucceeded"
+            :src="isExpired ? null : generation.image_url"
+            :alt="generation.prompt"
+            :expired="isExpired"
+            class="mb-1 sm:col-start-1 sm:row-start-2 sm:mb-0"
+        />
+
         <div class="flex items-center justify-between gap-3 sm:contents">
-            <Badge :tone="STATUS_TONES[generation.status]" class="sm:col-start-1 sm:row-start-1 sm:justify-self-start">{{
-                generation.status_label
+            <Badge :tone="STATUS_TONES[generation.status]" class="tabular-nums sm:col-start-1 sm:row-start-1 sm:justify-self-start">{{
+                statusText
             }}</Badge>
             <div class="flex shrink-0 items-center gap-2 sm:col-start-3 sm:row-start-1 sm:flex-col sm:items-end sm:gap-1">
                 <time :datetime="generation.created_at" :title="createdExactly" class="text-sm whitespace-nowrap text-zinc-500">{{
@@ -77,7 +120,7 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
             </div>
         </div>
 
-        <div class="flex min-w-0 flex-col gap-1 sm:col-start-2 sm:row-start-1">
+        <div class="flex min-w-0 flex-col gap-1 sm:col-start-2 sm:row-span-2 sm:row-start-1">
             <p
                 :id="promptId"
                 data-prompt
@@ -97,9 +140,24 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
                 {{ isExpanded ? 'Show less' : 'Show full prompt' }}
             </button>
             <p data-meta class="text-sm text-zinc-600">{{ describeImage(generation.quality, generation.size) }} · {{ references }}</p>
-            <p data-estimate class="text-sm text-zinc-600">
-                Est.
-                <AmountRange :min="generation.user_estimate_nanodollars.min" :max="generation.user_estimate_nanodollars.max" />
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p v-if="charge !== null" data-charge class="text-sm font-medium text-zinc-900">
+                    Charged
+                    <MoneyAmount :nanodollars="charge" />
+                </p>
+                <p v-else-if="isFailed" data-charge class="text-sm font-medium text-zinc-900">Not charged</p>
+                <p data-estimate class="text-sm text-zinc-600">
+                    Est.
+                    <AmountRange :min="generation.user_estimate_nanodollars.min" :max="generation.user_estimate_nanodollars.max" />
+                </p>
+            </div>
+            <p v-if="completedAt !== null" data-completed class="text-sm text-zinc-600">
+                Completed
+                <time :datetime="completedAt" :title="completedExactly">{{ completedClock }}</time>
+            </p>
+            <p v-if="isExpired" data-image-note class="text-sm text-zinc-600">Images are kept for 24 h after completion.</p>
+            <p v-if="isFailed && generation.failure_message" data-failure-message class="text-sm wrap-break-word text-red-700">
+                {{ generation.failure_message }}
             </p>
         </div>
     </div>

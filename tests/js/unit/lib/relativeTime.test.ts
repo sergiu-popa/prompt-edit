@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
+import { formatClockTime, formatElapsed, formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
 
 const NOW = new Date('2026-11-19T12:00:00Z');
 
@@ -47,5 +47,35 @@ describe('formatExactTimestamp', () => {
 
     it('shows the zone it converted to', () => {
         expect(formatExactTimestamp('2026-11-19T10:15:30Z', 'Europe/Bucharest')).toBe('Nov 19, 2026, 12:15:30 PM GMT+2');
+    });
+});
+
+describe('formatElapsed', () => {
+    it.each<[number, string]>([
+        [0, '0 s'],
+        [14, '14 s'],
+        [119, '119 s'],
+        [120, '2 min'],
+        [2 * HOUR - 1, '119 min'],
+        [2 * HOUR, '2 h'],
+        [30 * HOUR, '30 h'],
+    ])('reads %i s as "%s"', (seconds, expected) => {
+        expect(formatElapsed(seconds)).toBe(expected);
+    });
+});
+
+describe('formatClockTime', () => {
+    it('shows only the time for an instant on the same day as now', () => {
+        expect(formatClockTime('2026-11-19T00:03:00Z', NOW, 'UTC')).toBe('12:03 AM');
+        expect(formatClockTime('2026-11-19T14:03:00Z', NOW, 'UTC')).toBe('2:03 PM');
+    });
+
+    it('adds the date for an instant on another day', () => {
+        expect(formatClockTime('2026-11-12T14:03:00Z', NOW, 'UTC')).toBe('Nov 12, 2026, 2:03 PM');
+        expect(formatClockTime('2026-11-18T23:59:59Z', NOW, 'UTC')).toBe('Nov 18, 2026, 11:59 PM');
+    });
+
+    it("decides the day in the viewer's zone", () => {
+        expect(formatClockTime('2026-11-18T23:30:00Z', NOW, 'Europe/Bucharest')).toBe('1:30 AM');
     });
 });

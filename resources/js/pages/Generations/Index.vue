@@ -1,23 +1,38 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
 
 import HistoryItem from '@/components/history/HistoryItem.vue';
 import HistoryPagination from '@/components/history/HistoryPagination.vue';
+import LiveUpdatesNote from '@/components/history/LiveUpdatesNote.vue';
 import Button from '@/components/ui/Button.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
+import { useLiveUpdates } from '@/composables/useLiveUpdates';
+import { useServerClock } from '@/composables/useServerClock';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { paths } from '@/lib/paths';
-import type { Generation } from '@/types/generation';
-import type { Paginated } from '@/types/pagination';
+import type { GenerationHistory, GenerationStatus } from '@/types/generation';
 
-defineProps<{
-    generations: Paginated<Generation>;
+const props = defineProps<{
+    generations: GenerationHistory;
 }>();
 
-/** Flashed by the submit's redirect only, so a reload or Back never highlights it again. */
-const page = usePage();
-const highlightedId = computed(() => page.flash.highlighted_generation_id);
+/** The server's clock, re-aligned on every fresh response (not a Back), for elapsed and relative times. */
+const now = useServerClock(() => props.generations.server_time);
+
+const IN_PROGRESS: readonly GenerationStatus[] = ['pending', 'queued', 'processing'];
+
+/**
+ * Flashed by the submit's redirect only, so a reload or Back never highlights it again.
+ * It is read once, because a live update's partial reload replaces the flash with an
+ * empty one; a reload or a pagination click mounts the page anew.
+ */
+const highlightedId = usePage().flash.highlighted_generation_id;
+
+/** Polls our own server, never Pixelforge, while anything shown is in progress (D-11, D-41). */
+const { isPaused } = useLiveUpdates({
+    only: ['generations'],
+    active: () => props.generations.data.some((generation) => IN_PROGRESS.includes(generation.status)),
+});
 </script>
 
 <template>
@@ -33,7 +48,7 @@ const highlightedId = computed(() => page.flash.highlighted_generation_id);
 
             <ul v-if="generations.data.length > 0" class="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white shadow-xs">
                 <li v-for="generation in generations.data" :key="generation.id" class="group">
-                    <HistoryItem :generation="generation" :highlighted="generation.id === highlightedId" />
+                    <HistoryItem :generation="generation" :highlighted="generation.id === highlightedId" :now="now" />
                 </li>
             </ul>
 
@@ -61,5 +76,7 @@ const highlightedId = computed(() => page.flash.highlighted_generation_id);
 
             <HistoryPagination v-if="generations.meta.last_page > 1" :meta="generations.meta" :links="generations.links" />
         </div>
+
+        <LiveUpdatesNote :paused="isPaused" />
     </AppLayout>
 </template>

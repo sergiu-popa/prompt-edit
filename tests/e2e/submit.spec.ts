@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { registerNewUser } from './support/auth';
+import { expectNoReload, historyItems, LOCAL_FAILURE_TIMEOUT_MS, markNoReload, statusOf } from './support/liveStatus';
 
 const LIGHTHOUSE_PROMPT = 'A lighthouse on a cliff at dawn, oil painting';
 
@@ -13,14 +14,6 @@ function generateButton(page: Page): Locator {
     return page.getByRole('button', { name: 'Generate', exact: true });
 }
 
-function historyItems(page: Page): Locator {
-    return page.getByRole('main').getByRole('listitem');
-}
-
-function statusOf(item: Locator): Locator {
-    return item.locator('[data-tone]').first();
-}
-
 async function fillLighthouse(page: Page): Promise<void> {
     await page.getByLabel('Prompt').fill(LIGHTHOUSE_PROMPT);
     await page.locator('label', { hasText: 'High' }).click();
@@ -29,14 +22,6 @@ async function fillLighthouse(page: Page): Promise<void> {
     await page.getByLabel('Reference image 1', { exact: true }).fill('https://example.com/style.png');
     // A blank row is left out of both the estimate and the submission (AC 3).
     await page.getByRole('button', { name: 'Add reference image' }).click();
-}
-
-/** Live status arrives in PE-012, so History is reloaded until the badge reads `status`. */
-async function expectStatusAfterReloads(page: Page, item: Locator, status: RegExp): Promise<void> {
-    await expect(async () => {
-        await page.reload();
-        await expect(statusOf(item)).toHaveText(status, { timeout: 1_000 });
-    }).toPass({ timeout: 30_000 });
 }
 
 test('submits Lighthouse at the price it showed and lands on History with it highlighted once', async ({ page }, testInfo) => {
@@ -53,7 +38,7 @@ test('submits Lighthouse at the price it showed and lands on History with it hig
     await expect(item.locator('[data-prompt]')).toHaveText(LIGHTHOUSE_PROMPT);
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.3478 – $0.4572', { useInnerText: true });
     await expect(item.locator('[data-meta]')).toHaveText('High · 1536×1024 · 1 reference');
-    await expect(statusOf(item)).toHaveText(/^(Queued|Processing|Succeeded)$/);
+    await expect(statusOf(item)).toHaveText(/^(Queued|Processing( · \d+ s)?|Succeeded)$/);
 
     await page.reload();
 
@@ -61,7 +46,7 @@ test('submits Lighthouse at the price it showed and lands on History with it hig
     await expect(page.getByText('Just submitted')).toHaveCount(0);
 });
 
-test('shows a [blocked] prompt as Failed on History after a reload', async ({ page }, testInfo) => {
+test('a [blocked] prompt turns Failed live, with the content-policy copy and no charge', async ({ page }, testInfo) => {
     await registerNewUser(page, testInfo);
 
     await page.getByLabel('Prompt').fill('A [blocked] castle');
@@ -72,10 +57,18 @@ test('shows a [blocked] prompt as Failed on History after a reload', async ({ pa
     await generateButton(page).click();
 
     await expect(page).toHaveURL('/generations');
+    await markNoReload(page);
     const item = historyItems(page).first();
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
     await expect(item.locator('[data-meta]')).toHaveText('Medium · 1024×1024 · No references');
-    await expectStatusAfterReloads(page, item, /^Failed$/);
+
+    await expect(statusOf(item)).toHaveText('Failed', { timeout: LOCAL_FAILURE_TIMEOUT_MS });
+    await expect(item.locator('[data-failure-message]')).toHaveText(
+        "Prompt rejected by Pixelforge's content policy. Edit the prompt and try again.",
+    );
+    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
+    await expectNoReload(page);
 });
 
 test('a double click creates one generation, and coming back for another creates a second', async ({ page }, testInfo) => {

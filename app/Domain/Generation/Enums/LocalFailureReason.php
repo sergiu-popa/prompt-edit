@@ -6,9 +6,9 @@ namespace App\Domain\Generation\Enums;
 
 /**
  * Why a generation failed here, without a terminal status from Pixelforge.
- * Only ever recorded while Pixelforge has created nothing for it. PE-012's
- * failure copy maps from this enum as its single source; PE-013 and PE-014
- * append to it.
+ * Only ever recorded while Pixelforge has created nothing for it. Each value
+ * is also a GenerationFailureCode case, which holds its copy for History; a
+ * reason added here (PE-013, PE-014) gets its case and copy there too.
  */
 enum LocalFailureReason: string
 {
