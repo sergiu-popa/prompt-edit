@@ -167,6 +167,19 @@ final class LiveSmokeGuardTest extends TestCase
         $this->assertSame([], $included);
     }
 
+    /**
+     * `docker exec` passes no host variable into the container, so the guard
+     * only sees the host's `CI` when the target forwards it.
+     */
+    public function test_the_make_target_forwards_ci_into_the_container(): void
+    {
+        $makefile = (string) file_get_contents(base_path('Makefile'));
+
+        preg_match('/^live-smoke:\n\t@?(?<recipe>[^\n]+)/m', $makefile, $matches);
+
+        $this->assertMatchesRegularExpression('/^docker exec -e CI prompt-edit-app php artisan test .*--group=live/', $matches['recipe'] ?? '');
+    }
+
     public function test_the_live_smoke_carries_the_live_group_on_the_class(): void
     {
         $groups = array_map(
