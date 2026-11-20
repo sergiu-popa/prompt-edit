@@ -74,3 +74,39 @@ The constant-field check: the report's props carry no constant field. `limits.ma
 - S4: no action, as the review says.
 
 Checks: `lint` and `stan` clean; `test` 1,819 passed with `PIXELFORGE_FAKE_WEBHOOK_URL=http://app:8080` (without it, the same 34 lane-only `tests/Feature/Pixelforge/Fake` failures as in the review); `js-check` clean; `js-test` 528 passed; `e2e "operator sees"` 2 passed.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole story diff `52e0515..HEAD`, which holds the 22 `[PE-016]` commits `263ca63..50b21b7`. I re-read the round 1 fix commits `1cb6e68`, `228fec0`, `54100b2` and `2064847` line by line. I also read the report action, the DTOs, the controller, the query-builder scopes, the gate, the shared nav prop, the route and the Vue page and components again, checking them against the story's AC 1–16.
+
+Checks run on HEAD (`50b21b7`):
+- `lint` (Pint, 312 files) and `stan` (Larastan, 289 files) are clean.
+- `test`: all 1,819 PHPUnit tests pass (37,511 assertions). I ran it with `PIXELFORGE_FAKE_WEBHOOK_URL=http://app:8080`, for the lane-only reason that round 1 explains.
+- `js-check` (ESLint, Prettier, vue-tsc) is clean. `js-test` passes 528 Vitest tests in 36 files.
+- `e2e "operator sees"`: both `report.spec.ts` runs pass, on desktop and on mobile.
+
+There is no Critical finding and no unchecked Warning.
+
+### Round 1 resolutions
+
+- **W1 is resolved.** `1cb6e68` deletes `ReportRange::isDate()`. Every case it covered now runs through `fromDates()`:
+  - `2026-02-29`, a leading space, a trailing `\n` and `''` are rows of `invalidRanges`;
+  - `test_a_leap_day_is_accepted` proves that `2028-02-29` is listed among the range's dates.
+
+  `tryParse()` is still private, and `ReportRange` has no public method without a production caller.
+- **S1 is done.** `228fec0` makes `DATE_FORMAT` public and documents it. Both `date_format` rules and `before_or_equal` now come from `ReportRange`, and the request's private `today()` is gone. `ShowOperatorReportValidationTest`'s cases pass unchanged, including an end of today at 23:59:59Z under UTC+14 and the future end. They cover the refactor, so it needs no new test.
+- **S2 is done.** `54100b2` puts `vue` first, then a blank line, then the `@/` imports, as `ReportRangeForm.vue` and `Show.vue` do. ESLint and Prettier both accept it.
+- **S3 is done.** `2064847` asserts that To has a `Y-m-d` `max`, then that To's value equals it, so the server's `limits.today` is now the only clock. The story requires "the default range includes today", and this still proves that.
+
+### Commit hygiene
+
+- Each fix is its own commit, and its tests are in the same commit. `1cb6e68` moves the `isDate()` cases into the `fromDates()` tests when it deletes the method.
+- The resolution notes are in their own bookkeeping commit, `50b21b7`.
+- All 22 messages end with the trailer, and all 22 subjects start with `[PE-016]` and are imperative.
+- [x] **W2. `228fec0`'s subject is 73 characters, one over the 72-character limit.** — acknowledged: the only fix is to reword a pushed commit, which the pipeline may not do. The user can reword it when merging, for example to `[PE-016] Take the report request's date format and today from the range`.
+
+### Suggestions (optional, no action needed for APPROVE)
+
+- `ShowOperatorReportRequest.php:86-90` uses `if … elseif` in the `after()` closure. The reviewer guidelines prefer no `else`. One `else` already exists elsewhere in `app/`, and this branch is short and clear, so it is cosmetic. Two guarded blocks, each ending in `return`, would match the "no `else`" style if the file is touched again.
