@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fixturePricing, fixturePricingWith, LIGHTHOUSE_PROMPT } from '../../../support/pricing';
-import { givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
+import { givenCredits, givenSignedInAs, givenVisitsFailWith, givenVisitsStayPending } from '../../support/inertia';
 import { descriptionOf, inputLabelled } from '../../support/form';
 import { visibleText } from '../../support/text';
 
@@ -61,6 +61,15 @@ describe('Generate page', () => {
         expect(wrapper.get('main header p').text()).toBe(
             'Describe the image, choose a size and quality, and see the price before you generate.',
         );
+    });
+
+    it('shows the balance and what running generations reserve above the estimate (AC 4)', () => {
+        givenCredits({ available_nanodollars: 913_687_500, reserved_nanodollars: 86_312_500, running_generations: 1 });
+
+        const line = mountPage().get('aside > [data-credit-balance]');
+
+        expect(visibleText(line)).toBe('Available $0.9137 · $0.0863 reserved for 1 running generation');
+        expect(line.element.nextElementSibling?.querySelector('[data-headline]')).not.toBeNull();
     });
 
     it("starts from Pixelforge's defaults and estimates them at once", () => {
