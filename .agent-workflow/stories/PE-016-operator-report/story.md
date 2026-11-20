@@ -4,7 +4,7 @@
 Operator report: credit spend, provider cost and profit per day and per user
 
 ## Status
-`qa-ready`
+`qa-passed`
 
 ## Description
 This is stretch (a), part one. An operator needs to know whether the business makes money. The report shows what users were charged, what Pixelforge cost us and the profit, per UTC day and per user, exact to the nanodollar.
