@@ -56,9 +56,9 @@ return [
     'rate_limit_per_minute' => filter_var(env('PIXELFORGE_RATE_LIMIT_PER_MINUTE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 50]]),
 
     /**
-     * The cache store that counts the budget and holds each generation's create
-     * lock (D-53): one every process shares (D-20), pinned here, whatever
-     * CACHE_STORE says.
+     * The cache store that counts the budget, holds each generation's create
+     * lock (D-53) and the reconciler's heartbeat (D-59): one every process
+     * shares (D-20), pinned here, whatever CACHE_STORE says.
      */
     'rate_limit_store' => 'database',
 

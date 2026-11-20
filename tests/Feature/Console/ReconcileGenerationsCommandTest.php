@@ -7,6 +7,7 @@ namespace Tests\Feature\Console;
 use App\Console\Commands\ReconcileGenerationsCommand;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
+use App\Support\Health\ReconcilerHeartbeat;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Console\Scheduling\CacheEventMutex;
@@ -14,16 +15,18 @@ use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\PendingCommand;
+use RuntimeException;
 use Tests\Concerns\InteractsWithGenerations;
 use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\Concerns\InteractsWithPixelforgeApi;
 use Tests\TestCase;
 
 /**
- * `app:reconcile-generations` runs the reconciler, and the schedule runs it every
- * minute on one server without overlapping (D-54).
+ * `app:reconcile-generations` runs the reconciler and records each completed run
+ * (D-59), and the schedule runs it every minute on one server without overlapping (D-54).
  */
 final class ReconcileGenerationsCommandTest extends TestCase
 {
@@ -68,6 +71,53 @@ final class ReconcileGenerationsCommandTest extends TestCase
         $this->assertSame(GenerationStatus::Succeeded, $this->reloadedGeneration($settling)->status);
     }
 
+    public function test_a_completed_run_records_now_in_whole_seconds(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T15:04:14.750Z'));
+
+        $this->reconcile()->assertSuccessful();
+
+        $this->assertEquals(CarbonImmutable::parse('2026-11-20T15:04:14Z'), $this->heartbeat()->lastSuccessfulRunAt());
+    }
+
+    public function test_a_run_where_one_generation_throws_still_counts(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T15:04:14Z'));
+        $generation = Generation::factory()->processing()->create(['last_provider_update_at' => CarbonImmutable::now()->subMinutes(5)]);
+        Http::fake(['*' => self::pixelforgeRetrieved(self::generationObjectFor($generation, GenerationStatus::Succeeded, ['rates' => ['input_text_tokens' => '5.0005']]))]);
+
+        $this->reconcile()->assertSuccessful();
+
+        $this->assertSame(GenerationStatus::Processing, $this->reloadedGeneration($generation)->status);
+        $this->assertEquals(CarbonImmutable::now(), $this->heartbeat()->lastSuccessfulRunAt());
+    }
+
+    /**
+     * The action itself throwing, here on its first query, records nothing, and
+     * the last completed run's instant stays.
+     */
+    public function test_a_run_whose_action_throws_records_nothing(): void
+    {
+        $earlier = CarbonImmutable::parse('2026-11-20T15:00:00Z');
+        $this->heartbeat()->recordSuccessfulRun($earlier);
+        $this->travelTo($earlier->addMinutes(4));
+
+        DB::connection()->beforeExecuting(function (string $query): void {
+            if (str_contains($query, '"generations"')) {
+                throw new RuntimeException('The generations table is unavailable.');
+            }
+        });
+
+        try {
+            $this->reconcile()->run();
+            $this->fail('The run did not throw.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The generations table is unavailable.', $exception->getMessage());
+        }
+
+        $this->assertEquals($earlier, $this->heartbeat()->lastSuccessfulRunAt());
+    }
+
     /**
      * AC 4: the suite runs with production's frequency, so this is the production entry.
      */
@@ -100,6 +150,11 @@ final class ReconcileGenerationsCommandTest extends TestCase
             $this->assertSame('* * * * *', $event->expression);
             $this->assertFalse($event->isRepeatable(), sprintf('%d s repeats.', $seconds));
         }
+    }
+
+    private function heartbeat(): ReconcilerHeartbeat
+    {
+        return $this->app->make(ReconcilerHeartbeat::class);
     }
 
     private function reconcile(): PendingCommand
