@@ -21,7 +21,10 @@ final readonly class ReportRange
 
     public const int DEFAULT_DAYS = 30;
 
-    private const string DATE_FORMAT = 'Y-m-d';
+    /**
+     * The `/v1/usage` date format, also what the report's request validates.
+     */
+    public const string DATE_FORMAT = 'Y-m-d';
 
     private const int SECONDS_PER_DAY = 86_400;
 

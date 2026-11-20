@@ -41,8 +41,8 @@ final class ShowOperatorReportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'start_date' => ['bail', 'nullable', 'required_with:end_date', 'string', 'date_format:Y-m-d'],
-            'end_date' => ['bail', 'nullable', 'required_with:start_date', 'string', 'date_format:Y-m-d', 'before_or_equal:' . self::today()],
+            'start_date' => ['bail', 'nullable', 'required_with:end_date', 'string', 'date_format:' . ReportRange::DATE_FORMAT],
+            'end_date' => ['bail', 'nullable', 'required_with:start_date', 'string', 'date_format:' . ReportRange::DATE_FORMAT, 'before_or_equal:' . ReportRange::limitsFor(CarbonImmutable::now())['today']],
         ];
     }
 
@@ -105,10 +105,5 @@ final class ShowOperatorReportRequest extends FormRequest
         return $startDate !== null && $endDate !== null
             ? ReportRange::fromDates($startDate, $endDate)
             : ReportRange::defaultFor(CarbonImmutable::now());
-    }
-
-    private static function today(): string
-    {
-        return CarbonImmutable::now()->utc()->format('Y-m-d');
     }
 }
