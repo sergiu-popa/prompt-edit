@@ -146,18 +146,3 @@ RUN mkdir -p storage/framework/cache
 RUN composer run-script post-autoload-dump
 RUN php artisan key:generate
 RUN php artisan app:generate-local-webhook-secret
-
-
-FROM base AS production
-
-COPY --from=production-frontend --chown=www-data:www-data /app/public/build/ /var/www/public/build
-COPY --chown=www-data:www-data .docker/development/conf.d/npm.conf /etc/supervisor/conf.d/
-
-COPY --chown=www-data:www-data .env.example .env
-COPY --chown=www-data:www-data . .
-
-USER www-data
-
-RUN mkdir -p storage/framework/cache storage/framework/views
-RUN chmod 775 -R /var/www/storage/
-RUN php artisan view:cache

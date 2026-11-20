@@ -384,7 +384,7 @@ Required secrets: `GITHUB_TOKEN` (provided by Actions).
 
 ## Project Layout Notes
 
-- `.docker/` — Dockerfile (multi-stage: `development`, `ci`, etc.), entrypoint, Apache/PHP/supervisor config.
+- `.docker/` — Dockerfile (multi-stage: development and ci; production deploys with Deployer), entrypoint, Apache/PHP/supervisor config.
 - `.agent-workflow/` — requirements analysis, story backlog, agent configuration and the prompt log (see *How this is built*).
 - `CLAUDE.md` / `AGENTS.md` — guidelines for AI coding agents; Laravel Boost rules and the Docker command convention.
 - `boost.json` — Laravel Boost configuration.
