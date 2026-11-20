@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Database;
 
+use App\Domain\Billing\Actions\GrantStarterCreditsAction;
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Domain\Reporting\Actions\GrantOperatorAccessAction;
 use App\Models\User;
 use Database\Seeders\DemoUserSeeder;
@@ -13,11 +15,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 use Tests\Concerns\InteractsWithAuthentication;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\TestCase;
 
 final class OperatorUserSeederTest extends TestCase
 {
     use InteractsWithAuthentication;
+    use InteractsWithCreditLedger;
     use RefreshDatabase;
 
     public function test_seeding_twice_leaves_one_operator_who_can_sign_in(): void
@@ -64,12 +68,33 @@ final class OperatorUserSeederTest extends TestCase
         $this->app['env'] = 'production';
 
         try {
-            (new OperatorUserSeeder)->run(new GrantOperatorAccessAction);
+            (new OperatorUserSeeder)->run(new GrantOperatorAccessAction, $this->app->make(GrantStarterCreditsAction::class));
             $this->fail('The operator seeder ran in production.');
         } catch (RuntimeException $exception) {
             $this->assertSame('The local operator is local-only and is never seeded in production.', $exception->getMessage());
         }
 
         $this->assertSame(0, User::query()->count());
+        $this->assertSame(0, CreditLedgerEntry::query()->count());
+    }
+
+    /**
+     * AC 2: the seeded operator has exactly one starter grant, however often it is seeded.
+     */
+    public function test_seeding_twice_leaves_one_starter_grant(): void
+    {
+        $this->seed(OperatorUserSeeder::class);
+        $this->seed(OperatorUserSeeder::class);
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->sole()));
+    }
+
+    public function test_reseeding_grants_an_operator_from_before_balances(): void
+    {
+        $legacy = User::factory()->withoutCredits()->create(['email' => OperatorUserSeeder::EMAIL]);
+
+        $this->seed(OperatorUserSeeder::class);
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor($legacy));
     }
 }
