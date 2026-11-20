@@ -41,7 +41,8 @@ final class HandleInertiaRequests extends Middleware
             ],
             /*
              * The operator's extra nav links (D-63): the Report link for whoever passes its
-             * gate, and `[]` for everyone else, so a non-operator never learns the URL.
+             * gate, and `[]` for everyone else, so a non-operator is never shown the link. The
+             * gate, not the URL, protects the report: `paths.ts` ships it in every bundle.
              */
             'operator_navigation' => fn (): array => $request->user()?->can(ShowOperatorReportController::ABILITY) === true
                 ? [['label' => 'Report', 'href' => route('report', absolute: false)]]
