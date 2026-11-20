@@ -36,6 +36,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_FAKE_IMAGE_TTL_SECONDS',
         'PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS',
         'PIXELFORGE_FAKE_CHAOS_PERCENT',
+        'PIXELFORGE_FAKE_DROP_WEBHOOKS',
     ];
 
     /**
@@ -348,6 +349,33 @@ final class PixelforgeConfigTest extends TestCase
             'negative' => ['-1'],
             'a fraction' => ['2.5'],
             'a word' => ['abc'],
+        ];
+    }
+
+    public function test_webhooks_are_never_dropped_by_default(): void
+    {
+        $this->assertFalse($this->fakeConfigWith(['PIXELFORGE_FAKE_DROP_WEBHOOKS' => ''])['drop_webhooks']);
+        $this->assertFalse(config('pixelforge.fake.drop_webhooks'));
+    }
+
+    #[DataProvider('dropWebhooksValues')]
+    public function test_the_drop_switch_is_a_boolean(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, $this->fakeConfigWith(['PIXELFORGE_FAKE_DROP_WEBHOOKS' => $value])['drop_webhooks']);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function dropWebhooksValues(): array
+    {
+        return [
+            'the word true' => ['true', true],
+            'one' => ['1', true],
+            'the word on' => ['on', true],
+            'the word false' => ['false', false],
+            'zero' => ['0', false],
+            'any other word' => ['abc', false],
         ];
     }
 

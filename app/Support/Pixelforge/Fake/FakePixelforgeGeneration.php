@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $processing_seconds
  * @property int $image_ttl_seconds
  * @property bool $duplicates_webhooks
+ * @property bool $drops_webhooks
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  */
@@ -43,6 +44,7 @@ use Illuminate\Database\Eloquent\Model;
     'processing_seconds',
     'image_ttl_seconds',
     'duplicates_webhooks',
+    'drops_webhooks',
 ])]
 final class FakePixelforgeGeneration extends Model
 {
@@ -108,6 +110,7 @@ final class FakePixelforgeGeneration extends Model
             'processing_seconds' => 'integer',
             'image_ttl_seconds' => 'integer',
             'duplicates_webhooks' => 'boolean',
+            'drops_webhooks' => 'boolean',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

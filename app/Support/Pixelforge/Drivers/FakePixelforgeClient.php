@@ -65,6 +65,8 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         private int $imageTtlSeconds,
         #[Config('pixelforge.fake.expire_ttl_seconds')]
         private int $expireTtlSeconds,
+        #[Config('pixelforge.fake.drop_webhooks')]
+        private bool $dropsWebhooks,
     ) {}
 
     /**
@@ -110,6 +112,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
             'processing_seconds' => $keywords->slow ? $this->slowProcessingSeconds : $this->processingSeconds,
             'image_ttl_seconds' => $keywords->expire ? $this->expireTtlSeconds : $this->imageTtlSeconds,
             'duplicates_webhooks' => $keywords->duplicate || $this->chaos->duplicatesWebhooks(),
+            'drops_webhooks' => $keywords->noWebhooks || $this->dropsWebhooks,
         ]);
 
         if ($generation->wasRecentlyCreated) {

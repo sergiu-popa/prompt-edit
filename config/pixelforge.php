@@ -140,6 +140,13 @@ return [
         'expire_ttl_seconds' => filter_var(env('PIXELFORGE_FAKE_EXPIRE_TTL_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
 
         /**
+         * Drops the webhooks of every generation created while it is on, so the
+         * reconciler is the only signal (D-55). For manual local testing only:
+         * E2E uses the per-prompt `[no-webhooks]`. Off by default.
+         */
+        'drop_webhooks' => filter_var(env('PIXELFORGE_FAKE_DROP_WEBHOOKS'), FILTER_VALIDATE_BOOLEAN, ['options' => ['default' => false]]),
+
+        /**
          * Unprompted chaos, as the real API has it: the percent of creates
          * answered 503, of generations that fail with `internal_error`, and
          * of generations whose webhooks all arrive twice. Off by default; one

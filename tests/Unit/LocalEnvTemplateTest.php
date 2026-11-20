@@ -83,6 +83,15 @@ final class LocalEnvTemplateTest extends TestCase
     }
 
     /**
+     * The global drop switch is for manual testing only: E2E runs fully parallel on
+     * shared containers and uses `[no-webhooks]` instead (D-55).
+     */
+    public function test_the_fake_drops_no_webhooks_by_default(): void
+    {
+        $this->assertSame('', self::template()['PIXELFORGE_FAKE_DROP_WEBHOOKS'] ?? null);
+    }
+
+    /**
      * @return array<string, string|null>
      */
     private static function template(): array

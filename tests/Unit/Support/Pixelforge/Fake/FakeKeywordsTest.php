@@ -23,6 +23,7 @@ final class FakeKeywordsTest extends TestCase
         'slow' => '[slow]',
         'duplicate' => '[duplicate]',
         'expire' => '[expire]',
+        'noWebhooks' => '[no-webhooks]',
     ];
 
     #[DataProvider('placements')]
@@ -47,7 +48,7 @@ final class FakeKeywordsTest extends TestCase
             $cases["{$property} in the middle"] = [$property, "a {$keyword} lighthouse"];
             $cases["{$property} at the end"] = [$property, "a lighthouse {$keyword}"];
             $cases["{$property} in upper case"] = [$property, 'a ' . strtoupper($keyword) . ' lighthouse'];
-            $cases["{$property} in mixed case"] = [$property, 'a [' . ucfirst($property) . '] lighthouse'];
+            $cases["{$property} in mixed case"] = [$property, 'a [' . ucfirst(substr($keyword, 1)) . ' lighthouse'];
         }
 
         return $cases;
@@ -75,6 +76,7 @@ final class FakeKeywordsTest extends TestCase
             'spaces inside the brackets' => ['a [ blocked ] [ fail ] lighthouse'],
             'no brackets' => ['a blocked, overloaded, fail lighthouse'],
             'a longer word' => ['a [blockedx] [failure] [slower] lighthouse'],
+            'no hyphen or a space' => ['a [nowebhooks] [no webhooks] [no_webhooks] lighthouse'],
             'fullwidth brackets' => ['a ［blocked］ ［fail］ lighthouse'],
             'an emoji prompt' => ['🎨 a lighthouse 🎨'],
             'empty' => [''],
@@ -121,7 +123,7 @@ final class FakeKeywordsTest extends TestCase
             'fail before succeed' => ['a [succeed][fail] lighthouse', FakeGenerationOutcome::GenerationFailed],
             'none' => ['a lighthouse', null],
             'a rejection alone decides no outcome' => ['a [blocked] lighthouse', null],
-            'a modifier decides no outcome' => ['a [slow] [duplicate] [expire] lighthouse', null],
+            'a modifier decides no outcome' => ['a [slow] [duplicate] [expire] [no-webhooks] lighthouse', null],
         ];
     }
 }
