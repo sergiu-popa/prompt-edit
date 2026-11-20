@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { visibleText } from '../../support/text';
 
 import HistoryItem from '@/components/history/HistoryItem.vue';
+import ResultImage from '@/components/history/ResultImage.vue';
 import { formatExactTimestamp } from '@/lib/relativeTime';
 import type { Generation, GenerationStatus } from '@/types/generation';
 
@@ -32,6 +33,20 @@ const NOW_MS = Date.parse('2026-11-19T12:00:00Z');
 function mountItem(changes: Partial<Generation> = {}, highlighted = false, now = NOW_MS): VueWrapper {
     return mount(HistoryItem, { props: { generation: { ...LIGHTHOUSE, ...changes }, highlighted, now } });
 }
+
+const IMAGE_URL = 'https://pixelforge.promptedit.dev/images/gen_01.png?expires=1763596799&signature=test';
+
+/** The docs' Lighthouse, succeeded: charged 381,887,500 n$. */
+const SUCCEEDED: Partial<Generation> = {
+    status: 'succeeded',
+    status_label: 'Succeeded',
+    started_at: '2026-11-19T11:59:42Z',
+    completed_at: '2026-11-19T11:59:59Z',
+    user_charge_nanodollars: 381_887_500,
+    image_url: IMAGE_URL,
+    image_url_expires_at: '2026-11-20T11:59:59Z',
+    image_expired: false,
+};
 
 function badge(wrapper: VueWrapper) {
     return wrapper.get('[data-tone]');
@@ -107,6 +122,57 @@ describe('HistoryItem', () => {
         expect(visibleText(mountItem({ user_estimate_nanodollars: { min: 58_150_000, max: 58_150_000 } }).get('[data-estimate]'))).toBe(
             'Est. $0.0582',
         );
+    });
+
+    it('shows a succeeded generation charged, beside the estimate it was shown', () => {
+        const wrapper = mountItem(SUCCEEDED);
+
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Charged $0.3819');
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(wrapper.get('[data-charge]').element.parentElement).toBe(wrapper.get('[data-estimate]').element.parentElement);
+    });
+
+    it.each(['hover', 'keyboard focus'] as const)('shows the exact charge on %s', async (how) => {
+        const charge = mountItem(SUCCEEDED).get('[data-charge]');
+        const tip = charge.get<HTMLElement>('[role="tooltip"]');
+
+        expect(tip.text()).toBe('$0.381887500');
+        expect(tip.element.style.display).toBe('none');
+
+        if (how === 'hover') {
+            await charge.get('[data-charge] > span').trigger('pointerenter', { pointerType: 'mouse' });
+        } else {
+            await charge.get('button').trigger('focus');
+        }
+
+        expect(tip.element.style.display).toBe('');
+    });
+
+    it('says when it completed, with the exact instant on hover', () => {
+        const completed = mountItem(SUCCEEDED).get('[data-completed]');
+        const time = completed.get('time');
+
+        expect(visibleText(completed)).toMatch(/^Completed \d{1,2}:\d{2}\s[AP]M$/);
+        expect(time.attributes('datetime')).toBe('2026-11-19T11:59:59Z');
+        expect(time.attributes('title')).toBe(formatExactTimestamp('2026-11-19T11:59:59Z'));
+    });
+
+    it('shows the image of a succeeded generation, described by its prompt', () => {
+        const image = mountItem(SUCCEEDED).getComponent(ResultImage);
+
+        expect(image.props()).toStrictEqual({ src: IMAGE_URL, alt: LIGHTHOUSE.prompt });
+    });
+
+    it.each<[GenerationStatus, string]>([
+        ['queued', 'Queued'],
+        ['processing', 'Processing'],
+    ])('shows no charge, completion or image while %s', (status, label) => {
+        const wrapper = mountItem({ status, status_label: label });
+
+        expect(wrapper.find('[data-charge]').exists()).toBe(false);
+        expect(wrapper.find('[data-completed]').exists()).toBe(false);
+        expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
     });
 
     it('clamps the prompt to two lines, with the full prompt on hover', () => {
