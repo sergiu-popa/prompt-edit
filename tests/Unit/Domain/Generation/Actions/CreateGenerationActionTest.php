@@ -371,13 +371,6 @@ final class CreateGenerationActionTest extends TestCase
         Queue::assertPushed(SubmitGenerationJob::class, 1);
     }
 
-    private static function lighthouseSubmittedWith(string $token): NewGenerationData
-    {
-        $request = self::lighthouseRequest();
-
-        return new NewGenerationData($request->prompt, $request->size, $request->quality, $request->referenceImages, $token);
-    }
-
     /**
      * AC 10: a balance equal to the max holds it, down to exactly nothing.
      */
@@ -463,5 +456,12 @@ final class CreateGenerationActionTest extends TestCase
         $this->expectException(InsufficientCreditsException::class);
 
         $this->createGenerationFor($user, self::duskRequest());
+    }
+
+    private static function lighthouseSubmittedWith(string $token): NewGenerationData
+    {
+        $request = self::lighthouseRequest();
+
+        return new NewGenerationData($request->prompt, $request->size, $request->quality, $request->referenceImages, $token);
     }
 }
