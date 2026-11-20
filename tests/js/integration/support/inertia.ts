@@ -1,4 +1,4 @@
-import type { ActiveVisit, FlashData, PendingVisit, VisitOptions } from '@inertiajs/core';
+import type { ActiveVisit, FlashData, HttpResponse, PendingVisit, ReloadOptions, VisitOptions } from '@inertiajs/core';
 import { router } from '@inertiajs/core';
 import { vi } from 'vitest';
 import { reactive } from 'vue';
@@ -40,6 +40,7 @@ export function givenSignedInAs(user: AuthUser): void {
 
 const pendingVisit = {} as PendingVisit;
 const finishedVisit = {} as ActiveVisit;
+const reloadedPage = {} as Parameters<NonNullable<ReloadOptions['onSuccess']>>[0];
 
 /**
  * Every POST starts and never finishes, as while the request is in flight.
@@ -66,4 +67,25 @@ export function givenVisitsFailWith(errors: Record<string, string>) {
 
 export function givenNoErrors(): void {
     page.props.errors = {};
+}
+
+/**
+ * Every partial reload succeeds, as a live update does; the test then passes the new
+ * props with `setProps`, as Inertia would.
+ */
+export function givenReloadsSucceed() {
+    return vi.spyOn(router, 'reload').mockImplementation((options: ReloadOptions = {}) => {
+        options.onSuccess?.(reloadedPage);
+        options.onFinish?.(finishedVisit);
+    });
+}
+
+/**
+ * Every partial reload fails with a 503, and the page keeps the props it had.
+ */
+export function givenReloadsFail() {
+    return vi.spyOn(router, 'reload').mockImplementation((options: ReloadOptions = {}) => {
+        options.onHttpException?.({ status: 503, headers: {}, data: '' } as HttpResponse);
+        options.onFinish?.(finishedVisit);
+    });
 }

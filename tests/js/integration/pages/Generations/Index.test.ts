@@ -1,24 +1,35 @@
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
-import { givenFlash, givenSignedInAs, givenThePageIsAt } from '../../support/inertia';
+import { givenFlash, givenNoFlash, givenReloadsFail, givenReloadsSucceed, givenSignedInAs, givenThePageIsAt } from '../../support/inertia';
 import { visibleText } from '../../support/text';
 
 import Index from '@/pages/Generations/Index.vue';
-import type { Generation, GenerationHistory } from '@/types/generation';
+import type { Generation, GenerationHistory, GenerationStatus } from '@/types/generation';
 
 const BASE = 'http://prompt-edit.localhost/generations';
 
-function generation(id: string, prompt: string): Generation {
+const SERVER_TIME = '2026-11-19T12:00:00.000Z';
+
+const LABELS: Record<GenerationStatus, string> = {
+    pending: 'Queued',
+    queued: 'Queued',
+    processing: 'Processing',
+    succeeded: 'Succeeded',
+    failed: 'Failed',
+};
+
+function generation(id: string, prompt: string, status: GenerationStatus = 'queued'): Generation {
     return {
         id,
         prompt,
         size: '1536x1024',
         quality: 'high',
         reference_image_count: 1,
-        status: 'queued',
-        status_label: 'Queued',
+        status,
+        status_label: LABELS[status],
         user_estimate_nanodollars: { min: 347_750_000, max: 457_150_000 },
         created_at: '2026-11-19T11:57:00Z',
         started_at: null,
@@ -51,7 +62,7 @@ function pageOf(data: Generation[], { page = 1, lastPage = 1, total = data.lengt
             path: BASE,
             links: [],
         },
-        server_time: '2026-11-19T12:00:00.000Z',
+        server_time: SERVER_TIME,
     };
 }
 
@@ -69,10 +80,24 @@ function link(wrapper: VueWrapper, text: string) {
     return found;
 }
 
+function itemTexts(wrapper: VueWrapper): string[] {
+    return wrapper.findAll('main ul > li').map((item) => visibleText(item));
+}
+
+function statusNote(wrapper: VueWrapper) {
+    return wrapper.get('[role="status"]');
+}
+
 describe('History page', () => {
     beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(SERVER_TIME));
         givenSignedInAs({ id: 1, name: 'Ada Lovelace', email: 'ada@example.com' });
         givenThePageIsAt('/generations');
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('titles the document History and headlines the page, with a link to a new image', () => {
@@ -153,5 +178,127 @@ describe('History page', () => {
 
         expect(wrapper.findAll('[data-highlighted="true"]')).toHaveLength(0);
         expect(wrapper.text()).not.toContain('Just submitted');
+    });
+
+    describe('live updates', () => {
+        it('reloads only the generations 3 s after loading while one is in progress', () => {
+            const reload = givenReloadsSucceed();
+            mountPage(pageOf([generation('b', 'Running', 'processing'), generation('a', 'Done', 'succeeded')]));
+
+            vi.advanceTimersByTime(2_999);
+            expect(reload).not.toHaveBeenCalled();
+
+            vi.advanceTimersByTime(1);
+            expect(reload).toHaveBeenCalledOnce();
+            expect(reload.mock.calls[0]?.[0]).toMatchObject({ only: ['generations'] });
+        });
+
+        it.each<GenerationStatus>(['pending', 'queued', 'processing'])('polls while a generation is %s', (status) => {
+            const reload = givenReloadsSucceed();
+            mountPage(pageOf([generation('a', 'Running', status)]));
+
+            vi.advanceTimersByTime(3_000);
+
+            expect(reload).toHaveBeenCalledOnce();
+        });
+
+        it('never polls a page whose generations have all finished', () => {
+            const reload = givenReloadsSucceed();
+            mountPage(pageOf([generation('b', 'Done', 'succeeded'), generation('a', 'Broken', 'failed')]));
+
+            vi.advanceTimersByTime(60_000);
+
+            expect(reload).not.toHaveBeenCalled();
+        });
+
+        it('stops polling once the last one finishes', async () => {
+            const reload = givenReloadsSucceed();
+            const wrapper = mountPage(pageOf([generation('a', 'Running', 'processing')]));
+            vi.advanceTimersByTime(3_000);
+
+            await wrapper.setProps({ generations: pageOf([generation('a', 'Running', 'succeeded')]) });
+            vi.advanceTimersByTime(60_000);
+
+            expect(reload).toHaveBeenCalledOnce();
+        });
+
+        it('keeps every card, and an expanded prompt, when a poll changes a status', async () => {
+            givenReloadsSucceed();
+            const longPrompt = 'A lighthouse '.repeat(10);
+            const wrapper = mountPage(pageOf([generation('b', longPrompt, 'processing'), generation('a', 'Oldest', 'succeeded')]));
+            const rootsBefore = wrapper.findAll('main ul > li > div').map((item) => item.element);
+            await wrapper.get('button[aria-expanded]').trigger('click');
+
+            vi.advanceTimersByTime(3_000);
+            await wrapper.setProps({
+                generations: pageOf([generation('b', longPrompt, 'succeeded'), generation('a', 'Oldest', 'succeeded')]),
+            });
+
+            const rootsAfter = wrapper.findAll('main ul > li > div').map((item) => item.element);
+            expect(rootsAfter).toHaveLength(2);
+            rootsAfter.forEach((root, index) => expect(root).toBe(rootsBefore[index]));
+            expect(wrapper.get('button[aria-expanded]').attributes('aria-expanded')).toBe('true');
+            expect(itemTexts(wrapper)[0]).toContain('Succeeded');
+        });
+
+        it('keeps the just-submitted highlight after a poll clears the flash', async () => {
+            givenReloadsSucceed();
+            givenFlash({ highlighted_generation_id: 'a' });
+            const wrapper = mountPage(pageOf([generation('a', 'Just made', 'queued')]));
+
+            vi.advanceTimersByTime(3_000);
+            givenNoFlash();
+            await wrapper.setProps({ generations: pageOf([generation('a', 'Just made', 'processing')]) });
+
+            expect(wrapper.findAll('[data-highlighted="true"]')).toHaveLength(1);
+            expect(visibleText(wrapper.get('main ul'))).toContain('Just submitted');
+        });
+
+        it('says live updates are paused after a failed poll, and clears it after the next success', async () => {
+            givenReloadsFail();
+            const wrapper = mountPage(pageOf([generation('a', 'Running', 'processing')]));
+
+            expect(visibleText(statusNote(wrapper))).toBe('');
+
+            vi.advanceTimersByTime(3_000);
+            await nextTick();
+
+            expect(visibleText(statusNote(wrapper))).toBe('⟳ Live updates paused — retrying…');
+            expect(itemTexts(wrapper)[0]).toContain('Running');
+
+            vi.restoreAllMocks();
+            const reload = givenReloadsSucceed();
+            vi.advanceTimersByTime(6_000);
+            await nextTick();
+
+            expect(reload).toHaveBeenCalledOnce();
+            expect(visibleText(statusNote(wrapper))).toBe('');
+        });
+
+        it('stops polling and the clock once the page unmounts', () => {
+            const reload = givenReloadsSucceed();
+            const wrapper = mountPage(pageOf([generation('a', 'Running', 'processing')]));
+
+            wrapper.unmount();
+            vi.advanceTimersByTime(60_000);
+
+            expect(reload).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it("times a processing generation on the server's clock, though the browser's is 2 min fast", async () => {
+            givenReloadsSucceed();
+            vi.setSystemTime(Date.parse(SERVER_TIME) + 2 * 60_000);
+            const running = { ...generation('a', 'Running', 'processing'), started_at: '2026-11-19T11:59:46Z' };
+
+            const wrapper = mountPage(pageOf([running]));
+
+            expect(wrapper.get('[data-tone]').text()).toBe('Processing · 14 s');
+
+            vi.advanceTimersByTime(1_000);
+            await nextTick();
+
+            expect(wrapper.get('[data-tone]').text()).toBe('Processing · 15 s');
+        });
     });
 });
