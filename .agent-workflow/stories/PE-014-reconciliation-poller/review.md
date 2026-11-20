@@ -76,3 +76,32 @@ These are optional, and none blocks QA.
 - S3: not changed. The reviewer said no change is needed now. `once()` would need care with tests that change config at runtime.
 
 Checks: `make check` exits 0 (Pint 277 files, Larastan clean, 1,654 PHPUnit tests, ESLint, Prettier and vue-tsc clean, 498 Vitest tests). `make e2e` exits 0 (42 passed, 2 skipped).
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope reviewed: the whole story diff (`origin/main...HEAD`, the 31 `[PE-014]` commits `3ae57c6..941a423`), with a close look at the seven round 1 commits `a9649f3..941a423` against the Round 1 findings.
+
+Checks run on HEAD (`941a423`):
+- `make check` exits 0. Pint (277 files) and Larastan are clean. PHPUnit runs 1,654 tests (36,709 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 498 tests in 31 files, all passing.
+- `make e2e` exits 0, with 42 passed and 2 skipped (the existing touch-only and mouse-only rows of `generate.spec.ts`). The AC 22 spec passes on both projects.
+
+There is no Critical finding and no open Warning.
+
+### Round 1 findings, verified
+
+- **W1 (fixed, `a9649f3`).** `generations_stuck_unwarned_index` is on `(created_at, id)` with the predicate `status in ('pending', 'queued', 'processing') and reconcile_stuck_warned_at is null`, so terminal rows stay out of it. It is added in its own migration, with a reversible `down()`. `stuckUnwarned()` repeats the same predicate, and the new `GenerationQueryBuilderTest` row asserts with `enable_seqscan = off` that the planner picks the index, like the two existing EXPLAIN rows. The class docblock names it with the other two.
+- **W2 (fixed, `d132823`).** `GiveUpUnconfirmedGenerationAction` writes the "Gave up…" error only for `Applied`. Any other outcome gets an info line that carries the outcome. The new `ReconcileGiveUpTest` row runs the action on a stale instance whose row is already `queued`. It asserts that the row and ledger are unchanged, that no "Gave up" line is written, and that the info line says `refused_conflict`.
+- **S1 (fixed, `513913d`).** The three docblocks are rewrapped with no change to their wording.
+- **S2 (taken, `894fdfc`, `e9b8efd`, `5b6c101`).**
+  - `PixelforgeCreateLock` owns the key prefix, the pinned store and the TTL. `SubmitGenerationAction` uses it with no behaviour change, and `SubmitGenerationCreateLockTest` still passes against the moved constant.
+  - The give-up takes the lock with a non-blocking `get()` and releases it in `finally`. While a submit run holds it, the give-up logs an info line and returns without writing `reconcile_recheck_at`, so the row is retried at the next run. That is at most one lock TTL (90 s) of retries.
+  - A submit job that gets the lock after the give-up re-reads the row, finds it terminal, and returns without a request (`SubmitGenerationAction::submit()`). The window S2 described is therefore closed.
+  - The new test holds the lock, then shows one skipped run with no error log and an unchanged ledger, then the give-up once the lock is free. D-53 records the change.
+- **S3 (not changed).** Acceptable. It was optional, and the engineer's reason (tests change config at runtime) holds.
+
+### Commit hygiene
+
+- Each fix commit carries its code with its test. The extraction (`894fdfc`) is separate from the behaviour change (`e9b8efd`), and both bodies explain why. The decisions-log edit (`5b6c101`) and the bookkeeping (`941a423`) have their own commits, as in round 1.
+- All subjects start with `[PE-014]`, are imperative and are at most 72 characters. All messages end with the trailer.
