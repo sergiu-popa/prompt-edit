@@ -112,6 +112,30 @@ final class ReconcilePolicyTest extends TestCase
         $this->assertSame(3, self::policy(batchSize: 3)->batchSize());
     }
 
+    /**
+     * AC 17: a poll is sent only while more than the reserve is left, so 12 units
+     * left give 2 polls.
+     *
+     * @return array<string, array{int, int, bool}>
+     */
+    public static function reserve(): array
+    {
+        return [
+            'reserve 10, 12 left' => [10, 12, true],
+            'reserve 10, 11 left' => [10, 11, true],
+            'reserve 10, 10 left' => [10, 10, false],
+            'reserve 10, none left' => [10, 0, false],
+            'reserve 0, 1 left' => [0, 1, true],
+            'reserve 0, none left' => [0, 0, false],
+        ];
+    }
+
+    #[DataProvider('reserve')]
+    public function test_a_poll_leaves_the_reserve_to_submits(int $reserve, int $remaining, bool $allowed): void
+    {
+        $this->assertSame($allowed, self::policy(submitReserve: $reserve)->allowsPoll($remaining));
+    }
+
     private static function now(): CarbonImmutable
     {
         return CarbonImmutable::parse(self::NOW);
@@ -123,6 +147,7 @@ final class ReconcilePolicyTest extends TestCase
         int $recheckSeconds = 60,
         int $maxRecheckSeconds = 900,
         int $batchSize = 20,
+        int $submitReserve = 10,
     ): ReconcilePolicy {
         return new ReconcilePolicy(
             queuedAfterSeconds: $queuedAfterSeconds,
@@ -130,6 +155,7 @@ final class ReconcilePolicyTest extends TestCase
             recheckSeconds: $recheckSeconds,
             maxRecheckSeconds: $maxRecheckSeconds,
             batchSize: $batchSize,
+            submitReserve: $submitReserve,
         );
     }
 }

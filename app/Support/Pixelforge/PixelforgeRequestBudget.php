@@ -39,4 +39,13 @@ final readonly class PixelforgeRequestBudget
             throw RateBudgetExhaustedException::freesUpIn($this->rateLimiter->availableIn(self::BUDGET_KEY));
         }
     }
+
+    /**
+     * The units left in this minute, never below 0, so a reader such as the
+     * reconciler's reserve check sees the same count `take()` compares.
+     */
+    public function remaining(): int
+    {
+        return max(0, $this->requestsPerMinute - (int) $this->rateLimiter->attempts(self::BUDGET_KEY));
+    }
 }

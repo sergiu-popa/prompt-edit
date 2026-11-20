@@ -115,6 +115,12 @@ return [
          * The most rows one run handles, across polls and re-dispatches (D-51).
          */
         'batch_size' => filter_var(env('PIXELFORGE_RECONCILE_BATCH'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 20]]),
+
+        /**
+         * Units of the request budget polls always leave to submits (D-51): a poll
+         * is sent only while more than this is left in the minute. 0 is allowed.
+         */
+        'submit_reserve' => filter_var(env('PIXELFORGE_SUBMIT_RESERVE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 10]]),
     ],
 
     /**

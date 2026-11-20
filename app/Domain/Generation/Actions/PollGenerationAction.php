@@ -13,6 +13,8 @@ use App\Domain\Generation\ValueObjects\ReconcilePolicy;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\Exceptions\NotFoundException;
+use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
+use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use LogicException;
@@ -33,6 +35,8 @@ final class PollGenerationAction
     ) {}
 
     /**
+     * @throws RateBudgetExhaustedException when the budget is spent, so the caller stops polling
+     * @throws RateLimitExceededException when Pixelforge refuses for the rate, likewise
      * @throws ConcurrentGenerationTransitionException
      * @throws InvalidRateException when a succeeded snapshot cannot be priced exactly
      * @throws NanodollarOverflowException
@@ -47,6 +51,8 @@ final class PollGenerationAction
 
         try {
             $snapshot = $this->pixelforge->retrieveGeneration($providerId);
+        } catch (RateBudgetExhaustedException|RateLimitExceededException $exception) {
+            throw $exception;
         } catch (NotFoundException) {
             Log::warning('Pixelforge did not find a generation we polled; it is left unchanged.', [
                 'generation_id' => $generation->id,

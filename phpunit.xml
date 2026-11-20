@@ -42,6 +42,7 @@
         <env name="PIXELFORGE_RECONCILE_RECHECK" value="" force="true"/>
         <env name="PIXELFORGE_RECONCILE_RECHECK_MAX" value="" force="true"/>
         <env name="PIXELFORGE_RECONCILE_BATCH" value="" force="true"/>
+        <env name="PIXELFORGE_SUBMIT_RESERVE" value="" force="true"/>
         <!-- The dev containers set these in the process env, which Laravel reads from $_SERVER first. -->
         <server name="PIXELFORGE_RATE_LIMIT_PER_MINUTE" value=""/>
         <server name="PIXELFORGE_OVERLOADED_DEADLINE" value=""/>
@@ -51,6 +52,7 @@
         <server name="PIXELFORGE_RECONCILE_RECHECK" value=""/>
         <server name="PIXELFORGE_RECONCILE_RECHECK_MAX" value=""/>
         <server name="PIXELFORGE_RECONCILE_BATCH" value=""/>
+        <server name="PIXELFORGE_SUBMIT_RESERVE" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="INERTIA_SSR_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>

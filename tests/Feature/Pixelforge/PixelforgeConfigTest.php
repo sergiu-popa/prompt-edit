@@ -45,6 +45,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_RECONCILE_RECHECK',
         'PIXELFORGE_RECONCILE_RECHECK_MAX',
         'PIXELFORGE_RECONCILE_BATCH',
+        'PIXELFORGE_SUBMIT_RESERVE',
     ];
 
     /**
@@ -153,6 +154,27 @@ final class PixelforgeConfigTest extends TestCase
     public function test_a_reconcile_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
     {
         $this->assertSame(self::RECONCILE_DEFAULTS, $this->reconcileConfigWith(array_fill_keys(self::RECONCILE_VARIABLES, $value)));
+    }
+
+    public function test_the_submit_reserve_defaults_to_10_units(): void
+    {
+        $this->assertSame(10, config('pixelforge.reconcile.submit_reserve'));
+        $this->assertSame(10, $this->submitReserveWith(''));
+    }
+
+    /**
+     * 0 keeps nothing back, which is allowed.
+     */
+    public function test_a_set_submit_reserve_applies_including_zero(): void
+    {
+        $this->assertSame(15, $this->submitReserveWith('15'));
+        $this->assertSame(0, $this->submitReserveWith('0'));
+    }
+
+    #[DataProvider('invalidFakeValues')]
+    public function test_a_submit_reserve_that_is_not_a_whole_number_means_the_default(string $value): void
+    {
+        $this->assertSame(10, $this->submitReserveWith($value));
     }
 
     public function test_empty_values_mean_the_defaults(): void
@@ -443,8 +465,16 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame(5, $fake['expire_ttl_seconds']);
     }
 
+    private function submitReserveWith(string $value): mixed
+    {
+        $reconcile = $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_RESERVE' => $value])['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        return $reconcile['submit_reserve'] ?? null;
+    }
+
     /**
-     * The task-4 bounds only, so later keys never change these rows.
+     * The positive-integer bounds only; the reserve, which may be 0, has its own rows.
      *
      * @param  array<string, string>  $variables
      * @return array<string, mixed>

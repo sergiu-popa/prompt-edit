@@ -62,6 +62,26 @@ final class PixelforgeRequestBudgetTest extends TestCase
         $this->assertSame(60, $this->refusedTake()->retryAfterSeconds);
     }
 
+    public function test_remaining_counts_down_to_zero_and_never_below(): void
+    {
+        $this->assertSame(3, $this->budget->remaining());
+
+        $this->budget->take();
+        $this->assertSame(2, $this->budget->remaining());
+
+        $this->takeTimes(2);
+        $this->refusedTake();
+        $this->assertSame(0, $this->budget->remaining());
+    }
+
+    public function test_remaining_is_the_whole_limit_again_in_a_new_window(): void
+    {
+        $this->takeTimes(self::LIMIT);
+        CarbonImmutable::setTestNow('2026-11-20T10:01:00Z');
+
+        $this->assertSame(self::LIMIT, $this->budget->remaining());
+    }
+
     private function takeTimes(int $times): void
     {
         for ($unit = 0; $unit < $times; $unit++) {

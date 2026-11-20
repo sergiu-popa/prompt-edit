@@ -32,6 +32,8 @@ final readonly class ReconcilePolicy
         private int $maxRecheckSeconds,
         #[Config('pixelforge.reconcile.batch_size')]
         private int $batchSize,
+        #[Config('pixelforge.reconcile.submit_reserve')]
+        private int $submitReserve,
     ) {}
 
     /**
@@ -67,5 +69,14 @@ final readonly class ReconcilePolicy
     public function batchSize(): int
     {
         return $this->batchSize;
+    }
+
+    /**
+     * A poll is sent only while more than the reserve is left in this minute's
+     * budget, so new submits keep priority (D-51): 12 left give 2 polls.
+     */
+    public function allowsPoll(int $remainingUnits): bool
+    {
+        return $remainingUnits > $this->submitReserve;
     }
 }
