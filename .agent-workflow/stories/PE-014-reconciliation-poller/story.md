@@ -4,7 +4,7 @@
 Scheduled reconciler: status and money catch up when webhooks don't arrive
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 Webhooks are our primary signal, but they can fail to arrive. Pixelforge gives up on a webhook after six attempts, and our endpoint can be down or slow. A worker can also die before it submits. PE-013 also leaves ambiguous submits (timeouts, unexpected 5xx) non-terminal on purpose. Without a fallback, these generations would stay "processing" forever: the user's credit stays held and the charge is never recorded.
