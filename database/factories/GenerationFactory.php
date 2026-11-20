@@ -154,6 +154,35 @@ final class GenerationFactory extends Factory
     }
 
     /**
+     * D-09: failed here at submit (a `409`), yet the generation Pixelforge held under our
+     * key succeeded, so the transition action recorded the `succeeded()` state's usage,
+     * rates, provider cost and completion onto the failed row. The user is never charged:
+     * the ledger holds a hold and its release only.
+     */
+    public function providerCostOnly(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => GenerationStatus::Failed,
+            'local_failure_reason' => LocalFailureReason::IdempotencyKeyReused,
+            'error_code' => 'idempotency_key_reused',
+            'error_message' => 'This idempotency key was already used with different parameters.',
+            'input_text_tokens' => 10,
+            'input_image_tokens' => 765,
+            'output_tokens' => 1_650,
+            'reasoning_tokens' => 1_100,
+            'rates' => [
+                'input_text_tokens' => '5.00',
+                'input_image_tokens' => '10.00',
+                'output_tokens' => '40.00',
+                'reasoning_tokens' => '12.50',
+            ],
+            'provider_cost_nanodollars' => 87_450_000,
+            'user_charge_nanodollars' => 0,
+            'completed_at' => CarbonImmutable::now()->startOfSecond(),
+        ]);
+    }
+
+    /**
      * One submit attempt a minute ago, with that outcome, as the submit job records
      * it: the anchor and the note the outcome sets. With no outcome, the run died
      * after its start was recorded (AC 12).

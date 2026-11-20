@@ -18,7 +18,8 @@ use Illuminate\Database\Eloquent\Builder;
  * `awaitingRedispatch()->dueForRecheck()->oldestCreatedFirst()`, which the
  * partial `generations_pending_index` serves. Its stuck step reads
  * `stuckUnwarned()->oldestCreatedFirst()`, which the partial
- * `generations_stuck_unwarned_index` serves.
+ * `generations_stuck_unwarned_index` serves. The operator report reads
+ * `billedByPixelforge()->completedBetween()` (D-64).
  *
  * @extends Builder<Generation>
  */
@@ -114,6 +115,29 @@ final class GenerationQueryBuilder extends Builder
         return $this->whereIn('status', [GenerationStatus::Pending->value, GenerationStatus::Queued->value, GenerationStatus::Processing->value])
             ->where('created_at', '<=', self::instant($createdBefore))
             ->whereNull('reconcile_stuck_warned_at');
+    }
+
+    /**
+     * Pixelforge billed it: its usage is recorded. The transition action writes usage only
+     * from a succeeded snapshot, on a success or as D-09's provider cost after a local
+     * failure, so provider and local failures never match. Qualified, so the report's joins
+     * never make it ambiguous.
+     */
+    public function billedByPixelforge(): self
+    {
+        return $this->whereNotNull($this->qualifyColumn('output_tokens'));
+    }
+
+    /**
+     * Completed by Pixelforge at or after `$from` and strictly before `$before`, compared as
+     * instants, never through the session's timezone (D-10).
+     */
+    public function completedBetween(CarbonImmutable $from, CarbonImmutable $before): self
+    {
+        $completedAt = $this->qualifyColumn('completed_at');
+
+        return $this->where($completedAt, '>=', self::instant($from))
+            ->where($completedAt, '<', self::instant($before));
     }
 
     /**
