@@ -51,12 +51,12 @@ const subHeader = 'px-2 py-2 text-right align-bottom font-medium';
                 <thead class="text-zinc-600">
                     <tr>
                         <th scope="col" rowspan="2" class="px-4 py-2 text-left align-bottom font-medium whitespace-nowrap">Date</th>
+                        <th scope="col" rowspan="2" class="px-3 py-2 text-left align-bottom font-medium whitespace-nowrap">Status</th>
                         <th scope="colgroup" colspan="2" class="px-2 pt-2 text-right font-medium whitespace-nowrap">Generations</th>
                         <th scope="colgroup" colspan="3" class="px-2 pt-2 text-right font-medium whitespace-nowrap">Provider cost</th>
                         <th scope="colgroup" colspan="3" class="px-2 pt-2 text-right font-medium whitespace-nowrap">
                             Tokens (text / image / output / reasoning)
                         </th>
-                        <th scope="col" rowspan="2" class="px-3 py-2 text-left align-bottom font-medium whitespace-nowrap">Status</th>
                     </tr>
                     <tr class="border-b border-zinc-200 text-xs">
                         <th scope="col" :class="subHeader">Pixelforge says</th>

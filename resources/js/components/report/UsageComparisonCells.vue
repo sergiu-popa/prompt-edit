@@ -6,8 +6,8 @@ import { formatCount } from '@/lib/counting';
 import type { UsageComparisonLine, UsageFigures } from '@/types/usage';
 
 /**
- * The cells of one reconciliation line, a day or the total, after its label: counts, costs,
- * tokens and the status. While Pixelforge's figures are missing, its cells, the deltas and
+ * The cells of one reconciliation line, a day or the total, after its label: the status first,
+ * so the verdict shows before the table scrolls sideways, then counts, costs and tokens. While Pixelforge's figures are missing, its cells, the deltas and
  * the status read "—". It renders the cells alone, so its row stays the table's own.
  */
 defineProps<{
@@ -25,6 +25,12 @@ const missing = 'px-2 py-2.5 text-right whitespace-nowrap text-zinc-400';
 </script>
 
 <template>
+    <td data-status class="px-3 py-2.5 text-left whitespace-nowrap">
+        <Badge v-if="line.matches === true" tone="success">Match</Badge>
+        <Badge v-else-if="line.matches === false" tone="danger">Mismatch</Badge>
+        <span v-else class="text-zinc-400">—</span>
+    </td>
+
     <td v-if="line.pixelforge" data-pixelforge-generations :class="cell">{{ formatCount(line.pixelforge.generations) }}</td>
     <td v-else data-pixelforge-generations :class="missing">—</td>
     <td data-recorded-generations :class="cell">{{ formatCount(line.recorded.generations) }}</td>
@@ -46,10 +52,4 @@ const missing = 'px-2 py-2.5 text-right whitespace-nowrap text-zinc-400';
         /></template>
     </td>
     <td v-else data-tokens-delta :class="missing">—</td>
-
-    <td data-status class="px-3 py-2.5 text-left whitespace-nowrap">
-        <Badge v-if="line.matches === true" tone="success">Match</Badge>
-        <Badge v-else-if="line.matches === false" tone="danger">Mismatch</Badge>
-        <span v-else class="text-zinc-400">—</span>
-    </td>
 </template>

@@ -109,16 +109,31 @@ describe('UsageComparisonTable', () => {
         ]);
     });
 
+    it('puts the status right after the date, so the verdict shows before the table scrolls sideways', () => {
+        const table = mountTable();
+
+        expect(table.findAll('thead tr:first-child th').map((header) => header.text())).toStrictEqual([
+            'Date',
+            'Status',
+            'Generations',
+            'Provider cost',
+            'Tokens (text / image / output / reasoning)',
+        ]);
+        for (const row of [...days(table), table.get('tfoot tr')]) {
+            expect(row.findAll('th, td')[1]!.attributes()).toHaveProperty('data-status');
+        }
+    });
+
     it('shows Match on every day and on the total when everything is equal (AC 6)', () => {
         const table = mountTable();
 
         expect(days(table).map((day) => day.get('[data-status]').text())).toStrictEqual(['Match', 'Match', 'Match', 'Match']);
         expect(table.get('tfoot [data-status]').text()).toBe('Match');
         expect(visibleText(days(table)[2]!)).toBe(
-            '2026-11-16 2 2 $0.0746 $0.0746 0 14 / 0 / 1,380 / 1,546 14 / 0 / 1,380 / 1,546 0 / 0 / 0 / 0 Match',
+            '2026-11-16 Match 2 2 $0.0746 $0.0746 0 14 / 0 / 1,380 / 1,546 14 / 0 / 1,380 / 1,546 0 / 0 / 0 / 0',
         );
         expect(visibleText(table.get('tfoot tr'))).toBe(
-            'Total 3 3 $0.0921 $0.0921 0 20 / 0 / 1,660 / 2,046 20 / 0 / 1,660 / 2,046 0 / 0 / 0 / 0 Match',
+            'Total Match 3 3 $0.0921 $0.0921 0 20 / 0 / 1,660 / 2,046 20 / 0 / 1,660 / 2,046 0 / 0 / 0 / 0',
         );
         expect(table.find('[data-nonzero]').exists()).toBe(false);
         expect(table.find('[data-mismatch-explanation]').exists()).toBe(false);
