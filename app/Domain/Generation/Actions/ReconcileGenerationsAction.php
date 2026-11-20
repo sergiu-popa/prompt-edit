@@ -16,7 +16,8 @@ use Throwable;
 
 /**
  * One run of the scheduled reconciler (PE-014): it catches up generations whose
- * webhooks never arrived. Confirmed generations with no news for a while are polled,
+ * webhooks never arrived. It first logs one warning per generation that takes longer
+ * than usual (D-56), a database-only step with its own limit. Confirmed generations with no news for a while are polled,
  * oldest last provider update first, up to the batch, and only while more than the
  * reserve of D-44's budget is left for submits (D-51). A spent budget or Pixelforge's
  * 429 stops the run's polls. Generations Pixelforge never confirmed, whose submit job
@@ -42,8 +43,35 @@ final class ReconcileGenerationsAction
     {
         $now = CarbonImmutable::now()->startOfSecond();
 
+        $this->warnAboutStuckGenerations($now);
         $polled = $this->pollStaleGenerations($now);
         $this->handleUnsubmittedGenerations($now, $this->policy->batchSize() - $polled);
+    }
+
+    /**
+     * One warning per row, then its marker, so each is logged once.
+     */
+    private function warnAboutStuckGenerations(CarbonImmutable $now): void
+    {
+        $stuck = Generation::query()
+            ->stuckUnwarned($this->policy->stuckBefore($now))
+            ->oldestCreatedFirst()
+            ->limit($this->policy->batchSize())
+            ->get();
+
+        foreach ($stuck as $generation) {
+            try {
+                Log::warning('A generation is taking longer than usual; History says we are checking with Pixelforge.', [
+                    'generation_id' => $generation->id,
+                    'provider_id' => $generation->provider_id,
+                    'status' => $generation->status->value,
+                    'created_at' => $generation->created_at->toIso8601ZuluString(),
+                ]);
+                $generation->recordReconcileBookkeeping(['reconcile_stuck_warned_at' => $now]);
+            } catch (Throwable $exception) {
+                self::logFailedRow('stuck', $generation, $exception);
+            }
+        }
     }
 
     /**

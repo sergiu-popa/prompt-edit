@@ -103,6 +103,17 @@ final class GenerationQueryBuilder extends Builder
     }
 
     /**
+     * Not terminal, created at or before the instant, and not yet warned about by the
+     * reconciler (D-56).
+     */
+    public function stuckUnwarned(CarbonImmutable $createdBefore): self
+    {
+        return $this->whereIn('status', [GenerationStatus::Pending->value, GenerationStatus::Queued->value, GenerationStatus::Processing->value])
+            ->where('created_at', '<=', self::instant($createdBefore))
+            ->whereNull('reconcile_stuck_warned_at');
+    }
+
+    /**
      * Bound with its offset, as the columns are written (D-10), so the database
      * session's timezone never shifts a comparison.
      */

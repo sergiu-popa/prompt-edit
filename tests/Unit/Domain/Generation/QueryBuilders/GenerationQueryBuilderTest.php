@@ -233,6 +233,22 @@ final class GenerationQueryBuilderTest extends TestCase
         $this->assertStringContainsString('generations_pending_index', $plan);
     }
 
+    public function test_stuck_unwarned_keeps_non_terminal_rows_past_the_age_not_yet_warned_about(): void
+    {
+        $at = ['created_at' => self::now()->subMinutes(15)];
+        $pending = Generation::factory()->create($at);
+        $queued = Generation::factory()->queued()->create($at);
+        $processing = Generation::factory()->processing()->create($at);
+        Generation::factory()->processing()->create(['created_at' => self::now()->subSeconds(899)]);
+        Generation::factory()->processing()->create([...$at, 'reconcile_stuck_warned_at' => self::now()->subMinute()]);
+        Generation::factory()->succeeded()->create($at);
+        Generation::factory()->failed()->create($at);
+
+        $ids = Generation::query()->stuckUnwarned(self::now()->subSeconds(900))->pluck('id')->sort()->values()->all();
+
+        $this->assertSame(collect([$pending->id, $queued->id, $processing->id])->sort()->values()->all(), $ids);
+    }
+
     private function awaitingRedispatchSelection(): GenerationQueryBuilder
     {
         return Generation::query()
