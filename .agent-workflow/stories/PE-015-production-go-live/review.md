@@ -56,12 +56,12 @@ The constant-field check: `/health/reconciler` returns `status` and `last_succee
 
 ### Warnings
 
-- [ ] **W1. `make live-smoke` drops the host's `CI` variable, so the CI refusal (AC 1) never fires through the only supported entry point.**
+- [x] **W1. `make live-smoke` drops the host's `CI` variable, so the CI refusal (AC 1) never fires through the only supported entry point.**
   - `Makefile:98` runs `docker exec prompt-edit-app php artisan test --compact --group=live`. `docker exec` passes no host environment into the container. `LiveSmokeGuard::fromRuntime()` (`tests/Feature/Pixelforge/Live/LiveSmokeGuard.php:44`) reads `getenv('CI')` inside the container, and the `app` service never sets `CI` (only `playwright` does, `docker-compose.yml:169`).
   - Verified: `CI=true docker exec prompt-edit-app sh -c 'echo ${CI-unset}'` prints `unset`. With `-e CI` it prints `true`, and without a host `CI` it stays `unset`.
   - Why it matters: AC 1 requires the smoke to refuse "when the `CI` environment variable is set", and the story says "it runs only through a dedicated Makefile target". As written, `CI=true make live-smoke` on a machine with a dev key in `.env` spends against the real API. `LiveSmokeGuardTest` proves the guard reads the process variable, but not that the target hands it over. The README (reviewer guide, Make Targets) and D-58 both state that the smoke refuses in CI.
   - Fix: forward the variable with `@docker exec -e CI prompt-edit-app php artisan test --compact --group=live`. A bare `-e CI` copies it only when the host sets it. Add a `LiveSmokeGuardTest` row that reads the `live-smoke` recipe from `Makefile` and asserts it forwards `CI` (`-e CI`), so the guard and its entry point stay tied together.
-- [ ] **W2. `CheckGenerationMoneyAction::holdProblems()` uses `elseif`, against the "no `else`" rule.**
+- [x] **W2. `CheckGenerationMoneyAction::holdProblems()` uses `elseif`, against the "no `else`" rule.**
   - `app/Domain/Billing/Actions/CheckGenerationMoneyAction.php:82`: `} elseif ($holds[0][1] !== -$holdAmount) {`. This is the only `elseif` under `app/`, and the guidelines say "No `else`: prefer early returns and guard clauses".
   - Fix: return early, for example `if (count($holds) !== 1) { return [...$problems, sprintf('%d holds, expected 1', count($holds))]; }`, followed by a plain `if` for the amount. `CheckGenerationMoneyActionTest` already covers both branches (the tampered hold row), so its existing rows prove the refactor.
 - [ ] **W3. Commit `b6fa7a7` does not pass on its own (needs the user, not an Engineer task).**
