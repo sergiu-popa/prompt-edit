@@ -39,6 +39,25 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_FAKE_DROP_WEBHOOKS',
     ];
 
+    private const array RECONCILE_VARIABLES = [
+        'PIXELFORGE_RECONCILE_QUEUED_AFTER',
+        'PIXELFORGE_RECONCILE_PROCESSING_AFTER',
+        'PIXELFORGE_RECONCILE_RECHECK',
+        'PIXELFORGE_RECONCILE_RECHECK_MAX',
+        'PIXELFORGE_RECONCILE_BATCH',
+    ];
+
+    /**
+     * Production's reconcile bounds (D-50, D-51), the default of each.
+     */
+    private const array RECONCILE_DEFAULTS = [
+        'queued_after_seconds' => 120,
+        'processing_after_seconds' => 180,
+        'recheck_seconds' => 60,
+        'max_recheck_seconds' => 900,
+        'batch_size' => 20,
+    ];
+
     /**
      * @var array{env: array<string, mixed>, server: array<string, mixed>, process: array<string, string|false>}
      */
@@ -48,7 +67,7 @@ final class PixelforgeConfigTest extends TestCase
     {
         parent::setUp();
 
-        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES, ...self::RECONCILE_VARIABLES] as $name) {
             $this->savedVariables['env'][$name] = $_ENV[$name] ?? null;
             $this->savedVariables['server'][$name] = $_SERVER[$name] ?? null;
             $this->savedVariables['process'][$name] = getenv($name);
@@ -57,7 +76,7 @@ final class PixelforgeConfigTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES] as $name) {
+        foreach ([...self::CLIENT_VARIABLES, ...self::FAKE_VARIABLES, ...self::RECONCILE_VARIABLES] as $name) {
             self::restore($_ENV, $name, $this->savedVariables['env'][$name]);
             self::restore($_SERVER, $name, $this->savedVariables['server'][$name]);
             $process = $this->savedVariables['process'][$name];
@@ -97,6 +116,43 @@ final class PixelforgeConfigTest extends TestCase
     {
         $this->assertSame(50, config('pixelforge.rate_limit_per_minute'));
         $this->assertSame(120, config('pixelforge.submit.overloaded_deadline_seconds'));
+    }
+
+    /**
+     * The dev containers shorten the reconciler's thresholds in their env (D-48);
+     * the suite always runs with production's.
+     */
+    public function test_the_suite_runs_with_the_production_reconcile_bounds(): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, array_intersect_key((array) config('pixelforge.reconcile'), self::RECONCILE_DEFAULTS));
+    }
+
+    public function test_empty_reconcile_bounds_mean_the_production_defaults(): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, $this->reconcileConfigWith(array_fill_keys(self::RECONCILE_VARIABLES, '')));
+    }
+
+    public function test_set_reconcile_bounds_apply(): void
+    {
+        $this->assertSame(
+            ['queued_after_seconds' => 5, 'processing_after_seconds' => 6, 'recheck_seconds' => 2, 'max_recheck_seconds' => 300, 'batch_size' => 7],
+            $this->reconcileConfigWith([
+                'PIXELFORGE_RECONCILE_QUEUED_AFTER' => '5',
+                'PIXELFORGE_RECONCILE_PROCESSING_AFTER' => '6',
+                'PIXELFORGE_RECONCILE_RECHECK' => '2',
+                'PIXELFORGE_RECONCILE_RECHECK_MAX' => '300',
+                'PIXELFORGE_RECONCILE_BATCH' => '7',
+            ]),
+        );
+    }
+
+    /**
+     * A threshold or recheck of 0 would poll every row on every run.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_reconcile_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(self::RECONCILE_DEFAULTS, $this->reconcileConfigWith(array_fill_keys(self::RECONCILE_VARIABLES, $value)));
     }
 
     public function test_empty_values_mean_the_defaults(): void
@@ -385,6 +441,21 @@ final class PixelforgeConfigTest extends TestCase
 
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
         $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    /**
+     * The task-4 bounds only, so later keys never change these rows.
+     *
+     * @param  array<string, string>  $variables
+     * @return array<string, mixed>
+     */
+    private function reconcileConfigWith(array $variables): array
+    {
+        $reconcile = $this->pixelforgeConfigWith($variables)['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        /** @var array<string, mixed> $reconcile */
+        return array_intersect_key($reconcile, self::RECONCILE_DEFAULTS);
     }
 
     /**

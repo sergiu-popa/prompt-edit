@@ -90,6 +90,34 @@ return [
     ],
 
     /**
+     * The scheduled reconciler (PE-014), in seconds unless named otherwise. Every
+     * default is production's, and production sets none of them; anything but a
+     * positive integer means the default.
+     */
+    'reconcile' => [
+        /**
+         * A confirmed row is polled once its last provider update (D-50) is older
+         * than this: 2 min while `queued`, 3 min while `processing`.
+         */
+        'queued_after_seconds' => filter_var(env('PIXELFORGE_RECONCILE_QUEUED_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 120]]),
+
+        'processing_after_seconds' => filter_var(env('PIXELFORGE_RECONCILE_PROCESSING_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 180]]),
+
+        /**
+         * After a poll or a re-dispatch, a row waits a quarter of its age before
+         * the next one, at least this and at most the max (D-50).
+         */
+        'recheck_seconds' => filter_var(env('PIXELFORGE_RECONCILE_RECHECK'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 60]]),
+
+        'max_recheck_seconds' => filter_var(env('PIXELFORGE_RECONCILE_RECHECK_MAX'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 900]]),
+
+        /**
+         * The most rows one run handles, across polls and re-dispatches (D-51).
+         */
+        'batch_size' => filter_var(env('PIXELFORGE_RECONCILE_BATCH'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 20]]),
+    ],
+
+    /**
      * The `whsec_…` secret of the API key whose webhook URL points here. Each
      * key has its own, so local and production differ. Never logged or committed.
      */
