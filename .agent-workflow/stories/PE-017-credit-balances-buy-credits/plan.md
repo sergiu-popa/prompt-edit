@@ -256,9 +256,9 @@ Estimated at about 2,400 changed lines without lockfiles: roughly 700 of PHP and
 
 ## Rebase onto main (orchestrator, 2026-11-20)
 PE-016 merged first (#26, `1a92c58`), so this branch was rebased from `52e0515` onto it, and the notes now cite the rebased SHAs. Both stories' additions were kept wherever they met: the shared props (`operator_navigation` then `credits`), the header, `routes/web.php`, `paths.ts`, `inertia.d.ts`, the test support and requirements.md (D-62–D-65, then D-67–D-71). Three tests only failed once the two stories met, so each fix sits inside the commit where it would first fail:
-- PE-016's `test_spend_reads_only_the_generations_charge_entry` inserted rows that imitated this story's types, which this story's CHECKs now refuse: a grant tied to a generation, and a charge with no generation. In `3eb7383` it inserts a valid grant and purchase. From `1b438c6` it uses the factory's starter grant instead, since one grant per user is unique.
-- `DemoUserSeederTest` used `User::query()->sole()` after a full `seed()`, which now also seeds PE-016's operator. In `17ac273` and `01f83f9` it selects the demo user by email.
-- `BuyCreditsPageTest` (`ccb380f`) lists `operator_navigation` among the shared props.
+- PE-016's `test_spend_reads_only_the_generations_charge_entry` inserted rows that imitated this story's types, which this story's CHECKs now refuse: a grant tied to a generation, and a charge with no generation. In `2a29899` it inserts a valid grant and purchase. From `6b1cd29` it uses the factory's starter grant instead, since one grant per user is unique.
+- `DemoUserSeederTest` used `User::query()->sole()` after a full `seed()`, which now also seeds PE-016's operator. In `ac67c23` and `e605ec2` it selects the demo user by email.
+- `BuyCreditsPageTest` (`2d94e9d`) lists `operator_navigation` among the shared props.
 
 Tasks 24 and 25 follow in their own commits.
 
