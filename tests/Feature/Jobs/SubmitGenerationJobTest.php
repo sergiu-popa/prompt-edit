@@ -6,13 +6,18 @@ namespace Tests\Feature\Jobs;
 
 use App\Domain\Generation\DataTransferObjects\NewGenerationData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
+use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\Models\Generation;
+use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
+use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -158,13 +163,13 @@ final class SubmitGenerationJobTest extends TestCase
         Http::fake(['*' => Http::sequence()
             ->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received')
             ->pushResponse(self::pixelforgeAccepted($accepted, replayed: 'true'))]);
-        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $before = [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
         try {
             $this->runSubmitJob($lighthouse);
             $this->fail('Expected the timed-out attempt to be ambiguous.');
         } catch (AmbiguousPixelforgeOutcomeException) {
-            $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+            $this->assertSame($before, [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
         }
 
         $this->runSubmitJob($this->reloadedGeneration($lighthouse));
@@ -203,5 +208,98 @@ final class SubmitGenerationJobTest extends TestCase
         $this->assertSame($stored->prompt, self::decodedRequestBody($second)['prompt']);
         $this->assertSame(self::UNICODE_PROMPT, $stored->prompt);
         $this->assertSame(GenerationStatus::Queued, $stored->status);
+    }
+
+    public function test_an_accepted_attempt_is_recorded_with_its_start_and_outcome(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeAccepted(self::generationObjectFor($lighthouse, GenerationStatus::Queued))]);
+
+        $this->runSubmitJob($lighthouse);
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_first_attempted_at);
+        $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_last_attempted_at);
+        $this->assertSame(SubmitAttemptOutcome::Accepted, $row->submit_last_outcome);
+        $this->assertNull($row->submit_ambiguous_at);
+        $this->assertNull($row->submit_retry_note);
+    }
+
+    public function test_a_definitive_rejection_is_recorded_as_rejected(): void
+    {
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::ContentPolicyViolation)]);
+
+        $this->runSubmitJob($lighthouse);
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(GenerationStatus::Failed, $row->status);
+        $this->assertSame(SubmitAttemptOutcome::Rejected, $row->submit_last_outcome);
+        $this->assertNull($row->submit_ambiguous_at);
+    }
+
+    public function test_an_overload_is_recorded_with_its_anchor_and_note(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => self::pixelforgeErrorFor(PixelforgeErrorCode::Overloaded, headers: ['Retry-After' => '2'])]);
+
+        $this->runSubmitJobIgnoringItsRethrow($lighthouse);
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(SubmitAttemptOutcome::Overloaded, $row->submit_last_outcome);
+        $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_first_overloaded_at);
+        $this->assertNull($row->submit_ambiguous_at);
+        $this->assertSame(SubmitRetryNote::Retrying, $row->submit_retry_note);
+    }
+
+    public function test_a_timeout_latches_the_generation_as_ambiguous(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        Http::fake(['*' => Http::sequence()->pushFailedConnection('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received')]);
+
+        $this->runSubmitJobIgnoringItsRethrow($lighthouse);
+
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSame(SubmitAttemptOutcome::Ambiguous, $row->submit_last_outcome);
+        $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_ambiguous_at);
+        $this->assertSame(SubmitRetryNote::Retrying, $row->submit_retry_note);
+        $this->assertSame(GenerationStatus::Pending, $row->status);
+    }
+
+    /**
+     * The run before died after it may have sent its request (AC 12): the latch is
+     * on the row before this run's request leaves.
+     */
+    public function test_a_run_finding_an_attempt_with_no_outcome_latches_before_it_sends(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
+        $lighthouse = $this->givenTheLighthouseGeneration();
+        $lighthouse->recordSubmitBookkeeping((new SubmitBookkeeping)->startAttempt(CarbonImmutable::parse('2026-11-20T09:59:00Z')));
+        $latchedWhenSent = null;
+        Http::fake(function () use ($lighthouse, &$latchedWhenSent): PromiseInterface {
+            $latchedWhenSent = $this->reloadedGeneration($lighthouse)->submit_ambiguous_at;
+
+            return self::pixelforgeAccepted(self::generationObjectFor($lighthouse, GenerationStatus::Queued));
+        });
+
+        $this->runSubmitJob($this->reloadedGeneration($lighthouse));
+
+        $this->assertSameInstant('2026-11-20T09:59:00Z', $latchedWhenSent);
+        $row = $this->reloadedGeneration($lighthouse);
+        $this->assertSameInstant('2026-11-20T09:59:00Z', $row->submit_first_attempted_at);
+        $this->assertSameInstant('2026-11-20T10:00:00Z', $row->submit_last_attempted_at);
+        $this->assertSame(SubmitAttemptOutcome::Accepted, $row->submit_last_outcome);
+    }
+
+    private function runSubmitJobIgnoringItsRethrow(Generation $generation): void
+    {
+        try {
+            $this->runSubmitJob($generation);
+        } catch (ReportsPixelforgeContext) {
+            // The failure is rethrown for the queue; the bookkeeping is the point.
+        }
     }
 }

@@ -100,7 +100,7 @@ final class SubmitGenerationRejectionsTest extends TestCase
     {
         $lighthouse = $this->givenTheLighthouseGeneration();
         $this->fakePixelforgeAnswering($answer);
-        $before = [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)];
+        $before = [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)];
 
         try {
             $this->runSubmitJob($lighthouse);
@@ -109,7 +109,7 @@ final class SubmitGenerationRejectionsTest extends TestCase
             $this->assertInstanceOf($expected, $exception);
         }
 
-        $this->assertSame($before, [$this->rawGenerationRow($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
+        $this->assertSame($before, [$this->rawGenerationRowWithoutSubmitBookkeeping($lighthouse), $this->ledgerEntriesFor($lighthouse)]);
         $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($lighthouse));
     }
 

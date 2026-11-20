@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace App\Domain\Generation\Enums;
 
+use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
+use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
+use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
+
 /**
  * How one run of the submit job ended, as the generation's bookkeeping records it
  * (D-45). A run whose start is recorded but whose outcome is not died after it may
@@ -48,6 +54,36 @@ enum SubmitAttemptOutcome: string
      * Nothing could be sent: no key, or no webhook secret for the fake.
      */
     case NotConfigured = 'not_configured';
+
+    /**
+     * The outcome of a create that failed. A documented code that is not one of ours
+     * (a `404` at create) and every ambiguous answer may have created the generation,
+     * so they are ambiguous (D-31).
+     */
+    public static function fromFailure(ReportsPixelforgeContext $failure): self
+    {
+        if ($failure instanceof RateBudgetExhaustedException) {
+            return self::BudgetExhausted;
+        }
+
+        if ($failure instanceof PixelforgeNotConfiguredException) {
+            return self::NotConfigured;
+        }
+
+        if (! $failure instanceof PixelforgeApiException) {
+            return self::Ambiguous;
+        }
+
+        return match ($failure->errorCode()) {
+            PixelforgeErrorCode::ContentPolicyViolation, PixelforgeErrorCode::ValidationFailed, PixelforgeErrorCode::IdempotencyKeyReused => self::Rejected,
+            PixelforgeErrorCode::RateLimitExceeded => self::RateLimited,
+            PixelforgeErrorCode::ConcurrencyLimitExceeded => self::ConcurrencyLimited,
+            PixelforgeErrorCode::DailyLimitExceeded => self::DailyLimited,
+            PixelforgeErrorCode::Overloaded => self::Overloaded,
+            PixelforgeErrorCode::InvalidApiKey => self::InvalidApiKey,
+            PixelforgeErrorCode::NotFound => self::Ambiguous,
+        };
+    }
 
     /**
      * What History says while the generation waits after this outcome: null for an

@@ -8,8 +8,10 @@ use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Billing\Exceptions\NanodollarOverflowException;
 use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
 use App\Domain\Generation\Exceptions\ConcurrentGenerationTransitionException;
 use App\Domain\Generation\Models\Generation;
+use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Contracts\ReportsPixelforgeContext;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
@@ -17,6 +19,7 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -30,6 +33,9 @@ use Illuminate\Support\Facades\Log;
  * Only a definitive rejection, where Pixelforge created nothing (`400`, `422`
  * or `409`), fails the generation here, at no charge (D-31). Every other
  * failure is rethrown, so the job retries with the same key; a replay is free.
+ *
+ * Each run records its start on the generation before it sends, and its outcome
+ * after, outside the transition action (D-45).
  */
 final class SubmitGenerationAction
 {
@@ -58,23 +64,31 @@ final class SubmitGenerationAction
             return;
         }
 
+        $bookkeeping = $this->startAttempt($generation);
+
         try {
             $created = $this->pixelforge->createGeneration(self::payloadFor($generation));
         } catch (PixelforgeApiException $exception) {
             $reason = self::definitiveRejectionReason($exception);
 
             if ($reason === null) {
+                $this->finishAttempt($generation, $bookkeeping, SubmitAttemptOutcome::fromFailure($exception));
+
                 throw self::loggedForRetry($generation, $exception);
             }
 
             $this->failLocally($generation, $reason, $exception);
+            $this->finishAttempt($generation, $bookkeeping, SubmitAttemptOutcome::Rejected);
 
             return;
         } catch (ReportsPixelforgeContext $exception) {
+            $this->finishAttempt($generation, $bookkeeping, SubmitAttemptOutcome::fromFailure($exception));
+
             throw self::loggedForRetry($generation, $exception);
         }
 
         $outcome = $this->transitionGeneration->execute($generation, $created->snapshot);
+        $this->finishAttempt($generation, $bookkeeping, SubmitAttemptOutcome::Accepted);
 
         Log::info('Applied Pixelforge\'s answer to a generation create.', [
             'generation_id' => $generation->id,
@@ -82,6 +96,31 @@ final class SubmitGenerationAction
             'replayed' => $created->replayed,
             'outcome' => $outcome->value,
         ]);
+    }
+
+    /**
+     * Recorded before the budget is taken or the request is sent, so a run that dies
+     * mid-request leaves an attempt with no outcome, which the next run reads as
+     * ambiguous (AC 12, 23).
+     */
+    private function startAttempt(Generation $generation): SubmitBookkeeping
+    {
+        $bookkeeping = SubmitBookkeeping::fromGeneration($generation)->startAttempt(CarbonImmutable::now());
+        $generation->recordSubmitBookkeeping($bookkeeping);
+
+        return $bookkeeping;
+    }
+
+    /**
+     * Recorded only once the answer is applied, so a transition that throws leaves
+     * no outcome: the safe side.
+     */
+    private function finishAttempt(Generation $generation, SubmitBookkeeping $bookkeeping, SubmitAttemptOutcome $outcome): SubmitBookkeeping
+    {
+        $finished = $bookkeeping->finishAttempt($outcome, CarbonImmutable::now());
+        $generation->recordSubmitBookkeeping($finished);
+
+        return $finished;
     }
 
     /**
