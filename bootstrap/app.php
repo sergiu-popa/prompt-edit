@@ -11,10 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
-        // Webhooks and the fake Pixelforge's images sit outside every middleware group, so no
-        // session cookie or CSRF check applies.
+        // Webhooks, the fake Pixelforge's images and the reconciler's health sit outside every
+        // middleware group, so no session cookie or CSRF check applies.
         then: function (): void {
             Route::group([], __DIR__ . '/../routes/webhooks.php');
+            Route::group([], __DIR__ . '/../routes/health.php');
             Route::group([], __DIR__ . '/../routes/fake-pixelforge.php');
         },
     )
