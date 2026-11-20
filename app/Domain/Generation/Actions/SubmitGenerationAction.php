@@ -19,11 +19,8 @@ use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
+use App\Support\Pixelforge\PixelforgeCreateLock;
 use Carbon\CarbonImmutable;
-use Illuminate\Container\Attributes\Config;
-use Illuminate\Contracts\Cache\Factory as CacheFactory;
-use Illuminate\Contracts\Cache\Lock;
-use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Support\Facades\Log;
 use LogicException;
 
@@ -50,11 +47,6 @@ use LogicException;
 final class SubmitGenerationAction
 {
     /**
-     * The create lock's key, before the ULID.
-     */
-    public const string CREATE_LOCK_PREFIX = 'pixelforge-create:';
-
-    /**
      * How long a run that finds another's create in flight waits before trying again.
      */
     public const int CREATE_IN_FLIGHT_WAIT_SECONDS = 5;
@@ -64,11 +56,7 @@ final class SubmitGenerationAction
         private readonly TransitionGenerationAction $transitionGeneration,
         private readonly SubmitRetryPolicy $retryPolicy,
         private readonly StopSubmittingGenerationAction $stopSubmitting,
-        private readonly CacheFactory $cache,
-        #[Config('pixelforge.rate_limit_store')]
-        private readonly string $lockStore,
-        #[Config('pixelforge.submit.create_lock_seconds')]
-        private readonly int $createLockSeconds,
+        private readonly PixelforgeCreateLock $createLock,
     ) {}
 
     /**
@@ -87,7 +75,7 @@ final class SubmitGenerationAction
      */
     public function execute(string $generationId, ?CarbonImmutable $redispatchedAt = null): ?int
     {
-        $lock = $this->createLock($generationId);
+        $lock = $this->createLock->for($generationId);
 
         if (! $lock->get()) {
             return self::CREATE_IN_FLIGHT_WAIT_SECONDS;
@@ -98,20 +86,6 @@ final class SubmitGenerationAction
         } finally {
             $lock->release();
         }
-    }
-
-    /**
-     * @throws LogicException when the pinned store cannot lock, which config rules out
-     */
-    private function createLock(string $generationId): Lock
-    {
-        $store = $this->cache->store($this->lockStore)->getStore();
-
-        if (! $store instanceof LockProvider) {
-            throw new LogicException(sprintf('The "%s" cache store cannot hold the create lock.', $this->lockStore));
-        }
-
-        return $store->lock(self::CREATE_LOCK_PREFIX . $generationId, $this->createLockSeconds);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Domain\Billing\Exceptions\InvalidRateException;
 use App\Domain\Generation\Actions\SubmitGenerationAction;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Jobs\SubmitGenerationJob;
+use App\Support\Pixelforge\PixelforgeCreateLock;
 use Carbon\CarbonImmutable;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -135,7 +136,7 @@ final class SubmitGenerationCreateLockTest extends TestCase
         Http::fake(['*' => self::pixelforgeAccepted(self::generationObjectFor($lighthouse, GenerationStatus::Queued))]);
         $store = Cache::store('database')->getStore();
         $this->assertInstanceOf(LockProvider::class, $store);
-        $this->assertTrue($store->lock(SubmitGenerationAction::CREATE_LOCK_PREFIX . $lighthouse->id, 90)->get());
+        $this->assertTrue($store->lock(PixelforgeCreateLock::KEY_PREFIX . $lighthouse->id, 90)->get());
 
         $this->travel(89)->seconds();
         $this->assertReleasedFor(SubmitGenerationAction::CREATE_IN_FLIGHT_WAIT_SECONDS, $this->runSubmitJob($lighthouse));
