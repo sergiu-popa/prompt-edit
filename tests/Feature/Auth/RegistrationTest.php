@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Concerns\InteractsWithAuthentication;
@@ -45,6 +46,8 @@ final class RegistrationTest extends TestCase
         $this->register()->assertRedirect(route('dashboard'));
 
         $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->sole()));
+        $this->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('credits.available_nanodollars', 1_000_000_000));
     }
 
     public function test_a_failed_registration_grants_nothing(): void

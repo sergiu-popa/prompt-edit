@@ -3,7 +3,7 @@ import type * as InertiaVue from '@inertiajs/vue3';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 
-import { givenAGuest, givenNoErrors, givenNoFlash, givenThePageIsAt } from './support/inertia';
+import { givenAGuest, givenCredits, givenNoErrors, givenNoFlash, givenThePageIsAt } from './support/inertia';
 
 /**
  * Pages are mounted outside a running Inertia app, so the parts that need one are stubbed:
@@ -35,6 +35,7 @@ vi.mock('@inertiajs/vue3', async (importOriginal) => {
 
 beforeEach(() => {
     givenAGuest();
+    givenCredits(null);
     givenNoErrors();
     givenNoFlash();
     givenThePageIsAt('/');

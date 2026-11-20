@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Http\Controllers\Reporting\ShowOperatorReportController;
 use App\Http\Resources\AuthenticatedUserResource;
 use App\Models\User;
@@ -47,6 +48,16 @@ final class HandleInertiaRequests extends Middleware
             'operator_navigation' => fn (): array => $request->user()?->can(ShowOperatorReportController::ABILITY) === true
                 ? [['label' => 'Report', 'href' => route('report', absolute: false)]]
                 : [],
+            /*
+             * The signed-in user's balance, read from the ledger on every page (D-67). A
+             * closure, so a partial reload that doesn't ask for it never runs the query;
+             * History's live updates do ask (PE-017 AC 3).
+             */
+            'credits' => function () use ($request): ?array {
+                $user = $request->user();
+
+                return $user instanceof User ? CreditLedgerEntry::query()->ownedBy($user)->balance()->toArray() : null;
+            },
         ];
     }
 }

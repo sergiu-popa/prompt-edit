@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { reactive } from 'vue';
 
 import type { AuthProps, AuthUser } from '@/types/auth';
+import type { CreditBalance } from '@/types/credits';
 import type { NavigationLink } from '@/types/navigation';
 
 /**
@@ -13,11 +14,11 @@ import type { NavigationLink } from '@/types/navigation';
  */
 export const page = reactive<{
     url: string;
-    props: { auth: AuthProps; operator_navigation: NavigationLink[]; errors: Record<string, string> };
+    props: { auth: AuthProps; operator_navigation: NavigationLink[]; credits: CreditBalance | null; errors: Record<string, string> };
     flash: FlashData;
 }>({
     url: '/',
-    props: { auth: { user: null }, operator_navigation: [], errors: {} },
+    props: { auth: { user: null }, operator_navigation: [], credits: null, errors: {} },
     flash: {},
 });
 
@@ -50,6 +51,11 @@ export function givenSignedInAs(user: AuthUser): void {
 /** The nav links the server shares with an operator. */
 export function givenOperatorNavigation(links: NavigationLink[] = [{ label: 'Report', href: '/report' }]): void {
     page.props.operator_navigation = links;
+}
+
+/** The shared balance, as after sign-in or a live update; null as for a guest. */
+export function givenCredits(credits: CreditBalance | null): void {
+    page.props.credits = credits;
 }
 
 const pendingVisit = {} as PendingVisit;
