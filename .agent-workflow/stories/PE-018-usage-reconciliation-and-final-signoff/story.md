@@ -4,7 +4,7 @@
 Provider costs reconcile with GET /v1/usage; final production sign-off
 
 ## Status
-`in-review`
+`qa-ready`
 
 ## Description
 This is stretch (a), part two, and the final proof on the real deployment. The brief asks that the operator report's provider costs match `GET /v1/usage`, which Pixelforge calls the "source of truth for that key's provider costs". The PE-016 report gains, per UTC day, Pixelforge's own provider cost and token counts next to what we recorded. Each day shows the deltas and an exact integer Match or Mismatch badge.

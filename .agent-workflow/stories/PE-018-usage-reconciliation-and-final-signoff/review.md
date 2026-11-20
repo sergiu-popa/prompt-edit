@@ -88,3 +88,33 @@ The constant-field check finds no constant field in the `usage` prop. `availabil
 
 - **S1. The PE-017 pointer in "Stretch features" names a section without linking it.** `README.md:111` says "Credit balances and Buy credits (PE-017) are described in their own section." That section doesn't exist on this branch yet, because PE-017 is built in a parallel lane. Once this branch is rebased onto a `main` that has PE-017, turn the sentence into a link to that section's anchor, so it can't go stale unnoticed.
 - **S2. A corrupted cache entry would surface as a 500.** On a hit, `FetchPixelforgeUsageAction::execute()` (`app/Domain/Reporting/Actions/FetchPixelforgeUsageAction.php:45`) re-parses the stored array. An `InvalidUsageReportException` there is not a `ReportsPixelforgeContext`, so it bypasses the fallback in `CompareProviderUsageAction`. Today only our own `toArray()` writes that key, so this is a bug path, as documented. If the docs-shaped array ever changes between deploys, though, a 60 s-old entry would fail the page. A version segment in the key (`pixelforge-usage:v1:{start}:{end}`) would make that impossible at no cost. This is optional.
+
+## Round 2
+
+**Verdict: APPROVE**
+
+Scope: the whole story diff, `git diff origin/main...HEAD`. That is the 23 `[PE-018]` commits `365ef5a..2061f37`, checked against `story.md` and `plan.md`. `origin/main..HEAD` still holds only `[PE-018]` commits. Since round 1, two commits were added and nothing earlier was rewritten. All 17 plan tasks stay checked.
+
+Checks run on HEAD (`2061f37`) with `lane-make.sh l18 check`:
+- Pint is clean (335 files), and so is Larastan.
+- PHPUnit passes 1,971 tests (38,403 assertions).
+- ESLint, Prettier and vue-tsc are clean.
+- Vitest passes 539 tests in 37 files.
+
+These are the same counts as round 1, as expected: round 2 changes only `README.md` and `review.md`. I did not run Playwright again, because no spec, page or component changed since round 1's passing `e2e "operator"` run. The `live` group and `tests/smoke/production.spec.ts` stay with the orchestrator, as the plan says.
+
+### Round 1 findings
+
+- **W1, fixed in `3d29d35`.**
+  - `README.md:39` now reads "Delivered as 18 stories (below), each as one reviewable PR".
+  - `README.md:38` drops "to merge in order" and reads "Done as stacked PRs #3, #2, #4, #5 and #6, all merged". I checked that this is true. `gh pr view` shows all five PRs as MERGED, and each PR's head commit is an ancestor of `origin/main`, so the stacked merges reached `main`.
+  - The rest of the README no longer calls any feature planned.
+- **S1 and S2 stay optional.** S1 has to wait for a rebase onto a `main` that has PE-017. S2 (a version segment in the cache key) is still a cheap hardening step, but nothing writes that key except our own `toArray()`.
+
+### Commit hygiene
+
+- `3d29d35` is the one-file README fix, with the subject round 1 suggested.
+- `2061f37` is bookkeeping only: it ticks W1 in `review.md`. It comes after the code commit and is not mixed into it.
+- Both subjects start with `[PE-018]`, are imperative, are at most 72 characters and carry the `Co-Authored-By` trailer.
+
+There is no Critical finding and no unchecked Warning.
