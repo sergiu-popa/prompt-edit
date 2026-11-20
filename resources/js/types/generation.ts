@@ -1,3 +1,4 @@
+import type { Paginated } from '@/types/pagination';
 import type { ImageQuality, ImageSize } from '@/types/pricing';
 
 /**
@@ -51,4 +52,16 @@ export interface Generation {
     user_estimate_nanodollars: { min: number; max: number };
     /** ISO-8601 in UTC, such as `2026-11-19T10:15:30Z`. */
     created_at: string;
+    /** When Pixelforge started processing it, in UTC; null until then. */
+    started_at: string | null;
+    /** When it succeeded or failed, in UTC; null until then. */
+    completed_at: string | null;
+    /** What the user was actually charged; null unless it succeeded, so a failure reads as free. */
+    user_charge_nanodollars: number | null;
 }
+
+/**
+ * History's `generations` prop: a page of generations and the server's time when it was
+ * read, ISO-8601 in UTC to the millisecond, such as `2026-11-19T23:59:58.000Z` (D-42).
+ */
+export type GenerationHistory = Paginated<Generation> & { server_time: string };

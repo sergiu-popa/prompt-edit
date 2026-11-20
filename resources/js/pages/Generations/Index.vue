@@ -8,11 +8,10 @@ import Button from '@/components/ui/Button.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { paths } from '@/lib/paths';
-import type { Generation } from '@/types/generation';
-import type { Paginated } from '@/types/pagination';
+import type { GenerationHistory } from '@/types/generation';
 
 defineProps<{
-    generations: Paginated<Generation>;
+    generations: GenerationHistory;
 }>();
 
 /** Flashed by the submit's redirect only, so a reload or Back never highlights it again. */

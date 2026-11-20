@@ -6,8 +6,7 @@ import { givenFlash, givenSignedInAs, givenThePageIsAt } from '../../support/ine
 import { visibleText } from '../../support/text';
 
 import Index from '@/pages/Generations/Index.vue';
-import type { Generation } from '@/types/generation';
-import type { Paginated } from '@/types/pagination';
+import type { Generation, GenerationHistory } from '@/types/generation';
 
 const BASE = 'http://prompt-edit.localhost/generations';
 
@@ -22,10 +21,13 @@ function generation(id: string, prompt: string): Generation {
         status_label: 'Queued',
         user_estimate_nanodollars: { min: 347_750_000, max: 457_150_000 },
         created_at: '2026-11-19T11:57:00Z',
+        started_at: null,
+        completed_at: null,
+        user_charge_nanodollars: null,
     };
 }
 
-function pageOf(data: Generation[], { page = 1, lastPage = 1, total = data.length } = {}): Paginated<Generation> {
+function pageOf(data: Generation[], { page = 1, lastPage = 1, total = data.length } = {}): GenerationHistory {
     const url = (number: number) => `${BASE}?page=${number}`;
 
     return {
@@ -46,10 +48,11 @@ function pageOf(data: Generation[], { page = 1, lastPage = 1, total = data.lengt
             path: BASE,
             links: [],
         },
+        server_time: '2026-11-19T12:00:00.000Z',
     };
 }
 
-function mountPage(generations: Paginated<Generation>): VueWrapper {
+function mountPage(generations: GenerationHistory): VueWrapper {
     return mount(Index, { props: { generations } });
 }
 

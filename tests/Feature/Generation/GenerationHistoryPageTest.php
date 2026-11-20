@@ -11,11 +11,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\InteractsWithGenerations;
+use Tests\Concerns\ReadsGenerationHistory;
 use Tests\TestCase;
 
 final class GenerationHistoryPageTest extends TestCase
 {
     use InteractsWithGenerations;
+    use ReadsGenerationHistory;
     use RefreshDatabase;
 
     /** GenerationResource's fields, and nothing else (AC 16). */
@@ -29,6 +31,9 @@ final class GenerationHistoryPageTest extends TestCase
         'status_label',
         'user_estimate_nanodollars',
         'created_at',
+        'started_at',
+        'completed_at',
+        'user_charge_nanodollars',
     ];
 
     public function test_a_guest_is_sent_to_sign_in(): void
@@ -68,7 +73,15 @@ final class GenerationHistoryPageTest extends TestCase
             'status_label' => 'Queued',
             'user_estimate_nanodollars' => ['min' => 347_750_000, 'max' => 457_150_000],
             'created_at' => '2026-11-19T10:15:30Z',
+            'started_at' => null,
+            'completed_at' => null,
+            'user_charge_nanodollars' => null,
         ], $item);
+    }
+
+    public function test_the_generations_prop_is_the_page_of_items_and_the_servers_time(): void
+    {
+        $this->assertSame(['data', 'links', 'meta', 'server_time'], array_keys($this->historyFor(User::factory()->create())));
     }
 
     public function test_a_queued_generation_also_reads_queued_and_counts_its_references(): void
@@ -168,23 +181,6 @@ final class GenerationHistoryPageTest extends TestCase
         $this->actingAs($user)
             ->get(route('generations.index'))
             ->assertInertia(fn (Assert $page) => $page->missingFlash('highlighted_generation_id'));
-    }
-
-    /**
-     * @return array{data: list<array<string, mixed>>, links: array<string, ?string>, meta: array<string, mixed>}
-     */
-    private function historyFor(User $user, int $page = 1): array
-    {
-        $history = null;
-
-        $this->actingAs($user)
-            ->get(route('generations.index', $page === 1 ? [] : ['page' => $page]))
-            ->assertOk()
-            ->assertInertia(function (Assert $inertia) use (&$history): void {
-                $history = $inertia->toArray()['props']['generations'];
-            });
-
-        return $history;
     }
 
     /**

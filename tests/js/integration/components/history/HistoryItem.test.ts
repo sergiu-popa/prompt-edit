@@ -18,6 +18,9 @@ const LIGHTHOUSE: Generation = {
     status_label: 'Queued',
     user_estimate_nanodollars: { min: 347_750_000, max: 457_150_000 },
     created_at: '2026-11-19T11:57:00Z',
+    started_at: null,
+    completed_at: null,
+    user_charge_nanodollars: null,
 };
 
 function mountItem(changes: Partial<Generation> = {}, highlighted = false): VueWrapper {
