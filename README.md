@@ -117,7 +117,7 @@ Report is open to operators only (`app:grant-operator`, see [Operator access](#o
 - **Operator report (PE-016):** spend, Pixelforge cost and profit per UTC day and per user, for any range up to 92 days.
 - **Reconciliation with `/v1/usage` (PE-018):** every day and the total checked exactly against Pixelforge's own billing, with deltas and an explanation of any mismatch. Both are described in [Reading the operator report](#reading-the-operator-report).
 
-Credit balances and Buy credits (PE-017) are described in their own section.
+Credit balances and Buy credits are [PE-017](.agent-workflow/stories/PE-017-credit-balances-buy-credits/story.md), delivered in their own PR.
 
 ## Local development
 
@@ -420,7 +420,7 @@ Verified on production at go-live (PE-015) and worth repeating after any change 
 Shortly before hand-in, within 24 h so the images are still live, after `dep deploy` of the current `main` and a first `make smoke-production` (PE-018). No password ever goes on a command line: `E2E_REVIEWER_PASSWORD` comes from `read -rs`, as in [Reviewer account](#reviewer-account).
 
 1. **Operator.** `ssh admin@164.90.236.77 "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:grant-operator '$E2E_REVIEWER_EMAIL'"` prints "… is already an operator." and exits 0.
-2. **Balance.** Signed in as the reviewer, an available balance must be at least $0.7119, the demo set's holds (711,850,000 n$). If it is lower, buy one credits pack first.
+2. **Balance ([PE-017](.agent-workflow/stories/PE-017-credit-balances-buy-credits/story.md)).** Signed in as the reviewer, an available balance must be at least $0.7119, the demo set's holds (711,850,000 n$). If it is lower, buy one credits pack first.
 3. **Note the instant.** `export SINCE=$(date -u +%FT%TZ)`.
 4. **Demo set.** As the reviewer, on Generate, submit PE-015's 8 rows, each prompt at most 40 code points: `[succeed] a lighthouse at dawn` (Square, Low); `[succeed] a red fox in fresh snow` (Landscape, Medium, refs `https://example.com/ref-1.png` and `https://example.com/ref-2.png`); `[succeed] a mountain lake at noon` (Portrait, High); then `[fail] a broken pocket watch`, `[blocked] a forbidden scene`, `[overloaded] a busy harbour`, `[succeed] [duplicate] two moons` and `[succeed] [slow] a slow sunrise`, each Square, Low, no refs.
 5. **Each status and one charge.** The three `[succeed]` rows succeed with an image and a charge; `[fail]` fails and `[blocked]` is rejected, both "Not charged"; `[overloaded]` shows the retry note, then fails after about 2 min, "Not charged"; `[duplicate]` succeeds, with two deliveries per event on the dashboard; `[slow]` processes for 60–90 s, then succeeds without a reload. Then `ssh admin@164.90.236.77 "cd /home/admin/web/prompt.sergiupopa.dev/current && php8.4 artisan app:check-generation-money --since=$SINCE"` prints 8 rows, every check `OK`, exit 0, with at most 516,950,000 n$ of provider cost and 646,187,500 n$ charged.
