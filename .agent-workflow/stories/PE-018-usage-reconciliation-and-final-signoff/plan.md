@@ -256,3 +256,6 @@ The estimate is ≈ 3,700 changed lines, about 60 % of them tests. That is far a
 - **Fake JSON filter.** It compares text, which is correct only because the fake alone writes `completed_at`, always as fixed-width Zulu. There is no index; the dev table holds thousands of rows at most.
 - **The production smoke depends on time.** Its History check needs an image less than 24 h old, and its report check needs the key used only by production. Both are deliberate (D-76), and the README says so.
 - **Budget.** Each uncached load takes 1 of the 50 units a minute. The cache caps one operator at about one unit a minute per range.
+
+## Rebase (orchestrator, 2026-11-20)
+This story was built on PE-016's reviewed tip `f75f12c`. PE-016 then merged (#26) and PE-017 was rebased onto it, so this branch now sits on PE-017's final tip `4f138a0`, and the notes cite the rebased SHAs. Two places met PE-017's changes, and both kept both stories' additions: `tests/Unit/LocalEnvTemplateTest.php` (the starter credit and usage cache rows) and requirements.md (D-67–D-71, then D-72–D-76). No code or test needed changing.

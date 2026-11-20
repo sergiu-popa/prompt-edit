@@ -4,7 +4,7 @@
 
 **Verdict: QA PASSED**
 
-Run on `49a9ed2` (lane l18, fake Pixelforge driver). QA run 2: run 1 stopped before writing a verdict. Every command here ran in the foreground.
+Run on `6d5b5b2` (lane l18, fake Pixelforge driver). QA run 2: run 1 stopped before writing a verdict. Every command here ran in the foreground.
 
 Acceptance criteria 15–17 are the orchestrator's, after merge (see the AC table). They are not QA blockers.
 
@@ -47,7 +47,7 @@ Full output: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef
 | 15 Production sign-off: redeploy, PE-015 set recreated | orchestrator, after merge | Orchestrator, after merge |
 | 16 Production every day Match | orchestrator, after merge | Orchestrator, after merge |
 | 17 Read-only production smoke | `tests/smoke/production.spec.ts`: credentials from `E2E_REVIEWER_EMAIL` and `E2E_REVIEWER_PASSWORD`; non-GET requests recorded and must be exactly `POST /login` and `POST /logout`; no generations, no purchases. The spec was not run here (the lane has no production URL). | Orchestrator, after merge |
-| 18 README final pass | Verified in review round 2 (`3d29d35`, `2061f37`); not a QA test | Pass (review) |
+| 18 README final pass | Verified in review round 2 (`7815bb1`, `d4651a9`); not a QA test | Pass (review) |
 
 ### Edge cases and regressions
 

@@ -4,9 +4,9 @@
 
 **Verdict: REQUEST CHANGES**
 
-Scope: the 20 `[PE-018]` commits `365ef5a..b68739a` on `pe-018-usage-reconciliation-and-final-signoff`, checked against `story.md` and `plan.md`. `origin/main..HEAD` holds only `[PE-018]` commits. They are the plan, 17 task commits, one follow-up UI commit (`5582acc`) and the bookkeeping. All 17 plan tasks are checked.
+Scope: the 20 `[PE-018]` commits `01a63f1..97750ac` on `pe-018-usage-reconciliation-and-final-signoff`, checked against `story.md` and `plan.md`. `origin/main..HEAD` holds only `[PE-018]` commits. They are the plan, 17 task commits, one follow-up UI commit (`057a700`) and the bookkeeping. All 17 plan tasks are checked.
 
-Checks run on HEAD (`b68739a`) with `lane-make.sh l18`:
+Checks run on HEAD (`97750ac`) with `lane-make.sh l18`:
 - `check`: Pint is clean (335 files), and so is Larastan. PHPUnit passes 1,971 tests (38,403 assertions). ESLint, Prettier and vue-tsc are clean. Vitest passes 539 tests in 37 files.
 - `e2e "operator"`: 4 passed. `report-usage.spec.ts` and PE-016's `report.spec.ts` pass on desktop and on mobile.
 - I did not run the `live` group or `tests/smoke/production.spec.ts`. The plan leaves both to the orchestrator.
@@ -72,10 +72,10 @@ The constant-field check finds no constant field in the `usage` prop. `availabil
 ### Commit hygiene
 
 - Every task commit carries its code with its tests. The commit that changes a shared helper (`InteractsWithPixelforgeApi`, `ThrottledPixelforgeClientTest`'s double, `LiveSmokeGuard`, `Show.test.ts`'s `mountShow()`) is the commit that needs it.
-- The plan (`365ef5a`), the decisions (`28f7957`) and the bookkeeping (`b68739a`) each have their own commit. D-76 sits with the smoke it describes (`43d4566`), as the plan says.
-- `5582acc` is a self-contained layout follow-up to `be99c30`, with a body that explains why.
+- The plan (`01a63f1`), the decisions (`e2b7258`) and the bookkeeping (`97750ac`) each have their own commit. D-76 sits with the smoke it describes (`9256b94`), as the plan says.
+- `057a700` is a self-contained layout follow-up to `09b5861`, with a body that explains why.
 - All 20 subjects start with `[PE-018]`, are imperative and are at most 72 characters, and every message carries the `Co-Authored-By` trailer.
-- The cut point after task 14 (`28f7957`) is clean.
+- The cut point after task 14 (`e2b7258`) is clean.
 
 ### Warnings
 
@@ -93,9 +93,9 @@ The constant-field check finds no constant field in the `usage` prop. `availabil
 
 **Verdict: APPROVE**
 
-Scope: the whole story diff, `git diff origin/main...HEAD`. That is the 23 `[PE-018]` commits `365ef5a..2061f37`, checked against `story.md` and `plan.md`. `origin/main..HEAD` still holds only `[PE-018]` commits. Since round 1, two commits were added and nothing earlier was rewritten. All 17 plan tasks stay checked.
+Scope: the whole story diff, `git diff origin/main...HEAD`. That is the 23 `[PE-018]` commits `01a63f1..d4651a9`, checked against `story.md` and `plan.md`. `origin/main..HEAD` still holds only `[PE-018]` commits. Since round 1, two commits were added and nothing earlier was rewritten. All 17 plan tasks stay checked.
 
-Checks run on HEAD (`2061f37`) with `lane-make.sh l18 check`:
+Checks run on HEAD (`d4651a9`) with `lane-make.sh l18 check`:
 - Pint is clean (335 files), and so is Larastan.
 - PHPUnit passes 1,971 tests (38,403 assertions).
 - ESLint, Prettier and vue-tsc are clean.
@@ -105,7 +105,7 @@ These are the same counts as round 1, as expected: round 2 changes only `README.
 
 ### Round 1 findings
 
-- **W1, fixed in `3d29d35`.**
+- **W1, fixed in `7815bb1`.**
   - `README.md:39` now reads "Delivered as 18 stories (below), each as one reviewable PR".
   - `README.md:38` drops "to merge in order" and reads "Done as stacked PRs #3, #2, #4, #5 and #6, all merged". I checked that this is true. `gh pr view` shows all five PRs as MERGED, and each PR's head commit is an ancestor of `origin/main`, so the stacked merges reached `main`.
   - The rest of the README no longer calls any feature planned.
@@ -113,8 +113,8 @@ These are the same counts as round 1, as expected: round 2 changes only `README.
 
 ### Commit hygiene
 
-- `3d29d35` is the one-file README fix, with the subject round 1 suggested.
-- `2061f37` is bookkeeping only: it ticks W1 in `review.md`. It comes after the code commit and is not mixed into it.
+- `7815bb1` is the one-file README fix, with the subject round 1 suggested.
+- `d4651a9` is bookkeeping only: it ticks W1 in `review.md`. It comes after the code commit and is not mixed into it.
 - Both subjects start with `[PE-018]`, are imperative, are at most 72 characters and carry the `Co-Authored-By` trailer.
 
 There is no Critical finding and no unchecked Warning.
