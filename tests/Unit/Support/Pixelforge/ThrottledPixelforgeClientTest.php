@@ -11,6 +11,7 @@ use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
+use App\Support\Pixelforge\PixelforgeRequestBudget;
 use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\ArrayStore;
@@ -43,8 +44,7 @@ final class ThrottledPixelforgeClientTest extends TestCase
         CarbonImmutable::setTestNow('2026-11-20T10:00:00Z');
         $this->client = new ThrottledPixelforgeClient(
             $this->recordingClient(),
-            new RateLimiter(new Repository(new ArrayStore)),
-            self::LIMIT,
+            new PixelforgeRequestBudget(new RateLimiter(new Repository(new ArrayStore)), self::LIMIT),
         );
     }
 

@@ -9,28 +9,16 @@ use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
-use Illuminate\Cache\RateLimiter;
 
 /**
- * Every call through the contract first takes one unit of one account-wide budget,
- * below Pixelforge's 60 a minute (D-44). It wraps whichever driver is bound, so no
- * caller can skip it, and it counts in a store every process shares. The unit is
- * taken before the limit is compared: the database store increments under a row
- * lock, so two workers can never both take the last one.
+ * Every call through the contract first takes one unit of the account-wide budget
+ * (D-44). It wraps whichever driver is bound, so no caller can skip it.
  */
 final readonly class ThrottledPixelforgeClient implements PixelforgeClient
 {
-    /**
-     * The rate limiter key of the account's requests.
-     */
-    public const string BUDGET_KEY = 'pixelforge-requests';
-
-    public const int WINDOW_SECONDS = 60;
-
     public function __construct(
         public PixelforgeClient $client,
-        private RateLimiter $rateLimiter,
-        private int $requestsPerMinute,
+        private PixelforgeRequestBudget $budget,
     ) {}
 
     /**
@@ -38,7 +26,7 @@ final readonly class ThrottledPixelforgeClient implements PixelforgeClient
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
-        $this->takeOneUnit();
+        $this->budget->take();
 
         return $this->client->createGeneration($payload);
     }
@@ -48,7 +36,7 @@ final readonly class ThrottledPixelforgeClient implements PixelforgeClient
      */
     public function retrieveGeneration(string $providerId): GenerationSnapshot
     {
-        $this->takeOneUnit();
+        $this->budget->take();
 
         return $this->client->retrieveGeneration($providerId);
     }
@@ -59,17 +47,5 @@ final readonly class ThrottledPixelforgeClient implements PixelforgeClient
     public function isConfigured(): bool
     {
         return $this->client->isConfigured();
-    }
-
-    /**
-     * @throws RateBudgetExhaustedException
-     */
-    private function takeOneUnit(): void
-    {
-        $taken = $this->rateLimiter->increment(self::BUDGET_KEY, self::WINDOW_SECONDS);
-
-        if ($taken > $this->requestsPerMinute) {
-            throw RateBudgetExhaustedException::freesUpIn($this->rateLimiter->availableIn(self::BUDGET_KEY));
-        }
     }
 }
