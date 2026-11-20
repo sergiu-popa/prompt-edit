@@ -114,4 +114,18 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Registration Limit
+    |--------------------------------------------------------------------------
+    |
+    | How many accounts one client IP may create an hour (D-57), counted when
+    | an account is created. Every account can spend real Pixelforge money, so
+    | production keeps the default; dev and E2E raise it. Anything but a
+    | positive integer means the default.
+    |
+    */
+
+    'registrations_per_hour' => filter_var(env('AUTH_REGISTRATIONS_PER_HOUR'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 3]]),
+
 ];

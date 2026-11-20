@@ -37,6 +37,7 @@ final class LocalEnvTemplateTest extends TestCase
             'a queued generation polled after 5 s' => ['PIXELFORGE_RECONCILE_QUEUED_AFTER', '5'],
             'a processing generation polled after 5 s' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER', '5'],
             'a 2 s recheck' => ['PIXELFORGE_RECONCILE_RECHECK', '2'],
+            'an account limit E2E never reaches' => ['AUTH_REGISTRATIONS_PER_HOUR', '1000'],
         ];
     }
 
@@ -67,6 +68,7 @@ final class LocalEnvTemplateTest extends TestCase
             'the queued threshold' => ['PIXELFORGE_RECONCILE_QUEUED_AFTER'],
             'the processing threshold' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER'],
             'the recheck' => ['PIXELFORGE_RECONCILE_RECHECK'],
+            'the account limit' => ['AUTH_REGISTRATIONS_PER_HOUR'],
         ];
     }
 
