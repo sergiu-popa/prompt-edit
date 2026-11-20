@@ -21,6 +21,11 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_API_KEY',
         'PIXELFORGE_CONNECT_TIMEOUT',
         'PIXELFORGE_REQUEST_TIMEOUT',
+        'PIXELFORGE_RATE_LIMIT_PER_MINUTE',
+        'CACHE_STORE',
+        'PIXELFORGE_SUBMIT_WINDOW',
+        'PIXELFORGE_OVERLOADED_DEADLINE',
+        'PIXELFORGE_CONCURRENCY_MAX_WAIT',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -83,6 +88,16 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertTrue(in_array(config('pixelforge.webhook_secret'), [null, ''], true), 'pixelforge.webhook_secret must be empty in the test suite.');
     }
 
+    /**
+     * The dev containers set a high budget and a short overload deadline in their env
+     * (D-48); the suite always runs with production's bounds.
+     */
+    public function test_the_suite_runs_with_the_production_rate_budget_and_overload_deadline(): void
+    {
+        $this->assertSame(50, config('pixelforge.rate_limit_per_minute'));
+        $this->assertSame(120, config('pixelforge.submit.overloaded_deadline_seconds'));
+    }
+
     public function test_empty_values_mean_the_defaults(): void
     {
         $config = $this->pixelforgeConfigWith(array_fill_keys(self::CLIENT_VARIABLES, ''));
@@ -92,6 +107,7 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertNull($config['api_key']);
         $this->assertSame(5, $config['connect_timeout_seconds']);
         $this->assertSame(30, $config['request_timeout_seconds']);
+        $this->assertSame(50, $config['rate_limit_per_minute']);
     }
 
     public function test_set_values_apply_and_the_timeouts_are_integers(): void
@@ -102,6 +118,7 @@ final class PixelforgeConfigTest extends TestCase
             'PIXELFORGE_API_KEY' => 'pf_test_config_value',
             'PIXELFORGE_CONNECT_TIMEOUT' => '3',
             'PIXELFORGE_REQUEST_TIMEOUT' => '20',
+            'PIXELFORGE_RATE_LIMIT_PER_MINUTE' => '600',
         ]);
 
         $this->assertSame('fake', $config['driver']);
@@ -109,6 +126,7 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertSame('pf_test_config_value', $config['api_key']);
         $this->assertSame(3, $config['connect_timeout_seconds']);
         $this->assertSame(20, $config['request_timeout_seconds']);
+        $this->assertSame(600, $config['rate_limit_per_minute']);
     }
 
     /**
@@ -138,6 +156,95 @@ final class PixelforgeConfigTest extends TestCase
             'zero' => ['0'],
             'negative' => ['-5'],
             'a fraction' => ['2.5'],
+        ];
+    }
+
+    /**
+     * AC 19: a request that could outlast the submit job's timeout would let the worker
+     * kill the job mid-request, so such a value means the default too.
+     */
+    #[DataProvider('requestTimeoutsNotBelowTheJobTimeout')]
+    public function test_a_request_timeout_not_below_the_job_timeout_means_the_default(string $value): void
+    {
+        $this->assertSame(30, $this->pixelforgeConfigWith(['PIXELFORGE_REQUEST_TIMEOUT' => $value])['request_timeout_seconds']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function requestTimeoutsNotBelowTheJobTimeout(): array
+    {
+        return [
+            'the job timeout' => ['60'],
+            'just above it' => ['61'],
+            'far above it' => ['600'],
+        ];
+    }
+
+    public function test_a_request_timeout_just_below_the_job_timeout_applies(): void
+    {
+        $config = $this->pixelforgeConfigWith(['PIXELFORGE_REQUEST_TIMEOUT' => '59']);
+
+        $this->assertSame(59, $config['request_timeout_seconds']);
+        $this->assertIsArray($config['submit']);
+        $this->assertLessThan($config['submit']['job_timeout_seconds'], $config['request_timeout_seconds']);
+    }
+
+    /**
+     * A budget of 0 would never send anything, and a typo must never lift it.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_rate_limit_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(50, $this->pixelforgeConfigWith(['PIXELFORGE_RATE_LIMIT_PER_MINUTE' => $value])['rate_limit_per_minute']);
+    }
+
+    public function test_empty_submit_bounds_mean_the_production_defaults(): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '', 'PIXELFORGE_OVERLOADED_DEADLINE' => '', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => ''])['submit'],
+        );
+    }
+
+    public function test_set_submit_bounds_apply(): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 600, 'overloaded_deadline_seconds' => 15, 'concurrency_max_wait_seconds' => 300, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => '600', 'PIXELFORGE_OVERLOADED_DEADLINE' => '15', 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => '300'])['submit'],
+        );
+    }
+
+    /**
+     * A bound of 0 would fail every generation at its first wait.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_submit_bound_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(
+            ['window_seconds' => 1_800, 'overloaded_deadline_seconds' => 120, 'concurrency_max_wait_seconds' => 600, 'invalid_api_key_attempts' => 3, 'job_timeout_seconds' => 60],
+            $this->pixelforgeConfigWith(['PIXELFORGE_SUBMIT_WINDOW' => $value, 'PIXELFORGE_OVERLOADED_DEADLINE' => $value, 'PIXELFORGE_CONCURRENCY_MAX_WAIT' => $value])['submit'],
+        );
+    }
+
+    /**
+     * Every process must count in one store (D-44), whatever the app's cache is.
+     */
+    #[DataProvider('cacheStores')]
+    public function test_the_rate_budget_is_always_counted_in_the_database_store(string $cacheStore): void
+    {
+        $this->assertSame('database', $this->pixelforgeConfigWith(['CACHE_STORE' => $cacheStore])['rate_limit_store']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function cacheStores(): array
+    {
+        return [
+            'array' => ['array'],
+            'file' => ['file'],
+            'empty' => [''],
         ];
     }
 

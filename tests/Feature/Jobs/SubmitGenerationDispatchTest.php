@@ -10,6 +10,7 @@ use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -37,9 +38,14 @@ final class SubmitGenerationDispatchTest extends TestCase
     use InteractsWithPixelforgeApi;
     use RefreshDatabase;
 
-    public function test_creating_a_generation_queues_one_submit_job_carrying_its_ulid(): void
+    /**
+     * Bounded by time, not tries (D-46): no `maxTries`, so the worker's `--tries=3`
+     * never applies, and `retryUntil` is the window plus the grace from dispatch.
+     */
+    public function test_creating_a_generation_queues_one_time_bounded_submit_job_carrying_its_ulid(): void
     {
         config(['queue.default' => 'database']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T10:00:00Z'));
 
         $generation = $this->createThroughTheAction();
 
@@ -47,9 +53,10 @@ final class SubmitGenerationDispatchTest extends TestCase
         $this->assertCount(1, $jobs);
         $payload = self::payloadOf($jobs[0]);
         $this->assertSame(SubmitGenerationJob::class, $payload['displayName']);
-        $this->assertSame(5, $payload['maxTries']);
+        $this->assertNull($payload['maxTries']);
         $this->assertSame('5,15,30,60', $payload['backoff']);
-        $this->assertSame(60, $payload['timeout']);
+        $this->assertSame(config()->integer('pixelforge.submit.job_timeout_seconds'), $payload['timeout']);
+        $this->assertSame(CarbonImmutable::parse('2026-11-20T10:40:00Z')->getTimestamp(), $payload['retryUntil']);
         $this->assertSame($generation->id, self::commandOf($payload)->generationId);
     }
 
@@ -131,8 +138,9 @@ final class SubmitGenerationDispatchTest extends TestCase
     }
 
     /**
-     * A hung request must give up before the job does, and the job before the
-     * queue hands it to another worker, so an attempt never overlaps its retry.
+     * AC 19: a hung request must give up before the job does, and the job before the
+     * queue hands it to another worker, so one job never runs twice at once. Every
+     * value is read from config, as the worker reads it.
      */
     public function test_the_timeouts_nest_below_the_queue_retry_window(): void
     {
@@ -142,12 +150,13 @@ final class SubmitGenerationDispatchTest extends TestCase
         $payload = self::payloadOf(DB::table('jobs')->first());
         $connectTimeout = config()->integer('pixelforge.connect_timeout_seconds');
         $requestTimeout = config()->integer('pixelforge.request_timeout_seconds');
+        $jobTimeout = config()->integer('pixelforge.submit.job_timeout_seconds');
         $retryAfter = config()->integer('queue.connections.database.retry_after');
 
-        $this->assertIsInt($payload['timeout']);
+        $this->assertSame($jobTimeout, $payload['timeout']);
         $this->assertLessThanOrEqual($requestTimeout, $connectTimeout);
-        $this->assertLessThan($payload['timeout'], $requestTimeout);
-        $this->assertLessThan($retryAfter, $payload['timeout']);
+        $this->assertLessThan($jobTimeout, $requestTimeout);
+        $this->assertLessThan($retryAfter, $jobTimeout);
     }
 
     private function createThroughTheAction(): Generation

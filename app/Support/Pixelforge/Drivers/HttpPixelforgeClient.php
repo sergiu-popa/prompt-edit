@@ -12,6 +12,7 @@ use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\InvalidGenerationSnapshotException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Exceptions\RateLimitExceededException;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -69,11 +70,7 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
         }
 
         if (! $response->successful()) {
-            throw PixelforgeApiException::tryFromResponse(
-                $response->status(),
-                $response->body(),
-                $response->hasHeader('Retry-After') ? $response->header('Retry-After') : null,
-            ) ?? AmbiguousPixelforgeOutcomeException::undocumentedResponse($response->status());
+            throw $this->errorFrom($response);
         }
 
         return new CreatedGenerationData(
@@ -90,6 +87,20 @@ final readonly class HttpPixelforgeClient implements PixelforgeClient
     public function isConfigured(): bool
     {
         return $this->apiKey !== null && $this->apiKey !== '';
+    }
+
+    /**
+     * The typed error of a documented envelope. Any other 429 is a rate limit, since
+     * a 429 creates nothing; any other status is ambiguous (D-31, narrowed by D-47).
+     */
+    private function errorFrom(Response $response): PixelforgeApiException|AmbiguousPixelforgeOutcomeException
+    {
+        $retryAfterHeader = $response->hasHeader('Retry-After') ? $response->header('Retry-After') : null;
+
+        return PixelforgeApiException::tryFromResponse($response->status(), $response->body(), $retryAfterHeader)
+            ?? ($response->status() === 429
+                ? RateLimitExceededException::undocumented(PixelforgeApiException::retryAfterSecondsFrom($retryAfterHeader))
+                : AmbiguousPixelforgeOutcomeException::undocumentedResponse($response->status()));
     }
 
     /**

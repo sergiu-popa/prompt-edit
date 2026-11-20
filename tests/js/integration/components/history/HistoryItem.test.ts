@@ -26,6 +26,7 @@ const LIGHTHOUSE: Generation = {
     image_url_expires_at: null,
     image_expired: false,
     failure_message: null,
+    status_note: null,
 };
 
 /** The server's clock, which the browser's agrees with unless a test skews it. */
@@ -230,6 +231,52 @@ describe('HistoryItem', () => {
         expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(GENERATION_FAILED_COPY);
         expect(wrapper.find('[data-completed]').exists()).toBe(false);
         expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
+    });
+
+    it.each([
+        ['retrying', 'Pixelforge is busy — retrying automatically'],
+        ['waiting for a free slot', 'Waiting for a free slot'],
+    ])('shows a queued generation that is %s with its note, its estimate and no charge', (_, note) => {
+        const wrapper = mountItem({ status_note: note });
+
+        expect(badge(wrapper).text()).toBe('Queued');
+        expect(badge(wrapper).attributes('data-tone')).toBe('neutral');
+        expect(visibleText(wrapper.get('[data-status-note]'))).toBe(note);
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(wrapper.find('[data-charge]').exists()).toBe(false);
+    });
+
+    it('places the note under what was asked for and above the money', () => {
+        const wrapper = mountItem({ status_note: 'Waiting for a free slot' });
+        const meta = wrapper.get('[data-meta]').element;
+        const note = wrapper.get('[data-status-note]').element;
+        const estimate = wrapper.get('[data-estimate]').element;
+
+        expect(meta.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(note.compareDocumentPosition(estimate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows a note as text, never as markup, and none without one', () => {
+        const note = mountItem({ status_note: 'Waiting <b>x</b>' }).get('[data-status-note]');
+
+        expect(note.text()).toBe('Waiting <b>x</b>');
+        expect(note.find('b').exists()).toBe(false);
+        expect(mountItem().find('[data-status-note]').exists()).toBe(false);
+    });
+
+    it.each([
+        "Pixelforge was overloaded and didn't accept this request. You were not charged.",
+        'Pixelforge stayed busy for too long, so we stopped waiting. You were not charged.',
+        "Service unavailable — this generation wasn't sent. You were not charged.",
+        'Daily capacity reached, try after 00:00 UTC. You were not charged.',
+    ])('shows a generation that never reached Pixelforge as failed, not charged, with its estimate: %s', (message) => {
+        const wrapper = mountItem({ ...FAILED, started_at: null, completed_at: null, failure_message: message });
+
+        expect(badge(wrapper).text()).toBe('Failed');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+        expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(message);
+        expect(wrapper.find('[data-status-note]').exists()).toBe(false);
     });
 
     it('shows a failure message as text, never as markup', () => {

@@ -8,7 +8,9 @@ import {
     FAKE_EXPIRE_TTL_MS,
     historyItems,
     markNoReload,
+    OVERLOADED_FAILURE_TIMEOUT_MS,
     PROCESSING_TIMEOUT_MS,
+    RETRY_NOTE_TIMEOUT_MS,
     SLOW_TERMINAL_TIMEOUT_MS,
     statusOf,
     submitPrompt,
@@ -145,5 +147,37 @@ test('an [expire] image that expired while the user was away reads Image expired
     await expect(statusOf(item)).toHaveText('Succeeded');
     expect(await item.locator('img').count(), 'no image is rendered from the restored props').toBe(0);
     await expect(item.getByText('Image expired', { exact: true })).toBeVisible();
+    await expectNoReload(page);
+});
+
+test('an [overloaded] prompt reads retrying, then fails free once the overload deadline passes, with no reload', async ({
+    page,
+}, testInfo) => {
+    test.setTimeout(RETRY_NOTE_TIMEOUT_MS + OVERLOADED_FAILURE_TIMEOUT_MS + 30_000);
+    await registerNewUser(page, testInfo);
+
+    await submitPrompt(page, 'A lighthouse at dusk [overloaded]', { quality: 'Medium', size: 'Square' });
+    await markNoReload(page);
+
+    const item = historyItems(page).first();
+    const note = item.locator('[data-status-note]');
+    await expect(note).toHaveText('Pixelforge is busy — retrying automatically', { timeout: RETRY_NOTE_TIMEOUT_MS });
+    await expect(statusOf(item)).toHaveText('Queued');
+    await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expectInsideContentBox(
+        item.locator(':scope > div'),
+        item.locator('[data-tone], [data-prompt], [data-status-note], [data-estimate]'),
+    );
+    await expectNoHorizontalScroll(page);
+
+    await expect(statusOf(item)).toHaveText('Failed', { timeout: OVERLOADED_FAILURE_TIMEOUT_MS });
+    await expect(item.locator('[data-failure-message]')).toHaveText(
+        "Pixelforge was overloaded and didn't accept this request. You were not charged.",
+    );
+    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
+    await expect(note).toHaveCount(0);
     await expectNoReload(page);
 });

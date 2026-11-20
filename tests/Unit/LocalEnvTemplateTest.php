@@ -31,6 +31,34 @@ final class LocalEnvTemplateTest extends TestCase
             'the fake Pixelforge' => ['PIXELFORGE_DRIVER', 'fake'],
             'in-network webhooks' => ['PIXELFORGE_FAKE_WEBHOOK_URL', 'http://app:8080'],
             'a database queue the worker runs' => ['QUEUE_CONNECTION', 'database'],
+            'a rate budget that never slows parallel E2E' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE', '600'],
+            'an overload deadline E2E can wait for' => ['PIXELFORGE_OVERLOADED_DEADLINE', '15'],
+        ];
+    }
+
+    /**
+     * An existing dev `.env` lacks these names and is never edited, so the dev
+     * containers get them from compose (D-48), defaulted to the template's value.
+     */
+    #[DataProvider('containerBounds')]
+    public function test_compose_defaults_each_dev_bound_to_the_templates_value(string $name): void
+    {
+        $value = self::template()[$name] ?? null;
+        $compose = file_get_contents(dirname(__DIR__, 2) . '/docker-compose.yml');
+
+        $this->assertNotNull($value);
+        $this->assertIsString($compose, 'docker-compose.yml is missing.');
+        $this->assertStringContainsString(sprintf('%s: ${%s:-%s}', $name, $name, $value), $compose);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function containerBounds(): array
+    {
+        return [
+            'the rate budget' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE'],
+            'the overload deadline' => ['PIXELFORGE_OVERLOADED_DEADLINE'],
         ];
     }
 

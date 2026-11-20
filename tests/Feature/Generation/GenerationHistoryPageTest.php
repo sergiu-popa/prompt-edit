@@ -38,6 +38,7 @@ final class GenerationHistoryPageTest extends TestCase
         'image_url_expires_at',
         'image_expired',
         'failure_message',
+        'status_note',
     ];
 
     public function test_a_guest_is_sent_to_sign_in(): void
@@ -84,6 +85,7 @@ final class GenerationHistoryPageTest extends TestCase
             'image_url_expires_at' => null,
             'image_expired' => false,
             'failure_message' => null,
+            'status_note' => null,
         ], $item);
     }
 

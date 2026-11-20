@@ -87,20 +87,23 @@ final class SubmitGenerationLoggingTest extends TestCase
                 'error_code' => 'idempotency_key_reused',
                 'outcome' => 'applied',
             ]],
-            'a 503, rethrown' => ['503', 'warning', [
+            'a 503, released' => ['503', 'warning', [
                 'generation_id' => self::GENERATION_ID,
                 'error_code' => 'overloaded',
                 'status' => 503,
                 'retry_after_seconds' => 2,
+                'retry_in_seconds' => 2,
             ]],
-            'a read timeout, rethrown' => ['read timeout', 'warning', [
+            'a read timeout, released' => ['read timeout', 'warning', [
                 'generation_id' => self::GENERATION_ID,
                 'error_code' => 'ambiguous',
                 'status' => null,
+                'retry_in_seconds' => 5,
             ]],
-            'no key, rethrown' => ['no key', 'warning', [
+            'no key, released' => ['no key', 'warning', [
                 'generation_id' => self::GENERATION_ID,
                 'error_code' => 'not_configured',
+                'retry_in_seconds' => 60,
             ]],
         ];
     }
@@ -111,9 +114,11 @@ final class SubmitGenerationLoggingTest extends TestCase
 
         (new SubmitGenerationJob($lighthouse->id))->failed(new OverloadedException('api_error', 'Pixelforge is overloaded.', retryAfterSeconds: 2));
 
-        $lines = $this->submissionLinesFor($lighthouse);
+        $lines = array_values(array_filter(
+            $this->submissionLinesFor($lighthouse),
+            fn (MessageLogged $logged): bool => $logged->level === 'error',
+        ));
         $this->assertCount(1, $lines);
-        $this->assertSame('error', $lines[0]->level);
         $this->assertSame([
             'generation_id' => $lighthouse->id,
             'exception' => OverloadedException::class,

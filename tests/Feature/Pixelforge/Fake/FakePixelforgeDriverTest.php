@@ -7,6 +7,7 @@ namespace Tests\Feature\Pixelforge\Fake;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\ThrottledPixelforgeClient;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -15,14 +16,17 @@ use Tests\TestCase;
  */
 final class FakePixelforgeDriverTest extends TestCase
 {
-    public function test_the_fake_driver_binds_a_fresh_fake_client(): void
+    public function test_the_fake_driver_binds_a_fresh_fake_client_behind_the_rate_budget(): void
     {
         config(['pixelforge.driver' => FakePixelforgeClient::DRIVER]);
 
         $client = $this->app->make(PixelforgeClient::class);
+        $again = $this->app->make(PixelforgeClient::class);
 
-        $this->assertInstanceOf(FakePixelforgeClient::class, $client);
-        $this->assertNotSame($client, $this->app->make(PixelforgeClient::class));
+        $this->assertInstanceOf(ThrottledPixelforgeClient::class, $client);
+        $this->assertInstanceOf(ThrottledPixelforgeClient::class, $again);
+        $this->assertInstanceOf(FakePixelforgeClient::class, $client->client);
+        $this->assertNotSame($client->client, $again->client);
     }
 
     /**

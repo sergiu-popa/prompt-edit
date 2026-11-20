@@ -38,10 +38,11 @@ final class SubmitGenerationAfterCommitTest extends TestCase
 
         config(['database.connections.' . self::OBSERVER => config('database.connections.pgsql')]);
 
-        // Committed rows must not leak into the RefreshDatabase tests that run after this one.
+        // Committed rows must not leak into the RefreshDatabase tests that run after this one,
+        // and neither must the rate budget's count the submit took (D-44).
         $this->beforeApplicationDestroyed(function (): void {
             DB::purge(self::OBSERVER);
-            DB::statement('truncate table generations, users restart identity cascade');
+            DB::statement('truncate table generations, users, cache restart identity cascade');
         });
     }
 

@@ -6,7 +6,10 @@ namespace App\Domain\Generation\Models;
 
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
+use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\QueryBuilders\GenerationQueryBuilder;
+use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use Carbon\CarbonImmutable;
@@ -28,6 +31,10 @@ use Illuminate\Database\Eloquent\Model;
  *
  * The provider cost and the user charge stay null until the generation is
  * terminal, and only the transition action writes them, under its row lock.
+ *
+ * The `submit_*` columns are the submit job's record of its attempts (D-45). Only
+ * the submit path writes them, never the transition action, and they are not
+ * fillable.
  *
  * @property string $id
  * @property int $user_id
@@ -57,6 +64,15 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?CarbonImmutable $provider_created_at
  * @property ?CarbonImmutable $started_at
  * @property ?CarbonImmutable $completed_at
+ * @property ?CarbonImmutable $submit_first_attempted_at
+ * @property ?CarbonImmutable $submit_last_attempted_at
+ * @property ?SubmitAttemptOutcome $submit_last_outcome
+ * @property ?CarbonImmutable $submit_ambiguous_at
+ * @property ?CarbonImmutable $submit_handed_over_at
+ * @property ?CarbonImmutable $submit_first_overloaded_at
+ * @property ?CarbonImmutable $submit_first_concurrency_limited_at
+ * @property int $submit_invalid_api_key_count
+ * @property ?SubmitRetryNote $submit_retry_note
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  *
@@ -100,6 +116,26 @@ final class Generation extends Model
     use HasFactory, HasUlids;
 
     /**
+     * Writes the submit bookkeeping in one UPDATE of the `submit_*` columns alone
+     * (D-45), through the casts and the offset-carrying date format. It never
+     * touches status, costs or `updated_at`, so it is never a transition.
+     */
+    public function recordSubmitBookkeeping(SubmitBookkeeping $bookkeeping): void
+    {
+        $columns = $bookkeeping->toAttributes();
+
+        $this->forceFill($columns);
+        $changed = array_intersect_key($this->getDirty(), $columns);
+
+        if ($changed === []) {
+            return;
+        }
+
+        self::query()->whereKey($this->getKey())->toBase()->update($changed);
+        $this->syncOriginalAttributes(array_keys($changed));
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -124,6 +160,15 @@ final class Generation extends Model
             'provider_created_at' => 'immutable_datetime',
             'started_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
+            'submit_first_attempted_at' => 'immutable_datetime',
+            'submit_last_attempted_at' => 'immutable_datetime',
+            'submit_last_outcome' => SubmitAttemptOutcome::class,
+            'submit_ambiguous_at' => 'immutable_datetime',
+            'submit_handed_over_at' => 'immutable_datetime',
+            'submit_first_overloaded_at' => 'immutable_datetime',
+            'submit_first_concurrency_limited_at' => 'immutable_datetime',
+            'submit_invalid_api_key_count' => 'integer',
+            'submit_retry_note' => SubmitRetryNote::class,
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

@@ -117,11 +117,15 @@ trait InteractsWithPixelforgeApi
 
     /**
      * One attempt of the submit job, resolved through the container as the
-     * worker runs it. Whatever the attempt throws is rethrown.
+     * worker runs it, with its queue interactions faked so a test can assert
+     * the release. Whatever the attempt throws is rethrown.
      */
-    protected function runSubmitJob(Generation $generation): void
+    protected function runSubmitJob(Generation $generation): SubmitGenerationJob
     {
-        $this->app->call([new SubmitGenerationJob($generation->id), 'handle']);
+        $job = (new SubmitGenerationJob($generation->id))->withFakeQueueInteractions();
+        $this->app->call([$job, 'handle']);
+
+        return $job;
     }
 
     /**

@@ -10,6 +10,8 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\ThrottledPixelforgeClient;
+use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\RedirectResponse;
@@ -35,19 +37,27 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Built on every resolution, so a changed config applies. Resolution is
      * lazy: an unknown driver fails when the client is first needed, never
-     * while the app boots.
+     * while the app boots. Whichever driver is configured, the fake too, takes
+     * every call from the one shared budget (D-44).
      *
      * @throws PixelforgeNotConfiguredException
      */
     private function pixelforgeClient(Application $app): PixelforgeClient
     {
-        $driver = $app->make('config')->string('pixelforge.driver');
+        $config = $app->make('config');
+        $driver = $config->string('pixelforge.driver');
 
-        return match ($driver) {
+        $client = match ($driver) {
             HttpPixelforgeClient::DRIVER => $app->make(HttpPixelforgeClient::class),
             FakePixelforgeClient::DRIVER => $this->fakePixelforgeClient($app),
             default => throw PixelforgeNotConfiguredException::unknownDriver($driver),
         };
+
+        return new ThrottledPixelforgeClient(
+            $client,
+            new CacheRateLimiter($app->make('cache')->store($config->string('pixelforge.rate_limit_store'))),
+            $config->integer('pixelforge.rate_limit_per_minute'),
+        );
     }
 
     /**

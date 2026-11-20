@@ -9,7 +9,9 @@ use App\Domain\Billing\Actions\SettleGenerationCreditsAction;
 use App\Domain\Billing\ValueObjects\Nanodollars;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
 use App\Domain\Generation\Models\Generation;
+use App\Domain\Generation\ValueObjects\SubmitBookkeeping;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Models\User;
@@ -146,6 +148,31 @@ final class GenerationFactory extends Factory
             'error_param' => 'prompt',
             'provider_cost_nanodollars' => 0,
             'user_charge_nanodollars' => 0,
+        ]);
+    }
+
+    /**
+     * One submit attempt a minute ago, with that outcome, as the submit job records
+     * it: the anchor and the note the outcome sets. With no outcome, the run died
+     * after its start was recorded (AC 12).
+     */
+    public function submitAttempted(?SubmitAttemptOutcome $lastOutcome): static
+    {
+        return $this->state(function () use ($lastOutcome): array {
+            $attemptedAt = CarbonImmutable::now()->startOfSecond()->subMinute();
+            $bookkeeping = (new SubmitBookkeeping)->startAttempt($attemptedAt);
+
+            return ($lastOutcome === null ? $bookkeeping : $bookkeeping->finishAttempt($lastOutcome, $attemptedAt))->toAttributes();
+        });
+    }
+
+    /**
+     * Latched as ambiguous (AC 13) at its first attempt, or a minute ago without one.
+     */
+    public function submitLatched(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'submit_ambiguous_at' => $attributes['submit_first_attempted_at'] ?? CarbonImmutable::now()->startOfSecond()->subMinute(),
         ]);
     }
 

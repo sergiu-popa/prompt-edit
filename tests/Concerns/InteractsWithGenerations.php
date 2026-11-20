@@ -107,6 +107,21 @@ trait InteractsWithGenerations
         return (array) DB::table('generations')->where('id', $generation->getKey())->first();
     }
 
+    /**
+     * The raw row without the `submit_*` columns, which every submit attempt writes
+     * by design (D-45): equal when status, costs, provider fields and times are.
+     *
+     * @return array<string, mixed>
+     */
+    protected function rawGenerationRowWithoutSubmitBookkeeping(Generation $generation): array
+    {
+        return array_filter(
+            $this->rawGenerationRow($generation),
+            fn (string $column): bool => ! str_starts_with($column, 'submit_') || $column === 'submission_token',
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
     protected function reloadedGeneration(Generation $generation): Generation
     {
         return Generation::query()->whereKey($generation->getKey())->firstOrFail();

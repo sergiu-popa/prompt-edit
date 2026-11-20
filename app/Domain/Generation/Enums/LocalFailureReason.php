@@ -26,4 +26,24 @@ enum LocalFailureReason: string
      * `409`: Pixelforge holds our key with other params, which is a bug here.
      */
     case IdempotencyKeyReused = 'idempotency_key_reused';
+
+    /**
+     * `503 overloaded` past the overload deadline: nothing was created (AC 11).
+     */
+    case ProviderOverloaded = 'provider_overloaded';
+
+    /**
+     * Rate-limit, budget or concurrency waits that outlasted their bound (AC 7, 17).
+     */
+    case ProviderBusy = 'provider_busy';
+
+    /**
+     * The key was refused, or no request could ever be sent (AC 14, 17).
+     */
+    case ServiceUnavailable = 'service_unavailable';
+
+    /**
+     * `429 daily_limit_exceeded`: the account's 500 a UTC day are used (AC 8).
+     */
+    case DailyLimit = 'daily_limit';
 }
