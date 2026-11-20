@@ -1,22 +1,74 @@
 import { router } from '@inertiajs/vue3';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 
 import {
+    givenCredits,
     givenFlash,
     givenNoFlash,
     givenOperatorNavigation,
     givenSignedInAs,
     givenThePageIsAt,
     givenVisitsStayPending,
+    page,
 } from '../support/inertia';
+
+/** Sign out sits directly in the header's row; the balance's button is nested deeper. */
+const SIGN_OUT = 'header > div > button';
 
 describe('AppLayout', () => {
     beforeEach(() => {
         givenSignedInAs({ id: 1, name: 'Ada Lovelace', email: 'ada@example.com' });
+        givenCredits({ available_nanodollars: 913_687_500, reserved_nanodollars: 86_312_500, running_generations: 1 });
         givenNoFlash();
+    });
+
+    describe('balance', () => {
+        it('shows the available balance in the header', () => {
+            const balance = mount(AppLayout).get('header [data-balance]');
+
+            expect(balance.text()).toContain('Balance');
+            expect(balance.get('button').text()).toBe('$0.9137');
+            expect(balance.get('[role="tooltip"]').text()).toBe('$0.913687500');
+        });
+
+        it('shows the starter grant right after sign-up as $1.0000', () => {
+            givenCredits({ available_nanodollars: 1_000_000_000, reserved_nanodollars: 0, running_generations: 0 });
+
+            expect(mount(AppLayout).get('header [data-balance] button').text()).toBe('$1.0000');
+        });
+
+        it('updates when a live update brings a new balance', async () => {
+            const wrapper = mount(AppLayout);
+
+            page.props.credits = { available_nanodollars: 925_668_750, reserved_nanodollars: 0, running_generations: 0 };
+            await nextTick();
+
+            expect(wrapper.get('header [data-balance] button').text()).toBe('$0.9257');
+        });
+
+        it('shows no balance without one, as for a guest', () => {
+            givenCredits(null);
+
+            expect(mount(AppLayout).find('[data-balance]').exists()).toBe(false);
+        });
+
+        it('shows a negative balance in red with its minus sign', () => {
+            givenCredits({ available_nanodollars: -1_000_000, reserved_nanodollars: 0, running_generations: 0 });
+
+            const amount = mount(AppLayout).get('header [data-balance] button');
+            expect(amount.text()).toBe('-$0.0010');
+            expect(amount.element.closest('.text-red-700')).not.toBeNull();
+        });
+
+        it('shows a positive balance without the warning colour', () => {
+            const amount = mount(AppLayout).get('header [data-balance] button');
+
+            expect(amount.element.closest('.text-red-700')).toBeNull();
+        });
     });
 
     it('shows the server notice as a status at the top of <main>', () => {
@@ -51,7 +103,7 @@ describe('AppLayout', () => {
         const post = vi.spyOn(router, 'post').mockImplementation(() => {});
         const wrapper = mount(AppLayout);
 
-        const signOut = wrapper.get('header button');
+        const signOut = wrapper.get(SIGN_OUT);
         expect(signOut.text()).toBe('Sign out');
         expect(signOut.attributes('type')).toBe('button');
 
@@ -65,10 +117,10 @@ describe('AppLayout', () => {
         const post = givenVisitsStayPending();
         const wrapper = mount(AppLayout);
 
-        await wrapper.get('header button').trigger('click');
-        await wrapper.get('header button').trigger('click');
+        await wrapper.get(SIGN_OUT).trigger('click');
+        await wrapper.get(SIGN_OUT).trigger('click');
 
-        const signOut = wrapper.get('header button');
+        const signOut = wrapper.get(SIGN_OUT);
         expect(signOut.text()).toBe('Signing out…');
         expect(signOut.attributes('disabled')).toBeDefined();
         expect(signOut.attributes('aria-busy')).toBe('true');

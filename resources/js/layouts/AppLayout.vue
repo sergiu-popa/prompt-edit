@@ -2,6 +2,7 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
+import HeaderBalance from '@/components/credits/HeaderBalance.vue';
 import Button from '@/components/ui/Button.vue';
 import Notice from '@/components/ui/Notice.vue';
 import { paths } from '@/lib/paths';
@@ -13,6 +14,7 @@ defineSlots<{
 
 const page = usePage();
 const userName = computed(() => page.props.auth.user?.name ?? '');
+const credits = computed(() => page.props.credits);
 const notice = computed(() => page.flash.notice);
 
 const STATIC_NAV_ITEMS: readonly NavigationLink[] = [
@@ -43,8 +45,10 @@ function signOut(): void {
     <div class="min-h-screen bg-zinc-50">
         <!--
             Mobile: a grid of two rows. The brand, the name (truncated, so it never pushes Sign out
-            off the row) and Sign out share the first; the nav has the second to itself.
-            From `sm`: one flex row of brand, nav, then the name and Sign out on the right.
+            off the row) and Sign out share the first; the nav and, right-aligned, the balance
+            share the second.
+            From `sm`: one flex row of brand, nav, then the balance, the name and Sign out on the
+            right; the second row's wrapper is `display: contents` there, so it adds no box.
             The DOM order is the desktop order, so the tab order is the same at every width.
         -->
         <header class="border-b border-zinc-200 bg-white">
@@ -52,18 +56,26 @@ function signOut(): void {
                 class="mx-auto grid max-w-5xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 sm:flex sm:gap-x-6 sm:px-6"
             >
                 <Link :href="paths.dashboard" class="text-sm font-semibold tracking-tight text-zinc-900">PromptEdit</Link>
-                <!-- On a phone the nav is pulled left so its first label lines up with the brand. -->
-                <nav aria-label="Main" class="col-span-3 row-start-2 -ml-2.5 flex items-center gap-1 text-sm sm:ml-0">
-                    <Link
-                        v-for="item in navItems"
-                        :key="item.href"
-                        :href="item.href"
-                        :aria-current="currentPath === item.href ? 'page' : undefined"
-                        class="rounded-md px-2.5 py-1.5 text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 aria-[current=page]:bg-zinc-100 aria-[current=page]:font-medium aria-[current=page]:text-zinc-900"
-                        >{{ item.label }}</Link
-                    >
-                </nav>
-                <p class="col-start-2 row-start-1 min-w-0 truncate text-right text-sm text-zinc-600 sm:ml-auto sm:max-w-64 sm:text-left">
+                <div class="col-span-3 row-start-2 flex items-center justify-between gap-3 sm:contents">
+                    <!-- On a phone the nav is pulled left so its first label lines up with the brand. -->
+                    <nav aria-label="Main" class="-ml-2.5 flex items-center gap-1 text-sm sm:ml-0">
+                        <Link
+                            v-for="item in navItems"
+                            :key="item.href"
+                            :href="item.href"
+                            :aria-current="currentPath === item.href ? 'page' : undefined"
+                            class="rounded-md px-2.5 py-1.5 text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 aria-[current=page]:bg-zinc-100 aria-[current=page]:font-medium aria-[current=page]:text-zinc-900"
+                            >{{ item.label }}</Link
+                        >
+                    </nav>
+                    <HeaderBalance v-if="credits" :credits="credits" class="sm:ml-auto" />
+                </div>
+                <p
+                    :class="[
+                        'col-start-2 row-start-1 min-w-0 truncate text-right text-sm text-zinc-600 sm:max-w-64 sm:text-left',
+                        credits ? '' : 'sm:ml-auto',
+                    ]"
+                >
                     {{ userName }}
                 </p>
                 <Button variant="secondary" class="col-start-3 row-start-1" :busy="isSigningOut" busy-label="Signing out…" @click="signOut"
