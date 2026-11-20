@@ -66,7 +66,7 @@ test('a [blocked] prompt turns Failed live, with the content-policy copy and no 
     await expect(item.locator('[data-failure-message]')).toHaveText(
         "Prompt rejected by Pixelforge's content policy. Edit the prompt and try again.",
     );
-    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-charge]')).toHaveText('$0.0863 returned — not charged', { useInnerText: true });
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
     await expectNoReload(page);
 });
