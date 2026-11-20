@@ -201,7 +201,7 @@ final class LivePixelforgeSmokeTest extends TestCase
 
         $this->assertSame(GenerationStatus::Succeeded, $snapshot->status, sprintf('The generation ended %s (%s).', $snapshot->status->value, $snapshot->errorCode ?? 'no error code'));
         $this->assertNotNull($snapshot->usage);
-        $this->assertSame($this->pinnedRates(), $snapshot->rates);
+        $this->assertSame(self::sortedByKey($this->pinnedRates()), self::sortedByKey($snapshot->rates), 'The generation\'s rates drifted from config/pricing.php.');
 
         $generation = $this->lastResponse()->json();
         $this->assertIsArray($generation);
