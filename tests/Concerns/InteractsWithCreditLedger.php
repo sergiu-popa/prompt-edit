@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Tests\Concerns;
 
 use App\Domain\Generation\Models\Generation;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * A generation's credit ledger entries as stored, read without the model so
- * every amount is the exact integer in the row.
+ * A generation's credit ledger entries, and a user's top-ups, as stored, read
+ * without the model so every amount is the exact integer in the row.
  *
  * @phpstan-require-extends TestCase
  */
@@ -48,5 +49,24 @@ trait InteractsWithCreditLedger
         $this->assertIsInt($net);
 
         return $net;
+    }
+
+    /**
+     * @return list<array{string, int}> each grant's and purchase's type and amount, in write order
+     */
+    protected function topUpsFor(User $user): array
+    {
+        return array_values(DB::table('credit_ledger_entries')
+            ->where('user_id', $user->getKey())
+            ->whereNull('generation_id')
+            ->orderBy('id')
+            ->get(['type', 'amount_nanodollars'])
+            ->map(function (object $entry): array {
+                $this->assertIsString($entry->type);
+                $this->assertIsInt($entry->amount_nanodollars);
+
+                return [$entry->type, $entry->amount_nanodollars];
+            })
+            ->all());
     }
 }

@@ -38,6 +38,7 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="AUTH_REGISTRATIONS_PER_HOUR" value="" force="true"/>
+        <env name="CREDITS_STARTER_GRANT" value="" force="true"/>
         <env name="PIXELFORGE_API_KEY" value="" force="true"/>
         <env name="PIXELFORGE_DRIVER" value="http" force="true"/>
         <env name="PIXELFORGE_WEBHOOK_SECRET" value="" force="true"/>
@@ -56,6 +57,7 @@
         <env name="PIXELFORGE_STUCK_AFTER" value="" force="true"/>
         <!-- The dev containers set these in the process env, which Laravel reads from $_SERVER first. -->
         <server name="AUTH_REGISTRATIONS_PER_HOUR" value=""/>
+        <server name="CREDITS_STARTER_GRANT" value=""/>
         <server name="PIXELFORGE_RATE_LIMIT_PER_MINUTE" value=""/>
         <server name="PIXELFORGE_OVERLOADED_DEADLINE" value=""/>
         <server name="PIXELFORGE_FAKE_DROP_WEBHOOKS" value=""/>
