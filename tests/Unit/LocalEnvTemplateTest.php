@@ -33,6 +33,10 @@ final class LocalEnvTemplateTest extends TestCase
             'a database queue the worker runs' => ['QUEUE_CONNECTION', 'database'],
             'a rate budget that never slows parallel E2E' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE', '600'],
             'an overload deadline E2E can wait for' => ['PIXELFORGE_OVERLOADED_DEADLINE', '15'],
+            'a reconciler run every 5 s' => ['PIXELFORGE_RECONCILE_EVERY', '5'],
+            'a queued generation polled after 5 s' => ['PIXELFORGE_RECONCILE_QUEUED_AFTER', '5'],
+            'a processing generation polled after 5 s' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER', '5'],
+            'a 2 s recheck' => ['PIXELFORGE_RECONCILE_RECHECK', '2'],
         ];
     }
 
@@ -59,6 +63,10 @@ final class LocalEnvTemplateTest extends TestCase
         return [
             'the rate budget' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE'],
             'the overload deadline' => ['PIXELFORGE_OVERLOADED_DEADLINE'],
+            'the reconciler frequency' => ['PIXELFORGE_RECONCILE_EVERY'],
+            'the queued threshold' => ['PIXELFORGE_RECONCILE_QUEUED_AFTER'],
+            'the processing threshold' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER'],
+            'the recheck' => ['PIXELFORGE_RECONCILE_RECHECK'],
         ];
     }
 
@@ -79,6 +87,28 @@ final class LocalEnvTemplateTest extends TestCase
         return [
             'webhook secret' => ['PIXELFORGE_WEBHOOK_SECRET'],
             'API key' => ['PIXELFORGE_API_KEY'],
+        ];
+    }
+
+    /**
+     * Only what E2E needs is shortened (Story clarifications, dev bounds): re-dispatch,
+     * give-up and stuck keep production's values, so parallel specs never see them.
+     */
+    #[DataProvider('productionReconcileBounds')]
+    public function test_the_other_reconcile_bounds_keep_production_values(string $name): void
+    {
+        $this->assertSame('', self::template()[$name] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function productionReconcileBounds(): array
+    {
+        return [
+            'the max recheck' => ['PIXELFORGE_RECONCILE_RECHECK_MAX'],
+            'the batch' => ['PIXELFORGE_RECONCILE_BATCH'],
+            'the submit reserve' => ['PIXELFORGE_SUBMIT_RESERVE'],
         ];
     }
 
