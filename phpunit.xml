@@ -12,6 +12,12 @@
             <directory>tests/Feature</directory>
         </testsuite>
     </testsuites>
+    <!-- The live smoke talks to the real Pixelforge with a dev key; only `make live-smoke` runs it (D-58). -->
+    <groups>
+        <exclude>
+            <group>live</group>
+        </exclude>
+    </groups>
     <source>
         <include>
             <directory>app</directory>

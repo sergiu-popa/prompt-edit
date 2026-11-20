@@ -92,6 +92,11 @@ js-fix:
 js-test:
 	docker exec prompt-edit-app npm test
 
+# The opt-in live smoke against the real Pixelforge (D-58), never part of `make test` or CI. Its
+# guard reads the dev key from `.env` and refuses in production, in CI and without a key.
+live-smoke:
+	@docker exec prompt-edit-app php artisan test --compact --group=live
+
 e2e:
 	docker exec prompt-edit-app npm run build
 	docker compose run --rm playwright npx playwright test $(if $(filter),--grep "$(filter)")
