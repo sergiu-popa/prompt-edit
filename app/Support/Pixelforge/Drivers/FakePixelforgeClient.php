@@ -4,26 +4,32 @@ declare(strict_types=1);
 
 namespace App\Support\Pixelforge\Drivers;
 
+use App\Domain\Reporting\ValueObjects\ReportRange;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\DataTransferObjects\UsageReportData;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\ContentPolicyViolationException;
+use App\Support\Pixelforge\Exceptions\DateRangeTooLongException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\NotFoundException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use App\Support\Pixelforge\Exceptions\ValidationFailedException;
 use App\Support\Pixelforge\Fake\AdvanceFakeGenerationJob;
 use App\Support\Pixelforge\Fake\FakeChaos;
 use App\Support\Pixelforge\Fake\FakeGenerationOutcome;
 use App\Support\Pixelforge\Fake\FakeKeywords;
 use App\Support\Pixelforge\Fake\FakePixelforgeGeneration;
 use App\Support\Pixelforge\Fake\FakeUsageGenerator;
+use App\Support\Pixelforge\Fake\FakeUsageReport;
 use Carbon\CarbonImmutable;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use LogicException;
 use SensitiveParameter;
 
@@ -46,11 +52,17 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
     private const int OVERLOADED_RETRY_AFTER_SECONDS = 2;
 
     /**
+     * Pixelforge's own `/v1/usage` limit, which the fake answers as Pixelforge does.
+     */
+    public const int MAX_USAGE_DAYS = 92;
+
+    /**
      * @param  array<string, string>  $rates  the pinned USD-per-1M rate strings
      */
     public function __construct(
         private FakeUsageGenerator $usageGenerator,
         private FakeChaos $chaos,
+        private FakeUsageReport $usageReport,
         #[Config('pixelforge.webhook_secret'), SensitiveParameter]
         private ?string $webhookSecret,
         #[Config('pricing.rates')]
@@ -148,6 +160,36 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         }
 
         return GenerationSnapshot::from($generation->snapshot);
+    }
+
+    /**
+     * The usage of its own succeeded generations by completed UTC day (D-75). It signs
+     * nothing, so it needs no secret.
+     *
+     * @throws DateRangeTooLongException for more than `MAX_USAGE_DAYS` days
+     * @throws ValidationFailedException for a date that isn't `Y-m-d`, or a start after the end
+     */
+    public function retrieveUsage(string $startDate, string $endDate): UsageReportData
+    {
+        try {
+            $days = ReportRange::inclusiveDayCount($startDate, $endDate);
+        } catch (InvalidArgumentException) {
+            $days = 0;
+        }
+
+        if ($days < 1) {
+            throw new ValidationFailedException(
+                'invalid_request_error',
+                'start_date and end_date must be YYYY-MM-DD dates, the start on or before the end.',
+                param: 'start_date',
+            );
+        }
+
+        if ($days > self::MAX_USAGE_DAYS) {
+            throw new DateRangeTooLongException('invalid_request_error', 'The usage date range covers too many days.', param: 'end_date');
+        }
+
+        return UsageReportData::from($this->usageReport->build($startDate, $endDate));
     }
 
     /**

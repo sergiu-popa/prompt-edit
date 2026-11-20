@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Domain\Billing\ValueObjects\Nanodollars;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
@@ -47,6 +48,7 @@ trait InteractsWithPixelforgeApi
             'pixelforge.api_key' => self::PIXELFORGE_API_KEY,
             'pixelforge.connect_timeout_seconds' => 5,
             'pixelforge.request_timeout_seconds' => 30,
+            'pixelforge.usage.timeout_seconds' => 5,
         ]);
     }
 
@@ -72,6 +74,70 @@ trait InteractsWithPixelforgeApi
     protected static function pixelforgeRetrieved(array $object): PromiseInterface
     {
         return Http::response(json_encode($object, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), 200, ['Content-Type' => 'application/json']);
+    }
+
+    /**
+     * A `200` carrying the docs-shaped usage report of the rows, given ascending: its range
+     * runs from the first row's date to the last's, and its total, unless given, is the
+     * rows' sum.
+     *
+     * @param  non-empty-list<array<string, int|string>>  $rows  each from usageRow()
+     * @param  ?array<string, int|string>  $total
+     */
+    protected static function pixelforgeUsageAnswered(array $rows, ?array $total = null): PromiseInterface
+    {
+        return Http::response(json_encode([
+            'object' => 'usage',
+            'start_date' => $rows[0]['date'],
+            'end_date' => $rows[count($rows) - 1]['date'],
+            'data' => $rows,
+            'total' => $total ?? self::usageTotalOf($rows),
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), 200, ['Content-Type' => 'application/json']);
+    }
+
+    /**
+     * One day of a usage report in the docs' field order: zeros unless given.
+     *
+     * @return array{date: string, generations: int, input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int, cost_usd: string}
+     */
+    protected static function usageRow(
+        string $date,
+        string $costUsd = '0.000000000',
+        int $inputTextTokens = 0,
+        int $inputImageTokens = 0,
+        int $outputTokens = 0,
+        int $reasoningTokens = 0,
+        int $generations = 0,
+    ): array {
+        return [
+            'date' => $date,
+            'generations' => $generations,
+            'input_text_tokens' => $inputTextTokens,
+            'input_image_tokens' => $inputImageTokens,
+            'output_tokens' => $outputTokens,
+            'reasoning_tokens' => $reasoningTokens,
+            'cost_usd' => $costUsd,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, int|string>>  $rows
+     * @return array<string, int|string>
+     */
+    protected static function usageTotalOf(array $rows): array
+    {
+        $total = ['generations' => 0, 'input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0];
+        $cost = Nanodollars::zero();
+
+        foreach ($rows as $row) {
+            foreach (array_keys($total) as $field) {
+                $total[$field] += (int) $row[$field];
+            }
+
+            $cost = $cost->plus(Nanodollars::fromUsdString((string) $row['cost_usd']));
+        }
+
+        return [...$total, 'cost_usd' => $cost->toUsdString()];
     }
 
     /**
@@ -166,6 +232,19 @@ trait InteractsWithPixelforgeApi
         return array_values(Http::recorded()
             ->map(fn (array $pair): Request => $pair[0])
             ->filter(fn (Request $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/generations'))
+            ->all());
+    }
+
+    /**
+     * Every recorded `GET …/usage`, in the order it was sent.
+     *
+     * @return list<Request>
+     */
+    protected function recordedUsageRequests(): array
+    {
+        return array_values(Http::recorded()
+            ->map(fn (array $pair): Request => $pair[0])
+            ->filter(fn (Request $request): bool => $request->method() === 'GET' && str_contains($request->url(), '/usage'))
             ->all());
     }
 

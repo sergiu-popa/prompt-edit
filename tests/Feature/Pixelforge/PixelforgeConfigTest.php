@@ -26,6 +26,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_SUBMIT_WINDOW',
         'PIXELFORGE_OVERLOADED_DEADLINE',
         'PIXELFORGE_CONCURRENCY_MAX_WAIT',
+        'PIXELFORGE_USAGE_TIMEOUT',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -133,6 +134,47 @@ final class PixelforgeConfigTest extends TestCase
     public function test_the_suite_runs_with_the_production_reconcile_bounds(): void
     {
         $this->assertSame(self::RECONCILE_DEFAULTS, array_intersect_key((array) config('pixelforge.reconcile'), self::RECONCILE_DEFAULTS));
+    }
+
+    /**
+     * D-74: the report waits on the usage call, so the suite runs with production's 5 s.
+     */
+    public function test_the_suite_runs_with_the_production_usage_timeout(): void
+    {
+        $this->assertSame(5, config('pixelforge.usage.timeout_seconds'));
+    }
+
+    public function test_the_usage_timeout_defaults_to_5_seconds(): void
+    {
+        $this->assertSame(5, $this->usageTimeoutWith(''));
+    }
+
+    public function test_a_set_usage_timeout_applies(): void
+    {
+        $this->assertSame(8, $this->usageTimeoutWith('8'));
+        $this->assertSame(10, $this->usageTimeoutWith('10'));
+    }
+
+    /**
+     * A page waits on it, so it may not exceed 10 s.
+     */
+    #[DataProvider('invalidUsageTimeouts')]
+    public function test_a_usage_timeout_outside_1_to_10_means_the_default(string $value): void
+    {
+        $this->assertSame(5, $this->usageTimeoutWith($value));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidUsageTimeouts(): array
+    {
+        return [
+            'zero' => ['0'],
+            'eleven' => ['11'],
+            'a word' => ['abc'],
+            'a fraction' => ['2.5'],
+        ];
     }
 
     public function test_empty_reconcile_bounds_mean_the_production_defaults(): void
@@ -510,6 +552,14 @@ final class PixelforgeConfigTest extends TestCase
         $this->assertIsArray($reconcile);
 
         return $reconcile['every_seconds'] ?? null;
+    }
+
+    private function usageTimeoutWith(string $value): mixed
+    {
+        $usage = $this->pixelforgeConfigWith(['PIXELFORGE_USAGE_TIMEOUT' => $value])['usage'];
+        $this->assertIsArray($usage);
+
+        return $usage['timeout_seconds'] ?? null;
     }
 
     private function submitReserveWith(string $value): mixed

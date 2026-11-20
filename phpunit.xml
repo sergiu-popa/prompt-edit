@@ -55,6 +55,7 @@
         <env name="PIXELFORGE_REDISPATCH_AFTER" value="" force="true"/>
         <env name="PIXELFORGE_GIVE_UP_AFTER" value="" force="true"/>
         <env name="PIXELFORGE_STUCK_AFTER" value="" force="true"/>
+        <env name="PIXELFORGE_USAGE_TIMEOUT" value="" force="true"/>
         <!-- The dev containers set these in the process env, which Laravel reads from $_SERVER first. -->
         <server name="AUTH_REGISTRATIONS_PER_HOUR" value=""/>
         <server name="CREDITS_STARTER_GRANT" value=""/>
@@ -71,6 +72,7 @@
         <server name="PIXELFORGE_REDISPATCH_AFTER" value=""/>
         <server name="PIXELFORGE_GIVE_UP_AFTER" value=""/>
         <server name="PIXELFORGE_STUCK_AFTER" value=""/>
+        <server name="PIXELFORGE_USAGE_TIMEOUT" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="INERTIA_SSR_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>

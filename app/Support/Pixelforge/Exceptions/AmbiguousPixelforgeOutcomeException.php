@@ -13,8 +13,9 @@ use Throwable;
 /**
  * Pixelforge's answer does not say whether it created the generation, so it
  * may have been accepted and billed. It is never a definitive rejection: the
- * caller retries with the same idempotency key, and a replay is free. No
- * message carries the response body; the previous exception keeps its detail.
+ * caller retries with the same idempotency key, and a replay is free. For a read,
+ * it means no usable answer arrived. No message carries the response body; the
+ * previous exception keeps its detail.
  */
 final class AmbiguousPixelforgeOutcomeException extends RuntimeException implements ReportsPixelforgeContext
 {
@@ -50,6 +51,14 @@ final class AmbiguousPixelforgeOutcomeException extends RuntimeException impleme
     public static function unreadableGeneration(int $status, ?Throwable $previous = null): self
     {
         return new self(sprintf('Pixelforge answered HTTP %d without a readable generation object.', $status), $status, $previous);
+    }
+
+    /**
+     * A 2xx whose body is not a usage report for the range asked that can be read exactly.
+     */
+    public static function unreadableUsage(int $status, ?Throwable $previous = null): self
+    {
+        return new self(sprintf('Pixelforge answered HTTP %d without a readable usage report.', $status), $status, $previous);
     }
 
     /**

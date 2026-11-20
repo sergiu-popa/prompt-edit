@@ -8,6 +8,7 @@ use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
 use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
+use App\Support\Pixelforge\DataTransferObjects\UsageReportData;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
 
 /**
@@ -39,6 +40,16 @@ final readonly class ThrottledPixelforgeClient implements PixelforgeClient
         $this->budget->take();
 
         return $this->client->retrieveGeneration($providerId);
+    }
+
+    /**
+     * @throws RateBudgetExhaustedException when this minute's budget is spent; nothing is sent
+     */
+    public function retrieveUsage(string $startDate, string $endDate): UsageReportData
+    {
+        $this->budget->take();
+
+        return $this->client->retrieveUsage($startDate, $endDate);
     }
 
     /**
