@@ -56,8 +56,9 @@ return [
     'rate_limit_per_minute' => filter_var(env('PIXELFORGE_RATE_LIMIT_PER_MINUTE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 50]]),
 
     /**
-     * The cache store that counts the budget: one every process shares (D-20),
-     * pinned here, whatever CACHE_STORE says.
+     * The cache store that counts the budget and holds each generation's create
+     * lock (D-53): one every process shares (D-20), pinned here, whatever
+     * CACHE_STORE says.
      */
     'rate_limit_store' => 'database',
 
@@ -92,6 +93,12 @@ return [
          * so one job never runs twice at once (AC 19).
          */
         'job_timeout_seconds' => $submitJobTimeoutSeconds,
+
+        /**
+         * How long a run's create lock lives (D-53): past the job's timeout, so a
+         * run killed at it still holds off the next until it is surely dead.
+         */
+        'create_lock_seconds' => $submitJobTimeoutSeconds + 30,
     ],
 
     /**

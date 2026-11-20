@@ -20,7 +20,12 @@ use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
 use App\Support\Pixelforge\Exceptions\PixelforgeApiException;
 use App\Support\Pixelforge\Exceptions\RateBudgetExhaustedException;
 use Carbon\CarbonImmutable;
+use Illuminate\Container\Attributes\Config;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Support\Facades\Log;
+use LogicException;
 
 /**
  * One submit attempt for a local generation (D-32). The row is re-read and the
@@ -35,20 +40,42 @@ use Illuminate\Support\Facades\Log;
  * `422` or `409`) fails the generation free (D-31). Any other failure goes to
  * the retry policy (D-47): wait and try again, fail free where Pixelforge
  * definitely created nothing, or stop at the window's end (D-46).
+ *
+ * There is never more than one create in flight for a generation (D-53): each
+ * run holds `pixelforge-create:{ulid}` on the pinned database store, from the
+ * re-read to the recorded outcome. A run that finds it held waits a few seconds
+ * and records nothing. The lock outlives a run killed at the job's timeout, so
+ * even then nothing overlaps it.
  */
 final class SubmitGenerationAction
 {
+    /**
+     * The create lock's key, before the ULID.
+     */
+    public const string CREATE_LOCK_PREFIX = 'pixelforge-create:';
+
+    /**
+     * How long a run that finds another's create in flight waits before trying again.
+     */
+    public const int CREATE_IN_FLIGHT_WAIT_SECONDS = 5;
+
     public function __construct(
         private readonly PixelforgeClient $pixelforge,
         private readonly TransitionGenerationAction $transitionGeneration,
         private readonly SubmitRetryPolicy $retryPolicy,
         private readonly StopSubmittingGenerationAction $stopSubmitting,
+        private readonly CacheFactory $cache,
+        #[Config('pixelforge.rate_limit_store')]
+        private readonly string $lockStore,
+        #[Config('pixelforge.submit.create_lock_seconds')]
+        private readonly int $createLockSeconds,
     ) {}
 
     /**
      * A generation Pixelforge has already answered for (it has a provider id)
      * or that is terminal is left alone, with no request (AC 20). One whose
-     * window has ended is stopped before anything is sent.
+     * window has ended is stopped before anything is sent. While another run
+     * holds the create lock, nothing is read, sent or recorded.
      *
      * @return ?int the seconds until the next attempt, or null when the job is done
      *
@@ -57,6 +84,44 @@ final class SubmitGenerationAction
      * @throws NanodollarOverflowException
      */
     public function execute(string $generationId): ?int
+    {
+        $lock = $this->createLock($generationId);
+
+        if (! $lock->get()) {
+            return self::CREATE_IN_FLIGHT_WAIT_SECONDS;
+        }
+
+        try {
+            return $this->submit($generationId);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @throws LogicException when the pinned store cannot lock, which config rules out
+     */
+    private function createLock(string $generationId): Lock
+    {
+        $store = $this->cache->store($this->lockStore)->getStore();
+
+        if (! $store instanceof LockProvider) {
+            throw new LogicException(sprintf('The "%s" cache store cannot hold the create lock.', $this->lockStore));
+        }
+
+        return $store->lock(self::CREATE_LOCK_PREFIX . $generationId, $this->createLockSeconds);
+    }
+
+    /**
+     * One run under the create lock; the row is re-read only once it is held.
+     *
+     * @return ?int the seconds until the next attempt, or null when the job is done
+     *
+     * @throws ConcurrentGenerationTransitionException
+     * @throws InvalidRateException
+     * @throws NanodollarOverflowException
+     */
+    private function submit(string $generationId): ?int
     {
         $generation = Generation::query()->whereKey($generationId)->firstOrFail();
 
