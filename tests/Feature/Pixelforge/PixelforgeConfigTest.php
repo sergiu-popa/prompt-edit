@@ -46,6 +46,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_RECONCILE_RECHECK_MAX',
         'PIXELFORGE_RECONCILE_BATCH',
         'PIXELFORGE_SUBMIT_RESERVE',
+        'PIXELFORGE_RECONCILE_EVERY',
     ];
 
     /**
@@ -175,6 +176,35 @@ final class PixelforgeConfigTest extends TestCase
     public function test_a_submit_reserve_that_is_not_a_whole_number_means_the_default(string $value): void
     {
         $this->assertSame(10, $this->submitReserveWith($value));
+    }
+
+    public function test_the_reconciler_runs_every_minute_by_default(): void
+    {
+        $this->assertSame(60, config('pixelforge.reconcile.every_seconds'));
+        $this->assertSame(60, $this->reconcileEverySecondsWith(''));
+    }
+
+    #[DataProvider('reconcileFrequencies')]
+    public function test_the_reconciler_frequency_is_a_laravel_frequency_or_a_minute(string $value, int $seconds): void
+    {
+        $this->assertSame($seconds, $this->reconcileEverySecondsWith($value));
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function reconcileFrequencies(): array
+    {
+        return [
+            'every 5 s' => ['5', 5],
+            'every 30 s' => ['30', 30],
+            'every second' => ['1', 1],
+            'a minute' => ['60', 60],
+            'not a divisor of a minute' => ['7', 60],
+            'more than a minute' => ['120', 60],
+            'zero' => ['0', 60],
+            'a word' => ['abc', 60],
+        ];
     }
 
     public function test_empty_values_mean_the_defaults(): void
@@ -463,6 +493,14 @@ final class PixelforgeConfigTest extends TestCase
 
         $this->assertSame(86_400, $fake['image_ttl_seconds']);
         $this->assertSame(5, $fake['expire_ttl_seconds']);
+    }
+
+    private function reconcileEverySecondsWith(string $value): mixed
+    {
+        $reconcile = $this->pixelforgeConfigWith(['PIXELFORGE_RECONCILE_EVERY' => $value])['reconcile'];
+        $this->assertIsArray($reconcile);
+
+        return $reconcile['every_seconds'] ?? null;
     }
 
     private function submitReserveWith(string $value): mixed

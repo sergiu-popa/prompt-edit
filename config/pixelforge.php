@@ -11,6 +11,11 @@ declare(strict_types=1);
 $fakeChaosPercent = filter_var(env('PIXELFORGE_FAKE_CHAOS_PERCENT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100, 'default' => 0]]);
 
 /**
+ * How often the reconciler runs: one of Laravel's sub-minute frequencies, else a minute.
+ */
+$reconcileEverySeconds = filter_var(env('PIXELFORGE_RECONCILE_EVERY'), FILTER_VALIDATE_INT);
+
+/**
  * The submit job's own timeout. The request timeout stays below it (AC 19).
  */
 $submitJobTimeoutSeconds = 60;
@@ -121,6 +126,13 @@ return [
          * is sent only while more than this is left in the minute. 0 is allowed.
          */
         'submit_reserve' => filter_var(env('PIXELFORGE_SUBMIT_RESERVE'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'default' => 10]]),
+
+        /**
+         * How often the scheduler runs the reconciler (D-54): every minute in
+         * production; dev and E2E may name 1, 2, 5, 10, 15, 20 or 30 seconds.
+         * Anything else means 60.
+         */
+        'every_seconds' => in_array($reconcileEverySeconds, [1, 2, 5, 10, 15, 20, 30, 60], true) ? $reconcileEverySeconds : 60,
     ],
 
     /**
