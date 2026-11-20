@@ -26,8 +26,15 @@ const LIGHTHOUSE: Generation = {
     image_expired: false,
 };
 
-function mountItem(changes: Partial<Generation> = {}, highlighted = false): VueWrapper {
-    return mount(HistoryItem, { props: { generation: { ...LIGHTHOUSE, ...changes }, highlighted } });
+/** The server's clock, which the browser's agrees with unless a test skews it. */
+const NOW_MS = Date.parse('2026-11-19T12:00:00Z');
+
+function mountItem(changes: Partial<Generation> = {}, highlighted = false, now = NOW_MS): VueWrapper {
+    return mount(HistoryItem, { props: { generation: { ...LIGHTHOUSE, ...changes }, highlighted, now } });
+}
+
+function badge(wrapper: VueWrapper) {
+    return wrapper.get('[data-tone]');
 }
 
 function prompt(wrapper: VueWrapper) {
@@ -55,6 +62,25 @@ describe('HistoryItem', () => {
 
         expect(badge.text()).toBe(label);
         expect(badge.attributes('data-tone')).toBe(tone);
+    });
+
+    it('reads a processing generation with its time since it started, on the given clock', async () => {
+        const wrapper = mountItem({ status: 'processing', status_label: 'Processing', started_at: '2026-11-19T11:59:46Z' });
+
+        expect(badge(wrapper).text()).toBe('Processing · 14 s');
+        expect(badge(wrapper).classes()).toContain('tabular-nums');
+
+        await wrapper.setProps({ now: NOW_MS + 1_000 });
+
+        expect(badge(wrapper).text()).toBe('Processing · 15 s');
+    });
+
+    it('reads a processing generation with no start time as just Processing', () => {
+        expect(badge(mountItem({ status: 'processing', status_label: 'Processing', started_at: null })).text()).toBe('Processing');
+    });
+
+    it('adds no time to a queued generation', () => {
+        expect(badge(mountItem({ status: 'queued', status_label: 'Queued', started_at: '2026-11-19T11:59:46Z' })).text()).toBe('Queued');
     });
 
     it("shows the server's label, whatever the status", () => {
@@ -138,6 +164,17 @@ describe('HistoryItem', () => {
         expect(time.text()).toBe('3 min ago');
         expect(time.attributes('datetime')).toBe('2026-11-19T11:57:00Z');
         expect(time.attributes('title')).toBe(formatExactTimestamp('2026-11-19T11:57:00Z'));
+    });
+
+    it("reads the created time on the server's clock, not the browser's", () => {
+        vi.setSystemTime(new Date('2026-11-19T14:00:00Z'));
+
+        expect(mountItem().get('time').text()).toBe('3 min ago');
+        expect(
+            mountItem({}, false, NOW_MS + 2 * 60_000)
+                .get('time')
+                .text(),
+        ).toBe('5 min ago');
     });
 
     it('reads a generation created this minute as just now', () => {

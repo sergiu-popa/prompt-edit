@@ -5,13 +5,16 @@ import AmountRange from '@/components/estimate/AmountRange.vue';
 import Badge from '@/components/ui/Badge.vue';
 import { countCodePoints } from '@/lib/counting';
 import { describeImage } from '@/lib/imageOptions';
-import { formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
+import { elapsedSeconds } from '@/lib/generationTiming';
+import { formatElapsed, formatExactTimestamp, formatRelativeTime } from '@/lib/relativeTime';
 import type { Generation, GenerationStatus } from '@/types/generation';
 
 /**
  * One generation on History: its status, the prompt (clamped to two lines), what was
- * asked for, the estimate the user saw and when. From `sm` the badge has its own
- * column and the time sits on the right; on a phone both share the first line. It owns
+ * asked for, the estimate the user saw and when. Every time is read on `now`, the
+ * server-aligned clock History ticks, so a processing badge counts up live. From `sm`
+ * the badge has its own column and the time sits on the right; on a phone both share
+ * the first line. It owns
  * its row's padding, so the highlight fills the row; inside a list's rounded card, the
  * first and last rows round their corners to match.
  */
@@ -20,6 +23,8 @@ const props = withDefaults(
         generation: Generation;
         /** The generation just submitted: an accent bar, a tint and a "Just submitted" tag. */
         highlighted?: boolean;
+        /** The server's "now" in epoch ms (useServerClock). */
+        now: number;
     }>(),
     { highlighted: false },
 );
@@ -52,8 +57,18 @@ const references = computed(() => {
     return count === 1 ? '1 reference' : `${count} references`;
 });
 
-/** Read once, when the item renders; History shows a snapshot until PE-012's live updates. */
-const createdAgo = computed(() => formatRelativeTime(props.generation.created_at, new Date()));
+/** "Processing · 14 s" while it runs, else the server's label. */
+const statusText = computed(() => {
+    const { status, status_label: label, started_at: startedAt } = props.generation;
+
+    if (status !== 'processing' || startedAt === null) {
+        return label;
+    }
+
+    return `${label} · ${formatElapsed(elapsedSeconds(startedAt, props.now))}`;
+});
+
+const createdAgo = computed(() => formatRelativeTime(props.generation.created_at, new Date(props.now)));
 const createdExactly = computed(() => formatExactTimestamp(props.generation.created_at));
 </script>
 
@@ -61,13 +76,13 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
     <div
         :data-highlighted="highlighted ? 'true' : undefined"
         :class="[
-            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[calc(var(--radius-xl)-1px)] group-last:rounded-b-[calc(var(--radius-xl)-1px)] sm:grid sm:grid-cols-[6.5rem_minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:px-5',
+            'flex flex-col gap-2 px-4 py-4 group-first:rounded-t-[calc(var(--radius-xl)-1px)] group-last:rounded-b-[calc(var(--radius-xl)-1px)] sm:grid sm:grid-cols-[8.5rem_minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:px-5',
             highlighted && 'bg-sky-50/70 shadow-[inset_4px_0_0_var(--color-sky-600)]',
         ]"
     >
         <div class="flex items-center justify-between gap-3 sm:contents">
-            <Badge :tone="STATUS_TONES[generation.status]" class="sm:col-start-1 sm:row-start-1 sm:justify-self-start">{{
-                generation.status_label
+            <Badge :tone="STATUS_TONES[generation.status]" class="tabular-nums sm:col-start-1 sm:row-start-1 sm:justify-self-start">{{
+                statusText
             }}</Badge>
             <div class="flex shrink-0 items-center gap-2 sm:col-start-3 sm:row-start-1 sm:flex-col sm:items-end sm:gap-1">
                 <time :datetime="generation.created_at" :title="createdExactly" class="text-sm whitespace-nowrap text-zinc-500">{{

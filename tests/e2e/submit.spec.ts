@@ -53,7 +53,7 @@ test('submits Lighthouse at the price it showed and lands on History with it hig
     await expect(item.locator('[data-prompt]')).toHaveText(LIGHTHOUSE_PROMPT);
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.3478 – $0.4572', { useInnerText: true });
     await expect(item.locator('[data-meta]')).toHaveText('High · 1536×1024 · 1 reference');
-    await expect(statusOf(item)).toHaveText(/^(Queued|Processing|Succeeded)$/);
+    await expect(statusOf(item)).toHaveText(/^(Queued|Processing( · \d+ s)?|Succeeded)$/);
 
     await page.reload();
 

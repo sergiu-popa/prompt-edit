@@ -6,13 +6,17 @@ import HistoryItem from '@/components/history/HistoryItem.vue';
 import HistoryPagination from '@/components/history/HistoryPagination.vue';
 import Button from '@/components/ui/Button.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
+import { useServerClock } from '@/composables/useServerClock';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { paths } from '@/lib/paths';
 import type { GenerationHistory } from '@/types/generation';
 
-defineProps<{
+const props = defineProps<{
     generations: GenerationHistory;
 }>();
+
+/** The server's clock, re-aligned on every response, for elapsed and relative times. */
+const now = useServerClock(() => props.generations.server_time);
 
 /** Flashed by the submit's redirect only, so a reload or Back never highlights it again. */
 const page = usePage();
@@ -32,7 +36,7 @@ const highlightedId = computed(() => page.flash.highlighted_generation_id);
 
             <ul v-if="generations.data.length > 0" class="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white shadow-xs">
                 <li v-for="generation in generations.data" :key="generation.id" class="group">
-                    <HistoryItem :generation="generation" :highlighted="generation.id === highlightedId" />
+                    <HistoryItem :generation="generation" :highlighted="generation.id === highlightedId" :now="now" />
                 </li>
             </ul>
 
