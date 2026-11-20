@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Pixelforge\Live;
 
+use App\Domain\Billing\Actions\CalculateProviderCostAction;
 use App\Domain\Billing\Actions\EstimateGenerationCostAction;
 use App\Domain\Billing\DataTransferObjects\GenerationCostEstimate;
 use App\Domain\Billing\Enums\TokenType;
+use App\Domain\Billing\ValueObjects\TokenRates;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
 use App\Support\Pixelforge\DataTransferObjects\CreatedGenerationData;
 use App\Support\Pixelforge\DataTransferObjects\CreateGenerationPayloadData;
+use App\Support\Pixelforge\DataTransferObjects\GenerationSnapshot;
 use App\Support\Pixelforge\Drivers\HttpPixelforgeClient;
+use App\Support\Pixelforge\Exceptions\AmbiguousPixelforgeOutcomeException;
 use App\Support\Pixelforge\Exceptions\ConcurrencyLimitExceededException;
 use App\Support\Pixelforge\Exceptions\IdempotencyKeyReusedException;
 use App\Support\Pixelforge\Exceptions\OverloadedException;
@@ -62,6 +66,13 @@ final class LivePixelforgeSmokeTest extends TestCase
     private const int DEFAULT_RETRY_AFTER_SECONDS = 2;
 
     private const int MAX_RETRY_AFTER_SECONDS = 30;
+
+    /**
+     * At most one retrieve per 5 s, for at most 3 min: 36 polls.
+     */
+    private const int POLL_EVERY_SECONDS = 5;
+
+    private const int POLL_FOR_SECONDS = 180;
 
     private HttpPixelforgeClient $client;
 
@@ -178,6 +189,74 @@ final class LivePixelforgeSmokeTest extends TestCase
     }
 
     /**
+     * AC 7: polled until terminal, it succeeds with its usage, billed at the pinned rates.
+     *
+     * @param  array{key: string, provider_id: string}  $created
+     * @return array<array-key, mixed> the generation object as last retrieved
+     */
+    #[Depends('test_a_create_is_accepted_and_queued')]
+    public function test_the_generation_succeeds_within_three_minutes(array $created): array
+    {
+        $snapshot = $this->pollUntilTerminal($created['provider_id']);
+
+        $this->assertSame(GenerationStatus::Succeeded, $snapshot->status, sprintf('The generation ended %s (%s).', $snapshot->status->value, $snapshot->errorCode ?? 'no error code'));
+        $this->assertNotNull($snapshot->usage);
+        $this->assertSame($this->pinnedRates(), $snapshot->rates);
+
+        $generation = $this->lastResponse()->json();
+        $this->assertIsArray($generation);
+
+        return $generation;
+    }
+
+    /**
+     * AC 8: the real usage confirms the estimator, code-point counting included,
+     * and its cost at the generation's own rates stays within the estimated max.
+     *
+     * @param  array<array-key, mixed>  $generation
+     */
+    #[Depends('test_the_generation_succeeds_within_three_minutes')]
+    public function test_the_usage_confirms_the_estimate(array $generation): void
+    {
+        $snapshot = GenerationSnapshot::from($generation);
+        $usage = $snapshot->usage;
+        $this->assertNotNull($usage);
+        $this->assertNotNull($snapshot->rates);
+
+        $estimate = $this->estimate(self::prompt());
+        $text = $estimate->lines[TokenType::InputText->value]->tokens;
+        $reasoning = $estimate->lines[TokenType::Reasoning->value]->tokens;
+
+        $this->assertGreaterThanOrEqual($text->min, $usage->inputTextTokens);
+        $this->assertLessThanOrEqual($text->max, $usage->inputTextTokens);
+        $this->assertSame(0, $usage->inputImageTokens);
+        $this->assertSame(280, $usage->outputTokens);
+        $this->assertGreaterThanOrEqual($reasoning->min, $usage->reasoningTokens);
+        $this->assertLessThanOrEqual($reasoning->max, $usage->reasoningTokens);
+
+        $rawUsage = $generation['usage'] ?? null;
+        $this->assertIsArray($rawUsage);
+        $this->assertArrayHasKey('total_tokens', $rawUsage);
+        $this->assertSame($usage->inputTextTokens + $usage->inputImageTokens + $usage->outputTokens + $usage->reasoningTokens, $rawUsage['total_tokens']);
+
+        $providerCost = $this->app->make(CalculateProviderCostAction::class)->execute($usage, TokenRates::from($snapshot->rates));
+
+        $this->assertLessThanOrEqual($estimate->providerCost->max->amount, $providerCost->amount);
+
+        fwrite(STDERR, sprintf(
+            "\nLive smoke %s: input text %d, input image %d, output %d, reasoning %d tokens; provider cost %d n$ (\$%s), estimated max %d n$.\n",
+            $snapshot->id,
+            $usage->inputTextTokens,
+            $usage->inputImageTokens,
+            $usage->outputTokens,
+            $usage->reasoningTokens,
+            $providerCost->amount,
+            $providerCost->toUsdString(),
+            $estimate->providerCost->max->amount,
+        ));
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function pinnedRates(): array
@@ -223,6 +302,37 @@ final class LivePixelforgeSmokeTest extends TestCase
 
                 sleep(min($exception->retryAfterSeconds ?? self::DEFAULT_RETRY_AFTER_SECONDS, self::MAX_RETRY_AFTER_SECONDS));
             }
+        }
+    }
+
+    /**
+     * Retrieves the generation at most once per tick until it is terminal. A
+     * poll answered ambiguously or with a `429` waits for the next tick.
+     */
+    private function pollUntilTerminal(string $providerId): GenerationSnapshot
+    {
+        $deadline = microtime(true) + self::POLL_FOR_SECONDS;
+
+        while (true) {
+            $tick = microtime(true);
+
+            try {
+                $snapshot = $this->client->retrieveGeneration($providerId);
+
+                if ($snapshot->status->isTerminal()) {
+                    return $snapshot;
+                }
+            } catch (AmbiguousPixelforgeOutcomeException|RateLimitExceededException) {
+                // Read again on the next tick.
+            }
+
+            $next = $tick + self::POLL_EVERY_SECONDS;
+
+            if ($next > $deadline) {
+                $this->fail(sprintf('The generation was not terminal within %d s.', self::POLL_FOR_SECONDS));
+            }
+
+            usleep((int) max(0, ($next - microtime(true)) * 1_000_000));
         }
     }
 
