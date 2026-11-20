@@ -25,6 +25,7 @@ const LIGHTHOUSE: Generation = {
     image_url: null,
     image_url_expires_at: null,
     image_expired: false,
+    failure_message: null,
 };
 
 /** The server's clock, which the browser's agrees with unless a test skews it. */

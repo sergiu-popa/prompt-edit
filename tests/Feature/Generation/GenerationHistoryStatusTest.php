@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Generation;
 
+use App\Domain\Generation\DataTransferObjects\LocalGenerationFailureData;
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Models\Generation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -17,8 +19,8 @@ use Tests\TestCase;
 
 /**
  * What History's resource says about each status: the times, the actual charge,
- * the image and whether it has expired by the server's clock, and nothing of the
- * provider's cost.
+ * the image and whether it has expired by the server's clock, why it failed, and
+ * nothing of the provider's cost.
  */
 final class GenerationHistoryStatusTest extends TestCase
 {
@@ -185,6 +187,112 @@ final class GenerationHistoryStatusTest extends TestCase
         $this->assertNull($item['image_url']);
         $this->assertNull($item['image_url_expires_at']);
         $this->assertFalse($item['image_expired']);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>, string}>
+     */
+    public static function failures(): array
+    {
+        return [
+            'a local content-policy rejection' => [
+                ['local_failure_reason' => LocalFailureReason::ContentPolicyViolation, 'error_code' => 'content_policy_violation'],
+                'Prompt rejected by Pixelforge\'s content policy. Edit the prompt and try again.',
+            ],
+            'a local validation failure with a param' => [
+                ['local_failure_reason' => LocalFailureReason::ValidationFailed, 'error_code' => 'validation_failed', 'error_param' => 'prompt', 'error_message' => 'prompt must not be empty.'],
+                'Pixelforge rejected the request: prompt: prompt must not be empty.',
+            ],
+            'a local validation failure without a param' => [
+                ['local_failure_reason' => LocalFailureReason::ValidationFailed, 'error_code' => 'validation_failed', 'error_param' => null, 'error_message' => 'The request is invalid.'],
+                'Pixelforge rejected the request: The request is invalid.',
+            ],
+            'a provider generation_failed' => [
+                ['local_failure_reason' => null, 'error_code' => 'generation_failed'],
+                'Pixelforge couldn\'t produce an image for this prompt. Try rephrasing it.',
+            ],
+            'a provider internal_error' => [
+                ['local_failure_reason' => null, 'error_code' => 'internal_error'],
+                'Something went wrong on Pixelforge\'s side. Please try again.',
+            ],
+            'an unknown code' => [
+                ['local_failure_reason' => null, 'error_code' => 'model_on_fire'],
+                'This generation failed.',
+            ],
+            'no code' => [
+                ['local_failure_reason' => null, 'error_code' => null, 'error_message' => null],
+                'This generation failed.',
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $failure
+     */
+    #[DataProvider('failures')]
+    public function test_a_failed_generation_explains_itself_in_one_message(array $failure, string $message): void
+    {
+        $user = User::factory()->create();
+        Generation::factory()->failedLocally()->create(['user_id' => $user->id, 'error_param' => null, ...$failure]);
+
+        $item = $this->onlyHistoryItemOf($user);
+
+        $this->assertSame('failed', $item['status']);
+        $this->assertSame($message, $item['failure_message']);
+        $this->assertNull($item['user_charge_nanodollars']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unfailedStates(): array
+    {
+        return [
+            'pending' => ['pending'],
+            'queued' => ['queued'],
+            'processing' => ['processing'],
+            'succeeded' => ['succeeded'],
+        ];
+    }
+
+    #[DataProvider('unfailedStates')]
+    public function test_a_generation_that_has_not_failed_has_no_failure_message(string $status): void
+    {
+        $user = User::factory()->create();
+        $generation = $this->givenAGenerationIn(GenerationStatus::from($status));
+        $generation->forceFill(['user_id' => $user->id, 'error_code' => 'generation_failed'])->save();
+
+        $this->assertNull($this->onlyHistoryItemOf($user)['failure_message']);
+    }
+
+    /**
+     * D-09: we failed it locally, then the generation Pixelforge held under our key
+     * succeeded. Its provider cost is recorded for the report, but the user sees a
+     * free failure, with no image and no charge.
+     */
+    public function test_a_local_failure_that_later_succeeded_at_pixelforge_still_reads_failed_and_free(): void
+    {
+        $user = User::factory()->create();
+        $lighthouse = $this->createGenerationFor($user, self::lighthouseRequest());
+        $this->transitionGeneration($lighthouse, new LocalGenerationFailureData(
+            LocalFailureReason::IdempotencyKeyReused,
+            'idempotency_key_reused',
+            'This idempotency key was already used with different parameters.',
+            null,
+        ));
+        $this->transitionGeneration($lighthouse, self::lighthouseSucceededSnapshotFor($lighthouse));
+        $this->assertSame(305_510_000, $this->reloadedGeneration($lighthouse)->provider_cost_nanodollars);
+
+        $history = $this->historyFor($user);
+        $item = $history['data'][0];
+
+        $this->assertSame('failed', $item['status']);
+        $this->assertSame('Failed', $item['status_label']);
+        $this->assertSame('Something went wrong submitting this generation.', $item['failure_message']);
+        $this->assertNull($item['user_charge_nanodollars']);
+        $this->assertNull($item['image_url']);
+        $this->assertFalse($item['image_expired']);
+        $this->assertStringNotContainsString(self::LIGHTHOUSE_PROVIDER_COST, (string) json_encode($history));
     }
 
     public function test_history_carries_the_servers_time_to_the_millisecond(): void

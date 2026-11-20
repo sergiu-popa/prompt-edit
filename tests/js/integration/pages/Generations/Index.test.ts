@@ -38,6 +38,7 @@ function generation(id: string, prompt: string, status: GenerationStatus = 'queu
         image_url: null,
         image_url_expires_at: null,
         image_expired: false,
+        failure_message: null,
     };
 }
 

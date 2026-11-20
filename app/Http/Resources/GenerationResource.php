@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Domain\Generation\Enums\GenerationFailureCode;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
 use Carbon\CarbonImmutable;
@@ -17,7 +18,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * sent for a succeeded generation only, so a failed one never shows its stored 0.
  * So is the image: its URL is withheld once the server's clock reaches its expiry,
  * and whenever it is neither `https://` nor root-relative, so a page never requests
- * a dead URL and a provider URL never becomes a `javascript:` link (D-42).
+ * a dead URL and a provider URL never becomes a `javascript:` link (D-42). A
+ * failed generation sends one composed message, from GenerationFailureCode, and
+ * neither its raw code nor Pixelforge's text beside it (D-43).
  * Every instant is UTC to the second. It reads no relation, so a page of items
  * costs one query.
  *
@@ -42,6 +45,7 @@ final class GenerationResource extends JsonResource
      *     image_url: ?string,
      *     image_url_expires_at: ?string,
      *     image_expired: bool,
+     *     failure_message: ?string,
      * }
      */
     public function toArray(Request $request): array
@@ -69,6 +73,9 @@ final class GenerationResource extends JsonResource
             'image_url' => $succeeded && ! $imageExpired ? self::loadableUrl($this->resource->image_url) : null,
             'image_url_expires_at' => self::utcIso($expiresAt),
             'image_expired' => $imageExpired,
+            'failure_message' => $this->resource->status === GenerationStatus::Failed
+                ? GenerationFailureCode::messageFor($this->resource)
+                : null,
         ];
     }
 

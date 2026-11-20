@@ -67,6 +67,8 @@ export interface Generation {
     image_url_expires_at: string | null;
     /** Whether the server's clock had reached `image_url_expires_at` when the page was read. */
     image_expired: boolean;
+    /** Why it failed, in plain words (App\Domain\Generation\Enums\GenerationFailureCode); null unless it failed. */
+    failure_message: string | null;
 }
 
 /**
