@@ -147,4 +147,16 @@ final class ReportRangeTest extends TestCase
         $this->assertSame('2026-11-18 00:00:00+00:00', $range->endsBefore()->format('Y-m-d H:i:sP'));
         $this->assertSame(['2026-11-17', '2026-11-16'], $range->dates());
     }
+
+    public function test_it_serializes_as_the_usage_endpoints_params(): void
+    {
+        $this->assertSame(['start_date' => '2026-11-16', 'end_date' => '2026-11-17'], ReportRange::fromDates('2026-11-16', '2026-11-17')->toArray());
+    }
+
+    public function test_the_limits_are_92_days_ending_on_todays_utc_date(): void
+    {
+        date_default_timezone_set('Pacific/Kiritimati');
+
+        $this->assertSame(['max_days' => 92, 'today' => '2026-11-18'], ReportRange::limitsFor(CarbonImmutable::parse('2026-11-18T23:59:59Z')));
+    }
 }

@@ -84,6 +84,33 @@ final readonly class ReportRange
         return self::daysBetween(self::parse($startDate), self::parse($endDate));
     }
 
+    /**
+     * What the page's range form may choose: at most `MAX_DAYS`, ending no later than now's
+     * UTC date.
+     *
+     * @return array{max_days: int, today: string}
+     */
+    public static function limitsFor(CarbonImmutable $now): array
+    {
+        return [
+            'max_days' => self::MAX_DAYS,
+            'today' => $now->utc()->format(self::DATE_FORMAT),
+        ];
+    }
+
+    /**
+     * The `/v1/usage` param names, so PE-018 sends the very same range.
+     *
+     * @return array{start_date: string, end_date: string}
+     */
+    public function toArray(): array
+    {
+        return [
+            'start_date' => $this->startDate(),
+            'end_date' => $this->endDate(),
+        ];
+    }
+
     public function startDate(): string
     {
         return $this->start->format(self::DATE_FORMAT);
