@@ -4,7 +4,7 @@
 Live status, image and actual cost in history; failures explained
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 After submitting, the user watches a generation move from Queued to Processing to Succeeded or Failed without reloading.
