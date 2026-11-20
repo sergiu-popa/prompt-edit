@@ -7,6 +7,7 @@ namespace Tests\Concerns;
 use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Support\Pixelforge\Enums\PixelforgeErrorCode;
+use Carbon\CarbonImmutable;
 use Closure;
 use GuzzleHttp\Exception\ResponseTransferException;
 use GuzzleHttp\Promise\PromiseInterface;
@@ -128,11 +129,12 @@ trait InteractsWithPixelforgeApi
     /**
      * One attempt of the submit job, resolved through the container as the
      * worker runs it, with its queue interactions faked so a test can assert
-     * the release. Whatever the attempt throws is rethrown.
+     * the release. Whatever the attempt throws is rethrown. With an instant, it
+     * is the reconciler's re-dispatch of that instant.
      */
-    protected function runSubmitJob(Generation $generation): SubmitGenerationJob
+    protected function runSubmitJob(Generation $generation, ?CarbonImmutable $redispatchedAt = null): SubmitGenerationJob
     {
-        $job = (new SubmitGenerationJob($generation->id))->withFakeQueueInteractions();
+        $job = (new SubmitGenerationJob($generation->id, $redispatchedAt))->withFakeQueueInteractions();
         $this->app->call([$job, 'handle']);
 
         return $job;

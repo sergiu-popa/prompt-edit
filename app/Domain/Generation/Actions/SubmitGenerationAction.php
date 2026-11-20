@@ -74,16 +74,18 @@ final class SubmitGenerationAction
     /**
      * A generation Pixelforge has already answered for (it has a provider id)
      * or that is terminal is left alone, with no request (AC 20). One whose
-     * window has ended is stopped before anything is sent. While another run
-     * holds the create lock, nothing is read, sent or recorded.
+     * window has ended is stopped before anything is sent, unless this is a
+     * re-dispatch's owed run (D-52). While another run holds the create lock,
+     * nothing is read, sent or recorded.
      *
+     * @param  ?CarbonImmutable  $redispatchedAt  the reconciler's re-dispatch instant, or null
      * @return ?int the seconds until the next attempt, or null when the job is done
      *
      * @throws ConcurrentGenerationTransitionException
      * @throws InvalidRateException
      * @throws NanodollarOverflowException
      */
-    public function execute(string $generationId): ?int
+    public function execute(string $generationId, ?CarbonImmutable $redispatchedAt = null): ?int
     {
         $lock = $this->createLock($generationId);
 
@@ -92,7 +94,7 @@ final class SubmitGenerationAction
         }
 
         try {
-            return $this->submit($generationId);
+            return $this->submit($generationId, $redispatchedAt);
         } finally {
             $lock->release();
         }
@@ -113,7 +115,9 @@ final class SubmitGenerationAction
     }
 
     /**
-     * One run under the create lock; the row is re-read only once it is held.
+     * One run under the create lock; the row is re-read only once it is held. A
+     * re-dispatch is owed one run past the window while no attempt has started at or
+     * after its instant; after that run, PE-013's decision applies unchanged.
      *
      * @return ?int the seconds until the next attempt, or null when the job is done
      *
@@ -121,7 +125,7 @@ final class SubmitGenerationAction
      * @throws InvalidRateException
      * @throws NanodollarOverflowException
      */
-    private function submit(string $generationId): ?int
+    private function submit(string $generationId, ?CarbonImmutable $redispatchedAt): ?int
     {
         $generation = Generation::query()->whereKey($generationId)->firstOrFail();
 
@@ -129,7 +133,10 @@ final class SubmitGenerationAction
             return null;
         }
 
-        if ($this->retryPolicy->hasWindowEnded(SubmitBookkeeping::fromGeneration($generation), CarbonImmutable::now())) {
+        $bookkeeping = SubmitBookkeeping::fromGeneration($generation);
+        $isOwedRun = $redispatchedAt !== null && ! $bookkeeping->hasAttemptedSince($redispatchedAt);
+
+        if (! $isOwedRun && $this->retryPolicy->hasWindowEnded($bookkeeping, CarbonImmutable::now())) {
             $this->stopSubmitting->execute($generation->id);
 
             return null;

@@ -100,6 +100,15 @@ final readonly class SubmitBookkeeping
         return $this->ambiguousAt !== null || $this->hasAttemptWithoutOutcome();
     }
 
+    /**
+     * Whether a run started at or after the instant, as a re-dispatch asks whether
+     * its owed run has happened (D-52).
+     */
+    public function hasAttemptedSince(CarbonImmutable $instant): bool
+    {
+        return $this->lastAttemptedAt !== null && $this->lastAttemptedAt->greaterThanOrEqualTo($instant);
+    }
+
     public function hasAttemptWithoutOutcome(): bool
     {
         return $this->lastAttemptedAt !== null && $this->lastOutcome === null;
