@@ -12,6 +12,8 @@ declare module '@inertiajs/core' {
         flashDataType: {
             /** The generation CreateGenerationController just created, highlighted once on History. */
             highlighted_generation_id?: string;
+            /** The server's one-off notice, such as "Your session expired. Please try again." (D-60). */
+            notice?: string;
         };
     }
 }
