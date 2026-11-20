@@ -57,6 +57,13 @@ return [
          * integer from 1 to 10 means the default.
          */
         'timeout_seconds' => filter_var(env('PIXELFORGE_USAGE_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10, 'default' => 5]]),
+
+        /**
+         * How long a successful answer is reused per range, on the default cache store.
+         * Dev and E2E use 1, so a catch-up shows at once. Anything but a positive integer
+         * means the default.
+         */
+        'cache_seconds' => filter_var(env('PIXELFORGE_USAGE_CACHE_SECONDS'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 60]]),
     ],
 
     /**

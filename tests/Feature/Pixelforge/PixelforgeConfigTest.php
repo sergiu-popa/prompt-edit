@@ -27,6 +27,7 @@ final class PixelforgeConfigTest extends TestCase
         'PIXELFORGE_OVERLOADED_DEADLINE',
         'PIXELFORGE_CONCURRENCY_MAX_WAIT',
         'PIXELFORGE_USAGE_TIMEOUT',
+        'PIXELFORGE_USAGE_CACHE_SECONDS',
     ];
 
     private const array FAKE_VARIABLES = [
@@ -175,6 +176,29 @@ final class PixelforgeConfigTest extends TestCase
             'a word' => ['abc'],
             'a fraction' => ['2.5'],
         ];
+    }
+
+    /**
+     * The dev containers reuse a usage answer for 1 s (D-74); the suite runs with 60.
+     */
+    public function test_the_suite_runs_with_the_production_usage_cache(): void
+    {
+        $this->assertSame(60, config('pixelforge.usage.cache_seconds'));
+    }
+
+    public function test_the_usage_cache_defaults_to_60_seconds_and_a_set_value_applies(): void
+    {
+        $this->assertSame(60, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', '')['cache_seconds']);
+        $this->assertSame(1, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', '1')['cache_seconds']);
+    }
+
+    /**
+     * 0 would cache nothing and send a request on every load.
+     */
+    #[DataProvider('invalidTimeouts')]
+    public function test_a_usage_cache_that_is_not_a_positive_integer_means_the_default(string $value): void
+    {
+        $this->assertSame(60, $this->usageConfigWith('PIXELFORGE_USAGE_CACHE_SECONDS', $value)['cache_seconds']);
     }
 
     public function test_empty_reconcile_bounds_mean_the_production_defaults(): void
@@ -556,10 +580,18 @@ final class PixelforgeConfigTest extends TestCase
 
     private function usageTimeoutWith(string $value): mixed
     {
-        $usage = $this->pixelforgeConfigWith(['PIXELFORGE_USAGE_TIMEOUT' => $value])['usage'];
+        return $this->usageConfigWith('PIXELFORGE_USAGE_TIMEOUT', $value)['timeout_seconds'] ?? null;
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private function usageConfigWith(string $name, string $value): array
+    {
+        $usage = $this->pixelforgeConfigWith([$name => $value])['usage'];
         $this->assertIsArray($usage);
 
-        return $usage['timeout_seconds'] ?? null;
+        return $usage;
     }
 
     private function submitReserveWith(string $value): mixed
