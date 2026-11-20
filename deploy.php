@@ -97,6 +97,14 @@ task('deploy:npm:build', function () {
     run('source $HOME/.nvm/nvm.sh && cd {{release_path}} && npm run build && rm -rf node_modules');
 });
 
+// Every account without a credit grant gets its opening grant (D-70) after the migrations
+// and before `deploy:symlink`, so the new release never serves a balance without one.
+// Safe to re-run: the one-grant index grants nobody twice.
+task('artisan:app:grant-opening-credits', artisan('app:grant-opening-credits', ['skipIfNoEnv', 'showOutput']))
+    ->desc('Grants the opening credit to every user who has none');
+
+after('artisan:migrate', 'artisan:app:grant-opening-credits');
+
 after('deploy:vendors', 'deploy:npm:install');
 after('deploy:npm:install', 'deploy:npm:build');
 

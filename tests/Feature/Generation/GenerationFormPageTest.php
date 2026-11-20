@@ -55,7 +55,7 @@ final class GenerationFormPageTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $this->assertEqualsCanonicalizing(
-                ['auth', 'operator_navigation', 'errors', 'pricing', 'limits', 'can_submit'],
+                ['auth', 'operator_navigation', 'credits', 'errors', 'pricing', 'limits', 'can_submit'],
                 array_keys($page->toArray()['props']),
             ));
     }

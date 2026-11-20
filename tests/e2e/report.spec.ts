@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { OPERATOR_USER, registerNewUser, signIn } from './support/auth';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectInsideContentBox, expectNoHorizontalScroll } from './support/layout';
 import { exactNanodollars, historyItems, statusOf, submitPrompt, TERMINAL_TIMEOUT_MS } from './support/liveStatus';
 
 /*
@@ -44,6 +44,18 @@ test('an operator sees a new user’s billed generation in the report, which the
     await expect(row.locator('[data-succeeded]')).toHaveText('1');
     expect(await exactNanodollars(row.locator('[data-spend] [role="tooltip"]'))).toBe(charge);
 
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expectNoHorizontalScroll(page);
+    // The operator's header is the widest: Report, the balance and Buy credits stay inside the
+    // gutters at every width. Below `lg` the nav takes its own row under the brand, so the name
+    // keeps the first row's free space: with the real font, one row at 768 px cut it to "Op…".
+    const banner = page.getByRole('banner');
+    const name = banner.locator(':scope > div > p');
+    for (const width of [375, 640, 768, 1023, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 812 });
+        await expectNoHorizontalScroll(page);
+        await expectInsideContentBox(banner.locator(':scope > div'), banner.locator('[data-balance], [data-buy-credits], button'));
+        const brand = (await banner.getByRole('link', { name: 'PromptEdit' }).boundingBox())!;
+        const nav = (await banner.getByRole('navigation', { name: 'Main' }).boundingBox())!;
+        expect(nav.y >= brand.y + brand.height, `nav on its own row at ${width} px`).toBe(width < 1024);
+        expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth), `name cut at ${width} px`).toBe(false);
+    }
 });

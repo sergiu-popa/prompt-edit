@@ -6,6 +6,15 @@
  * - `formatUsd` shows 4 decimals, rounded half away from zero. A non-zero
  *   amount under $0.00005 shows as `<$0.0001`, so a cost never reads as free.
  * - `formatUsdExact` shows all 9 decimals: the amount that is held and charged.
+ * - `formatUsdRoundedUp` shows 4 decimals with the magnitude rounded up, so a
+ *   shortfall we state is always enough and 1 n$ reads `$0.0001` (D-69).
+ * - `formatBalance` shows a balance: a negative one rounds away from zero, so a
+ *   debt never reads as `-$0.0000`; any other is `formatUsd`.
+ *
+ * - `formatUsdCents` shows a whole number of cents to 2 decimals, such as a credit
+ *   pack's `$1.00`; anything finer throws.
+ *
+ * A negative amount keeps the ASCII hyphen-minus sign.
  */
 
 const NANODOLLARS_PER_DOLLAR = 1_000_000_000n;
@@ -16,6 +25,8 @@ const NANODOLLARS_PER_DISPLAY_UNIT = 100_000n;
 const DISPLAY_UNITS_PER_DOLLAR = NANODOLLARS_PER_DOLLAR / NANODOLLARS_PER_DISPLAY_UNIT;
 
 const HALF_DISPLAY_UNIT = NANODOLLARS_PER_DISPLAY_UNIT / 2n;
+
+const NANODOLLARS_PER_CENT = 10_000_000n;
 
 interface SignedAmount {
     sign: '' | '-';
@@ -52,6 +63,32 @@ export function formatUsd(nanodollars: number): string {
     const displayUnits = (magnitude + HALF_DISPLAY_UNIT) / NANODOLLARS_PER_DISPLAY_UNIT;
 
     return dollarsAndFraction(sign, displayUnits / DISPLAY_UNITS_PER_DOLLAR, displayUnits % DISPLAY_UNITS_PER_DOLLAR, 4);
+}
+
+/** `$0.0764` for 76,312,500 n$, and `$0.0001` for 1 n$. */
+export function formatUsdRoundedUp(nanodollars: number): string {
+    const { sign, magnitude } = signedAmount(nanodollars);
+    const displayUnits = (magnitude + NANODOLLARS_PER_DISPLAY_UNIT - 1n) / NANODOLLARS_PER_DISPLAY_UNIT;
+
+    return dollarsAndFraction(sign, displayUnits / DISPLAY_UNITS_PER_DOLLAR, displayUnits % DISPLAY_UNITS_PER_DOLLAR, 4);
+}
+
+/** `$0.9137` for 913,687,500 n$, and `-$0.0010` for −1,000,000 n$. */
+export function formatBalance(nanodollars: number): string {
+    return nanodollars < 0 ? formatUsdRoundedUp(nanodollars) : formatUsd(nanodollars);
+}
+
+/** `$1.00` for 1,000,000,000 n$. */
+export function formatUsdCents(nanodollars: number): string {
+    const { sign, magnitude } = signedAmount(nanodollars);
+
+    if (magnitude % NANODOLLARS_PER_CENT !== 0n) {
+        throw new RangeError(`An amount shown in cents must be a whole number of cents, got ${String(nanodollars)} n$.`);
+    }
+
+    const cents = magnitude / NANODOLLARS_PER_CENT;
+
+    return dollarsAndFraction(sign, cents / 100n, cents % 100n, 2);
 }
 
 /** `$0.373875000` for 373,875,000 n$. */

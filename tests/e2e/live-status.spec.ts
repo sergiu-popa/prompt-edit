@@ -88,7 +88,7 @@ test('a [fail] generation turns Failed live, explained and not charged', async (
     await expect(item.locator('[data-failure-message]')).toHaveText(
         "Pixelforge couldn't produce an image for this prompt. Try rephrasing it.",
     );
-    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-charge]')).toHaveText(/^\$\d+\.\d{4} returned — not charged$/, { useInnerText: true });
     await expect(item.locator('[data-estimate]')).toHaveText(/^Est\. \$\d+\.\d{4} – \$\d+\.\d{4}$/, { useInnerText: true });
     await expect(item.getByRole('img')).toHaveCount(0);
     await expectNoReload(page);
@@ -177,7 +177,7 @@ test('an [overloaded] prompt reads retrying, then fails free once the overload d
     await expect(item.locator('[data-failure-message]')).toHaveText(
         "Pixelforge was overloaded and didn't accept this request. You were not charged.",
     );
-    await expect(item.locator('[data-charge]')).toHaveText('Not charged');
+    await expect(item.locator('[data-charge]')).toHaveText('$0.0863 returned — not charged', { useInnerText: true });
     await expect(item.locator('[data-estimate]')).toHaveText('Est. $0.0582 – $0.0863', { useInnerText: true });
     await expect(note).toHaveCount(0);
     await expectNoReload(page);

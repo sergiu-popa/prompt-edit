@@ -127,7 +127,12 @@ describe('HistoryItem', () => {
         const wrapper = mountItem();
 
         expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
-        expect(wrapper.findAll('[role="tooltip"]').map((tip) => tip.text())).toStrictEqual(['$0.347750000', '$0.457150000']);
+        expect(
+            wrapper
+                .get('[data-estimate]')
+                .findAll('[role="tooltip"]')
+                .map((tip) => tip.text()),
+        ).toStrictEqual(['$0.347750000', '$0.457150000']);
     });
 
     it('shows one amount when the range is a single figure', () => {
@@ -210,6 +215,43 @@ describe('HistoryItem', () => {
     });
 
     it.each<[GenerationStatus, string]>([
+        ['pending', 'Queued'],
+        ['queued', 'Queued'],
+        ['processing', 'Processing'],
+    ])('shows the max estimate as reserved, outside the estimate, while %s (AC 5)', (status, label) => {
+        const wrapper = mountItem({ status, status_label: label });
+
+        expect(visibleText(wrapper.get('[data-reserved]'))).toBe('· $0.4572 reserved');
+        expect(wrapper.get('[data-reserved] [role="tooltip"]').text()).toBe('$0.457150000');
+        expect(wrapper.get('[data-estimate]').find('[data-reserved]').exists()).toBe(false);
+        expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
+    });
+
+    it("shows the worked example's hold as $0.0863 reserved", () => {
+        const wrapper = mountItem({
+            status: 'processing',
+            status_label: 'Processing',
+            user_estimate_nanodollars: { min: 58_162_500, max: 86_312_500 },
+        });
+
+        expect(visibleText(wrapper.get('[data-reserved]'))).toBe('· $0.0863 reserved');
+    });
+
+    it("shows a failed generation's hold as returned, with its exact amount (AC 5)", () => {
+        const charge = mountItem({ ...FAILED, user_estimate_nanodollars: { min: 58_162_500, max: 86_312_500 } }).get('[data-charge]');
+
+        expect(visibleText(charge)).toBe('$0.0863 returned — not charged');
+        expect(charge.get('[role="tooltip"]').text()).toBe('$0.086312500');
+    });
+
+    it.each<[string, Partial<Generation>]>([
+        ['succeeded', SUCCEEDED],
+        ['failed', FAILED],
+    ])('reserves nothing once %s', (_label, changes) => {
+        expect(mountItem(changes).find('[data-reserved]').exists()).toBe(false);
+    });
+
+    it.each<[GenerationStatus, string]>([
         ['queued', 'Queued'],
         ['processing', 'Processing'],
     ])('shows no charge, completion or image while %s', (status, label) => {
@@ -226,7 +268,7 @@ describe('HistoryItem', () => {
 
         expect(badge(wrapper).text()).toBe('Failed');
         expect(badge(wrapper).attributes('data-tone')).toBe('danger');
-        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('$0.4572 returned — not charged');
         expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
         expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(GENERATION_FAILED_COPY);
         expect(wrapper.find('[data-completed]').exists()).toBe(false);
@@ -270,7 +312,7 @@ describe('HistoryItem', () => {
 
         expect(badge(wrapper).text()).toBe('Failed');
         expect(badge(wrapper).attributes('data-tone')).toBe('danger');
-        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('$0.4572 returned — not charged');
         expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
         expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(message);
         expect(wrapper.find('[data-status-note]').exists()).toBe(false);
@@ -304,7 +346,7 @@ describe('HistoryItem', () => {
         const wrapper = mountItem({ ...FAILED, started_at: null, completed_at: null, failure_message: message });
 
         expect(badge(wrapper).text()).toBe('Failed');
-        expect(visibleText(wrapper.get('[data-charge]'))).toBe('Not charged');
+        expect(visibleText(wrapper.get('[data-charge]'))).toBe('$0.4572 returned — not charged');
         expect(visibleText(wrapper.get('[data-estimate]'))).toBe('Est. $0.3478 – $0.4572');
         expect(visibleText(wrapper.get('[data-failure-message]'))).toBe(message);
         expect(wrapper.find('[data-status-note]').exists()).toBe(false);
@@ -339,7 +381,7 @@ describe('HistoryItem', () => {
         });
 
         expect(badge(wrapper).text()).toBe('Failed');
-        expect(visibleText(wrapper)).toContain('Not charged');
+        expect(visibleText(wrapper)).toContain('$0.4572 returned — not charged');
         expect(visibleText(wrapper)).not.toContain('Charged $');
         expect(wrapper.findComponent(ResultImage).exists()).toBe(false);
     });

@@ -15,7 +15,7 @@ use Tests\Concerns\InteractsWithGenerationSnapshots;
 use Tests\TestCase;
 
 /**
- * History's live updates are partial reloads of the `generations` prop (D-41).
+ * History's live updates are partial reloads of the `generations` and `credits` props (D-41).
  * There is deliberately no Http::fake() here: TestCase prevents stray requests,
  * so any call to Pixelforge during a reload would throw (AC 3).
  */
@@ -52,6 +52,44 @@ final class GenerationHistoryLiveUpdatesTest extends TestCase
                     ->where('generations.data.0.user_charge_nanodollars', 381_887_500)));
 
         Queue::assertNothingPushed();
+    }
+
+    /**
+     * PE-017 AC 3: the header's balance comes with each poll. The Lighthouse holds
+     * 457,150,000 n$ of the 1,000,000,000 n$ starter, then is charged 381,887,500 n$.
+     */
+    public function test_a_partial_reload_of_generations_and_credits_returns_the_settled_balance(): void
+    {
+        $user = User::factory()->create();
+        $lighthouse = $this->createGenerationFor($user, self::lighthouseRequest());
+
+        $this->actingAs($user)
+            ->get(route('generations.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->reloadOnly(['generations', 'credits'], fn (Assert $reload) => $reload
+                    ->missing('auth')
+                    ->where('generations.data.0.status', 'pending')
+                    ->where('credits.available_nanodollars', 542_850_000)
+                    ->where('credits.reserved_nanodollars', 457_150_000)
+                    ->where('credits.running_generations', 1))
+                ->tap(fn () => $this->transitionGeneration($lighthouse, self::lighthouseSucceededSnapshotFor($lighthouse)))
+                ->reloadOnly(['generations', 'credits'], fn (Assert $reload) => $reload
+                    ->where('generations.data.0.status', 'succeeded')
+                    ->where('credits.available_nanodollars', 618_112_500)
+                    ->where('credits.reserved_nanodollars', 0)
+                    ->where('credits.running_generations', 0)));
+    }
+
+    public function test_a_partial_reload_of_generations_alone_skips_the_balance(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('generations.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('credits')
+                ->reloadOnly('generations', fn (Assert $reload) => $reload->missing('credits')));
     }
 
     public function test_a_partial_reload_returns_only_the_signed_in_users_generations(): void

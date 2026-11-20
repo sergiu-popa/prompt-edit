@@ -193,6 +193,6 @@ final class GenerationFactoryTest extends TestCase
     {
         Generation::factory()->make();
 
-        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count());
     }
 }

@@ -7,8 +7,8 @@ import MoneyAmount from '@/components/ui/MoneyAmount.vue';
 
 let wrapper: VueWrapper | undefined;
 
-function mountAmount(nanodollars: number): VueWrapper {
-    wrapper = mount(MoneyAmount, { props: { nanodollars }, attachTo: document.body });
+function mountAmount(nanodollars: number, { balance = false } = {}): VueWrapper {
+    wrapper = mount(MoneyAmount, { props: { nanodollars, balance }, attachTo: document.body });
 
     return wrapper;
 }
@@ -251,6 +251,21 @@ describe('MoneyAmount', () => {
 
         expect(removeListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
         expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function));
+    });
+
+    it('shows a negative balance rounded away from zero, with its exact value', () => {
+        const amount = mountAmount(-1_000_000, { balance: true });
+
+        expect(amount.get('button').text()).toBe('-$0.0010');
+        expect(descriptionOf(amount)).toBe('-$0.001000000');
+    });
+
+    it('shows a small debt as a balance, never as -<$0.0001', () => {
+        expect(mountAmount(-1, { balance: true }).get('button').text()).toBe('-$0.0001');
+    });
+
+    it('shows a positive balance as any amount', () => {
+        expect(mountAmount(913_687_500, { balance: true }).get('button').text()).toBe('$0.9137');
     });
 
     it('shows a tiny non-zero amount as <$0.0001, with its exact value', () => {

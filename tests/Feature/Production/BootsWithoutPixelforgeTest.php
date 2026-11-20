@@ -152,7 +152,7 @@ final class BootsWithoutPixelforgeTest extends TestCase
             ->assertSessionHasErrors(['submission' => "Image generation isn't available yet."]);
 
         $this->assertSame(0, Generation::query()->count());
-        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->whereNotNull('generation_id')->count());
         Queue::assertNothingPushed();
     }
 

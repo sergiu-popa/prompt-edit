@@ -39,8 +39,12 @@ export async function signIn(page: Page, email: string, password: string): Promi
 /**
  * Registers a fresh user through the form and waits for the signed-in home, so a test
  * that writes data (or expects none) never shares an account with another test.
+ *
+ * Dev and E2E accounts start at $0.0100, below any request's max (D-71), so by default
+ * the user buys the $1.00 demo pack through the Buy credits page first, starting the
+ * test with $1.0100. `topUp: false` keeps the starter alone, for the blocked flow.
  */
-export async function registerNewUser(page: Page, testInfo: TestInfo): Promise<string> {
+export async function registerNewUser(page: Page, testInfo: TestInfo, { topUp = true }: { topUp?: boolean } = {}): Promise<string> {
     const email = uniqueEmail(testInfo);
 
     await page.goto('/register');
@@ -50,6 +54,13 @@ export async function registerNewUser(page: Page, testInfo: TestInfo): Promise<s
     await page.getByLabel('Confirm password').fill('correct-password');
     await page.getByRole('button', { name: 'Create account' }).click();
     await page.waitForURL('/dashboard');
+
+    if (topUp) {
+        await page.goto('/credits');
+        await page.getByRole('button', { name: 'Add $1.00' }).click();
+        await page.getByRole('status').filter({ hasText: '$1.00 added.' }).waitFor();
+        await page.goto('/dashboard');
+    }
 
     return email;
 }

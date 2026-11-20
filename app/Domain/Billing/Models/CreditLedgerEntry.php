@@ -6,9 +6,11 @@ namespace App\Domain\Billing\Models;
 
 use App\Domain\Billing\Enums\CreditLedgerEntryType;
 use App\Domain\Billing\Exceptions\ImmutableCreditLedgerEntryException;
+use App\Domain\Billing\QueryBuilders\CreditLedgerEntryQueryBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\DateFormat;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UseEloquentBuilder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -21,7 +23,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?string $generation_id
  * @property CreditLedgerEntryType $type
  * @property int $amount_nanodollars
+ * @property ?string $purchase_token the Buy credits page's token, set on a purchase only
  * @property CarbonImmutable $created_at
+ *
+ * @method static CreditLedgerEntryQueryBuilder query()
  */
 #[DateFormat('Y-m-d H:i:sP')]
 #[Fillable([
@@ -29,7 +34,9 @@ use Illuminate\Database\Eloquent\Model;
     'generation_id',
     'type',
     'amount_nanodollars',
+    'purchase_token',
 ])]
+#[UseEloquentBuilder(CreditLedgerEntryQueryBuilder::class)]
 final class CreditLedgerEntry extends Model
 {
     public const null UPDATED_AT = null;

@@ -185,7 +185,7 @@ describe('History page', () => {
     });
 
     describe('live updates', () => {
-        it('reloads only the generations 3 s after loading while one is in progress', () => {
+        it('reloads only the generations and the balance 3 s after loading while one is in progress', () => {
             const reload = givenReloadsSucceed();
             mountPage(pageOf([generation('b', 'Running', 'processing'), generation('a', 'Done', 'succeeded')]));
 
@@ -194,7 +194,7 @@ describe('History page', () => {
 
             vi.advanceTimersByTime(1);
             expect(reload).toHaveBeenCalledOnce();
-            expect(reload.mock.calls[0]?.[0]).toMatchObject({ only: ['generations'] });
+            expect(reload.mock.calls[0]?.[0]).toMatchObject({ only: ['generations', 'credits'] });
         });
 
         it.each<GenerationStatus>(['pending', 'queued', 'processing'])('polls while a generation is %s', (status) => {

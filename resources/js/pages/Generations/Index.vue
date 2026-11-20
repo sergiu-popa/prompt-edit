@@ -28,9 +28,13 @@ const IN_PROGRESS: readonly GenerationStatus[] = ['pending', 'queued', 'processi
  */
 const highlightedId = usePage().flash.highlighted_generation_id;
 
-/** Polls our own server, never Pixelforge, while anything shown is in progress (D-11, D-41). */
+/**
+ * Polls our own server, never Pixelforge, while anything shown is in progress (D-11, D-41).
+ * Each poll also refreshes the shared balance, so the header shows a settled charge or a
+ * returned hold without a reload (PE-017 AC 3).
+ */
 const { isPaused } = useLiveUpdates({
-    only: ['generations'],
+    only: ['generations', 'credits'],
     active: () => props.generations.data.some((generation) => IN_PROGRESS.includes(generation.status)),
 });
 </script>

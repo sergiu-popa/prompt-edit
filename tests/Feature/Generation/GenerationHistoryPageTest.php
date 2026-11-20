@@ -54,7 +54,7 @@ final class GenerationHistoryPageTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Generations/Index')
                 ->tap(fn (Assert $page) => $this->assertEqualsCanonicalizing(
-                    ['auth', 'operator_navigation', 'errors', 'generations'],
+                    ['auth', 'operator_navigation', 'credits', 'errors', 'generations'],
                     array_keys($page->toArray()['props']),
                 )));
     }

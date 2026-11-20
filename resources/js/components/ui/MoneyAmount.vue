@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, useTemplateRef, watch } from 'vue';
 
-import { formatUsd, formatUsdExact } from '@/lib/money';
+import { formatBalance, formatUsd, formatUsdExact } from '@/lib/money';
 
 /**
  * An amount shown to 4 decimals, with its exact 9-decimal value one hover, focus or
@@ -21,8 +21,10 @@ const props = withDefaults(
         nanodollars: number;
         /** Which edge of the amount the tip lines up with. */
         align?: 'start' | 'end';
+        /** A balance, so a negative amount rounds away from zero instead of half away. */
+        balance?: boolean;
     }>(),
-    { align: 'start' },
+    { align: 'start', balance: false },
 );
 
 const tooltipId = useId();
@@ -32,7 +34,7 @@ const root = useTemplateRef<HTMLElement>('root');
 /** The pointer pressing the button right now, if any, so its focus and click are read as a tap. */
 const pressingPointerType = ref<string | null>(null);
 
-const displayed = computed(() => formatUsd(props.nanodollars));
+const displayed = computed(() => (props.balance ? formatBalance(props.nanodollars) : formatUsd(props.nanodollars)));
 const exact = computed(() => formatUsdExact(props.nanodollars));
 
 const isTapping = computed(() => pressingPointerType.value !== null && pressingPointerType.value !== 'mouse');

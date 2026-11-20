@@ -1,8 +1,11 @@
-# Dev and E2E bounds for the Pixelforge client and sign-up (D-48, D-57). An existing `.env`
-# lacks these names, so each is defaulted here to `.env.example`'s value; a value in `.env`
-# still wins. Playwright gets them too, to derive its timeouts from the same values.
+# Dev and E2E bounds for the Pixelforge client, sign-up and the starter credit (D-48, D-57,
+# D-71). An existing `.env` lacks these names, so each is defaulted here to `.env.example`'s
+# value; a value in `.env` still wins. Playwright gets them too, to derive its timeouts from
+# the same values. Accounts start at $0.0100, below the cheapest request's max, so E2E can
+# show the blocked flow; its specs buy $1.00 of demo credit through the Buy credits page.
 x-dev-bounds: &dev-bounds
   AUTH_REGISTRATIONS_PER_HOUR: ${AUTH_REGISTRATIONS_PER_HOUR:-1000}
+  CREDITS_STARTER_GRANT: ${CREDITS_STARTER_GRANT:-10000000}
   PIXELFORGE_RATE_LIMIT_PER_MINUTE: ${PIXELFORGE_RATE_LIMIT_PER_MINUTE:-600}
   PIXELFORGE_OVERLOADED_DEADLINE: ${PIXELFORGE_OVERLOADED_DEADLINE:-15}
   PIXELFORGE_RECONCILE_EVERY: ${PIXELFORGE_RECONCILE_EVERY:-5}

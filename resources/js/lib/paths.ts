@@ -9,4 +9,6 @@ export const paths = {
     dashboard: '/dashboard',
     generations: '/generations',
     report: '/report',
+    credits: '/credits',
+    creditPurchases: '/credits/purchases',
 } as const;

@@ -78,6 +78,15 @@ Image generation on top of [Pixelforge](https://pixelforge.promptedit.dev/docs),
 
 Worked examples and the full model are in [`requirements.md` §3](.agent-workflow/requirements.md#3-money-model).
 
+### Balances and Buy credits
+
+- **The balance is the ledger.** There is no balance column that could drift (D-67). Available is the sum of a user's entries: grants and purchases add, holds of running generations and charges take. Reserved is what the active holds take. Provider cost lives on the generation, never in the ledger, so it never moves a balance.
+- **Every account starts with $1.0000.** Registration, `app:upsert-user` (on create only) and the seeders each write one starter grant in the transaction that creates the user (`CREDITS_STARTER_GRANT`, D-70). A partial unique index allows one grant per user.
+- **An unaffordable generation is refused up front.** The create action locks the user's row, reads the balance and refuses a max estimate it can't cover, all in the transaction that writes the hold (D-68). Two tabs therefore can't overspend. Generate shows the shortfall, rounded up to the next $0.0001, with a link to Buy credits, and the browser's check only disables the button early.
+- **The actual can exceed the hold** when Pixelforge's rates change between estimate and creation. The charge is settled in full, a warning is logged, the balance may go negative ("-$0.0010") and every create is refused until a top-up.
+- **Buy credits is fake.** The page at `/credits` offers $1.00, $5.00 and $10.00 packs, says "Demo — no payment is taken" and has no payment fields. Each visit sends one purchase token, unique per user in the database, so a double click adds one pack (D-71).
+- **Existing accounts got an opening grant.** `app:grant-opening-credits` gives every user without a grant the starter plus their settled charges, so they start where a new account starts. It runs on every deploy and finds nobody after go-live.
+
 ## How it copes with Pixelforge
 
 - **Local row first.** Its ULID is both the `Idempotency-Key` and `metadata.generation_id`. Retries are safe, and a webhook that arrives before the create response still finds its row.
@@ -110,6 +119,8 @@ The app is served at http://prompt-edit.localhost. `make npm-dev` runs Vite in d
 | `operator@promptedit.test` | `promptedit-operator` | operator: opens Report |
 
 These credentials are local-only: the seeder refuses to run in production.
+
+Dev and E2E accounts start at $0.0100 (`CREDITS_STARTER_GRANT=10000000`), below the cheapest request's max, so the blocked flow can be seen and tested (D-71). Buy a pack at `/credits`. The seeded demo account also gets one $1.00 demo purchase, so it has $1.0100 on a fresh database.
 
 ### Pixelforge (used from PE-009 onwards)
 
@@ -295,7 +306,7 @@ The key ends in `<email>|<ip>`, and the IP must be your public IP, never `127.0.
 ### Deploy runbook
 
 1. Merge to `main` and wait for CI to pass. `dep deploy` refuses to deploy unless the latest CI run on `origin/main`'s head succeeded, and it deploys exactly that commit. The gate runs locally and needs an authenticated `gh`.
-2. `dep deploy`. It installs Composer and npm dependencies, builds the assets (through nvm, then removes `node_modules`), runs `migrate --force` and the caches, flips `current`, reloads PHP-FPM (otherwise OPcache keeps serving the old release) and restarts the queue worker (`artisan reload`).
+2. `dep deploy`. It installs Composer and npm dependencies, builds the assets (through nvm, then removes `node_modules`), runs `migrate --force` and the caches, then `app:grant-opening-credits` so no account is served a balance without its grant (safe to re-run), flips `current`, reloads PHP-FPM (otherwise OPcache keeps serving the old release) and restarts the queue worker (`artisan reload`).
 3. `make smoke-production`.
 
 **Every merged story is redeployed and smoke-checked.** Rollback is `dep rollback`, which also reloads PHP-FPM and restarts the worker. It doesn't roll migrations back, so migrations are forward-only and must stay compatible with the previous release.

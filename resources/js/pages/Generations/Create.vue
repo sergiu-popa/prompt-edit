@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { useId } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
+import { computed, useId } from 'vue';
 
+import CreditBalanceLine from '@/components/credits/CreditBalanceLine.vue';
 import EstimatePanel from '@/components/estimate/EstimatePanel.vue';
 import PromptField from '@/components/generation/PromptField.vue';
 import ReferenceImagesField from '@/components/generation/ReferenceImagesField.vue';
@@ -23,13 +24,28 @@ const props = defineProps<{
     can_submit: boolean;
 }>();
 
+const page = usePage();
+const credits = computed(() => page.props.credits);
+
 const formId = useId();
 const focusFirstInvalidField = useFocusFirstInvalidField('formElement');
 
-const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmittable, rowErrors, formError, submit } = useGenerationForm({
+const {
+    form,
+    estimate,
+    referenceImageCount,
+    perReferenceNanodollars,
+    isSubmittable,
+    rowErrors,
+    formError,
+    shortfall,
+    isShortfallFromServer,
+    submit,
+} = useGenerationForm({
     pricing: () => props.pricing,
     limits: () => props.limits,
     canSubmit: () => props.can_submit,
+    available: () => credits.value?.available_nanodollars ?? null,
     onRejected: () => focusFirstInvalidField(),
 });
 </script>
@@ -62,7 +78,8 @@ const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmitta
                     />
                 </form>
 
-                <aside class="min-w-0 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                <aside class="flex min-w-0 flex-col gap-3 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                    <CreditBalanceLine v-if="credits" :credits="credits" />
                     <EstimatePanel
                         :estimate="estimate"
                         :quality="form.quality"
@@ -78,6 +95,8 @@ const { form, estimate, referenceImageCount, perReferenceNanodollars, isSubmitta
                     :busy="form.processing"
                     :error="formError"
                     :unavailable="!can_submit"
+                    :shortfall="shortfall"
+                    :announce-shortfall="isShortfallFromServer"
                 />
             </div>
         </div>

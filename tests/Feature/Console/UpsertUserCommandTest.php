@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Console;
 
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
@@ -11,9 +12,11 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
+use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\TestCase;
 
 /**
@@ -22,6 +25,7 @@ use Tests\TestCase;
  */
 final class UpsertUserCommandTest extends TestCase
 {
+    use InteractsWithCreditLedger;
     use RefreshDatabase;
 
     private const string PASSWORD = 'first-Secret-4711';
@@ -73,6 +77,47 @@ final class UpsertUserCommandTest extends TestCase
 
         $this->assertPasswordNeverLeaked('second-Secret-0815', $output);
         $this->assertOneInfoLineFor($user);
+    }
+
+    /**
+     * AC 2: the account it creates gets its starter grant.
+     */
+    public function test_creating_a_user_grants_the_starter_credit_once(): void
+    {
+        $this->upsert('ada@example.com', 'Ada Lovelace', [self::PASSWORD]);
+        $this->upsert('ada@example.com', 'Ada King', ['second-Secret-0815']);
+
+        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->sole()));
+    }
+
+    /**
+     * Re-running it for an existing user grants nothing, even to one without a grant:
+     * the opening-grant backfill covers those.
+     */
+    public function test_updating_a_user_grants_nothing(): void
+    {
+        $existing = User::factory()->withoutCredits()->create(['email' => 'ada@example.com']);
+
+        [$exitCode] = $this->upsert('ada@example.com', 'Ada King', [self::PASSWORD]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame([], $this->topUpsFor($existing));
+    }
+
+    public function test_a_failing_grant_creates_no_user(): void
+    {
+        CreditLedgerEntry::created(function (): void {
+            throw new RuntimeException('The grant write failed.');
+        });
+
+        try {
+            $this->upsert('ada@example.com', 'Ada Lovelace', [self::PASSWORD]);
+            $this->fail('The upsert did not fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The grant write failed.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, User::query()->count());
     }
 
     /**

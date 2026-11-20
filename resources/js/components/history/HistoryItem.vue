@@ -15,10 +15,11 @@ import type { Generation, GenerationStatus } from '@/types/generation';
  * One generation on History: its status, the prompt (clamped to two lines), what was
  * asked for, the estimate the user saw and when; once it succeeded, its image (or, from
  * its expiry on the server's clock, a placeholder), what it was actually charged and
- * when it completed; once it failed, that it was free and the server's one message
+ * when it completed; once it failed, that its hold came back and the server's one message
  * saying why, rendered as text. Until Pixelforge accepts it, the server's note on why
  * it waits (retrying, or waiting for a free slot) sits above the money, as text, and
- * the badge stays a neutral "Queued". Any card not yet terminal 15 min after
+ * the badge stays a neutral "Queued". Until it is terminal, the hold its max estimate
+ * reserves sits beside the estimate. Any card not yet terminal 15 min after
  * creation shows the server's "Taking longer than usual" note there instead,
  * whatever its badge. Every time is read on `now`, the server-aligned clock History
  * ticks, so a processing badge counts up live. From `sm` the badge has its own
@@ -82,6 +83,13 @@ const createdExactly = computed(() => formatExactTimestamp(props.generation.crea
 
 const isSucceeded = computed(() => props.generation.status === 'succeeded');
 const isFailed = computed(() => props.generation.status === 'failed');
+
+/**
+ * The hold is always the max estimate (HoldGenerationCreditsAction), and a failure
+ * releases it in full, so both labels read it from the estimate.
+ */
+const heldNanodollars = computed(() => props.generation.user_estimate_nanodollars.max);
+const isHolding = computed(() => !isSucceeded.value && !isFailed.value);
 
 /** The server's flag, or its clock passing the expiry while the page is open (D-42). */
 const isExpired = computed(
@@ -152,10 +160,15 @@ const completedExactly = computed(() => (completedAt.value === null ? '' : forma
                     Charged
                     <MoneyAmount :nanodollars="charge" />
                 </p>
-                <p v-else-if="isFailed" data-charge class="text-sm font-medium text-zinc-900">Not charged</p>
+                <p v-else-if="isFailed" data-charge class="text-sm font-medium text-zinc-900">
+                    <MoneyAmount :nanodollars="heldNanodollars" /> returned — not charged
+                </p>
                 <p data-estimate class="text-sm text-zinc-600">
                     Est.
                     <AmountRange :min="generation.user_estimate_nanodollars.min" :max="generation.user_estimate_nanodollars.max" />
+                </p>
+                <p v-if="isHolding" data-reserved class="text-sm text-zinc-600">
+                    · <MoneyAmount :nanodollars="heldNanodollars" /> reserved
                 </p>
             </div>
             <p v-if="completedAt !== null" data-completed class="text-sm text-zinc-600">
