@@ -32,6 +32,7 @@ final class LocalEnvTemplateTest extends TestCase
             'in-network webhooks' => ['PIXELFORGE_FAKE_WEBHOOK_URL', 'http://app:8080'],
             'a database queue the worker runs' => ['QUEUE_CONNECTION', 'database'],
             'a rate budget that never slows parallel E2E' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE', '600'],
+            'an overload deadline E2E can wait for' => ['PIXELFORGE_OVERLOADED_DEADLINE', '15'],
         ];
     }
 
@@ -57,6 +58,7 @@ final class LocalEnvTemplateTest extends TestCase
     {
         return [
             'the rate budget' => ['PIXELFORGE_RATE_LIMIT_PER_MINUTE'],
+            'the overload deadline' => ['PIXELFORGE_OVERLOADED_DEADLINE'],
         ];
     }
 

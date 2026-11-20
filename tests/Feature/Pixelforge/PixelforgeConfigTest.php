@@ -89,12 +89,13 @@ final class PixelforgeConfigTest extends TestCase
     }
 
     /**
-     * The dev containers set a high budget in their env (D-48); the suite always runs
-     * with production's bounds.
+     * The dev containers set a high budget and a short overload deadline in their env
+     * (D-48); the suite always runs with production's bounds.
      */
-    public function test_the_suite_runs_with_the_production_rate_budget(): void
+    public function test_the_suite_runs_with_the_production_rate_budget_and_overload_deadline(): void
     {
         $this->assertSame(50, config('pixelforge.rate_limit_per_minute'));
+        $this->assertSame(120, config('pixelforge.submit.overloaded_deadline_seconds'));
     }
 
     public function test_empty_values_mean_the_defaults(): void

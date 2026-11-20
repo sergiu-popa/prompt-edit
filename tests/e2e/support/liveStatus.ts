@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
@@ -50,6 +52,38 @@ export const LOCAL_FAILURE_TIMEOUT_MS = MARGIN * (WORKER_SLEEP_MS + POLL_INTERVA
 
 /** From Succeeded on screen to "Image expired": the TTL, plus a second for the clock's tick. */
 export const EXPIRY_TIMEOUT_MS = MARGIN * (FAKE_EXPIRE_TTL_MS + 1_000);
+
+/**
+ * `submit.overloaded_deadline_seconds` as the app reads it: the dev containers' env, which
+ * compose also gives Playwright (D-48), else `.env.example`'s line, which CI's image is
+ * built from, beside this checkout.
+ */
+function overloadedDeadlineSeconds(): number {
+    const fromTemplate = /^PIXELFORGE_OVERLOADED_DEADLINE=(\d+)$/m.exec(readFileSync('.env.example', 'utf8'))?.[1];
+    const seconds = Number(process.env.PIXELFORGE_OVERLOADED_DEADLINE || fromTemplate);
+
+    if (!Number.isInteger(seconds) || seconds < 1) {
+        throw new Error('PIXELFORGE_OVERLOADED_DEADLINE is neither in the env nor in .env.example.');
+    }
+
+    return seconds;
+}
+
+/** How long an `[overloaded]` prompt is retried before it fails free. */
+const OVERLOADED_DEADLINE_MS = overloadedDeadlineSeconds() * 1_000;
+
+/** The fake's `Retry-After` for an `[overloaded]` create (FakePixelforgeClient). */
+const OVERLOADED_RETRY_AFTER_MS = 2_000;
+
+/** The submit job's first attempt, then one poll, shows the retry note. */
+export const RETRY_NOTE_TIMEOUT_MS = MARGIN * (WORKER_SLEEP_MS + POLL_INTERVAL_MS);
+
+/**
+ * From the retry note to the free failure: the deadline, a last wait of up to one
+ * `Retry-After`, two worker sleeps around the released job, then one poll.
+ */
+export const OVERLOADED_FAILURE_TIMEOUT_MS =
+    MARGIN * (OVERLOADED_DEADLINE_MS + OVERLOADED_RETRY_AFTER_MS + 2 * WORKER_SLEEP_MS + POLL_INTERVAL_MS);
 
 export interface PromptOptions {
     quality?: 'Low' | 'Medium' | 'High';
