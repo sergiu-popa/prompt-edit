@@ -227,6 +227,24 @@ final class SubmitGenerationLimitsTest extends TestCase
         foreach ([self::PIXELFORGE_API_KEY, 'Bearer', 'Authorization', 'Idempotency-Key', 'Content-Type', 'Accept'] as $secret) {
             $this->assertStringNotContainsStringIgnoringCase($secret, $logged);
         }
+
+        $this->assertNoLogLineCarriesTheKey();
+    }
+
+    /**
+     * Every line the refused key led to, at any level, with its context.
+     */
+    private function assertNoLogLineCarriesTheKey(): void
+    {
+        $this->assertNotEmpty($this->loggedMessages());
+
+        foreach ($this->loggedMessages() as $logged) {
+            $line = $logged->message . json_encode($logged->context, JSON_THROW_ON_ERROR);
+
+            $this->assertStringNotContainsString(self::PIXELFORGE_API_KEY, $line);
+            $this->assertStringNotContainsStringIgnoringCase('Bearer', $line);
+            $this->assertStringNotContainsStringIgnoringCase('Authorization', $line);
+        }
     }
 
     private static function concurrencyLimited(): PromiseInterface
