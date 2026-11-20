@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Generation\Models;
 
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
+use App\Domain\Generation\Enums\SubmitRetryNote;
 use App\Domain\Generation\Models\Generation;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Concerns\AssertsInstants;
 use Tests\TestCase;
 
 final class GenerationTest extends TestCase
 {
+    use AssertsInstants;
     use RefreshDatabase;
 
     private string $phpTimezone;
@@ -98,6 +102,57 @@ final class GenerationTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         Generation::factory()->create(['provider_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K']);
+    }
+
+    /**
+     * A row from before PE-013, inserted without any `submit_*` column, reads as
+     * never attempted.
+     */
+    public function test_a_row_without_bookkeeping_reads_as_never_attempted(): void
+    {
+        $generation = Generation::factory()->create();
+
+        $row = Generation::query()->whereKey($generation->getKey())->firstOrFail();
+
+        $this->assertNull($row->submit_first_attempted_at);
+        $this->assertNull($row->submit_last_attempted_at);
+        $this->assertNull($row->submit_last_outcome);
+        $this->assertNull($row->submit_ambiguous_at);
+        $this->assertNull($row->submit_handed_over_at);
+        $this->assertNull($row->submit_first_overloaded_at);
+        $this->assertNull($row->submit_first_concurrency_limited_at);
+        $this->assertSame(0, $row->submit_invalid_api_key_count);
+        $this->assertNull($row->submit_retry_note);
+    }
+
+    public function test_the_submit_bookkeeping_round_trips_through_its_casts(): void
+    {
+        $generation = Generation::factory()->create();
+        $instants = [
+            'submit_first_attempted_at' => '2026-11-20T10:00:00Z',
+            'submit_last_attempted_at' => '2026-11-20T10:00:30Z',
+            'submit_ambiguous_at' => '2026-11-20T10:00:05Z',
+            'submit_handed_over_at' => '2026-11-20T10:30:00Z',
+            'submit_first_overloaded_at' => '2026-11-20T10:00:01Z',
+            'submit_first_concurrency_limited_at' => '2026-11-20T10:00:02Z',
+        ];
+        $generation->forceFill([
+            ...array_map(fn (string $instant): CarbonImmutable => CarbonImmutable::parse($instant), $instants),
+            'submit_last_outcome' => SubmitAttemptOutcome::ConcurrencyLimited,
+            'submit_invalid_api_key_count' => 2,
+            'submit_retry_note' => SubmitRetryNote::WaitingForSlot,
+        ])->save();
+
+        $row = Generation::query()->whereKey($generation->getKey())->firstOrFail();
+
+        foreach ($instants as $column => $instant) {
+            $this->assertSameInstant($instant, $row->getAttribute($column));
+        }
+
+        $this->assertSame(SubmitAttemptOutcome::ConcurrencyLimited, $row->submit_last_outcome);
+        $this->assertSame(2, $row->submit_invalid_api_key_count);
+        $this->assertSame(SubmitRetryNote::WaitingForSlot, $row->submit_retry_note);
+        $this->assertSame('concurrency_limited', DB::table('generations')->where('id', $generation->getKey())->value('submit_last_outcome'));
     }
 
     public function test_a_pixelforge_instant_survives_a_non_utc_php_and_database_timezone(): void
