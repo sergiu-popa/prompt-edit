@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Generation\Enums;
 
 use App\Domain\Generation\Models\Generation;
+use Illuminate\Support\Str;
 
 /**
  * Why a generation failed, and what History tells the user about it: the single
@@ -24,6 +25,12 @@ enum GenerationFailureCode: string
      * What any other, or a missing, code reads.
      */
     public const string GENERIC_MESSAGE = 'This generation failed.';
+
+    /**
+     * How much of Pixelforge's own message the copy quotes. Its `param` is already at
+     * most 255 characters, but the message is any length the provider sends.
+     */
+    public const int MAX_DETAIL_LENGTH = 300;
 
     /**
      * The local reason wins over the stored `error_code`, because a local reason
@@ -56,10 +63,12 @@ enum GenerationFailureCode: string
     }
 
     /**
-     * "Pixelforge rejected the request: {param}: {message}", leaving out what is blank.
+     * "Pixelforge rejected the request: {param}: {message}", leaving out what is blank,
+     * with a message past MAX_DETAIL_LENGTH cut and marked with an ellipsis.
      */
     private static function rejectedRequest(?string $param, ?string $detail): string
     {
+        $detail = $detail === null ? null : Str::limit($detail, self::MAX_DETAIL_LENGTH, '…');
         $parts = array_filter([$param, $detail], fn (?string $part): bool => $part !== null && $part !== '');
 
         return $parts === []

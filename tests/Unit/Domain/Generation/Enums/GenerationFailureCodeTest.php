@@ -64,6 +64,20 @@ final class GenerationFailureCodeTest extends TestCase
         $this->assertSame($message, GenerationFailureCode::ValidationFailed->message($param, $detail));
     }
 
+    public function test_a_long_pixelforge_message_is_cut_to_a_readable_length(): void
+    {
+        $message = GenerationFailureCode::ValidationFailed->message('prompt', str_repeat('é', 5_000));
+
+        $this->assertSame('Pixelforge rejected the request: prompt: ' . str_repeat('é', 300) . '…', $message);
+    }
+
+    public function test_a_pixelforge_message_at_the_limit_is_kept_whole(): void
+    {
+        $detail = str_repeat('a', 300);
+
+        $this->assertSame('Pixelforge rejected the request: ' . $detail, GenerationFailureCode::ValidationFailed->message(null, $detail));
+    }
+
     public function test_the_codes_are_spelled_as_the_local_reasons_and_pixelforges_error_codes(): void
     {
         $this->assertSame(
