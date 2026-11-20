@@ -182,7 +182,13 @@ The orchestrator runs these over SSH as `admin`, in `/home/admin/web/prompt.serg
     - `php8.4 -r 'var_dump(ini_get("zend.exception_ignore_args"));'` → `"1"`.
 
     If either is Off, report it and ask the user before changing anything as root.
-13. **Final smoke (E2E).** After the last deploy, run `make smoke-production` again.
+13. **Abuse limits and expired session (AC 15, 20, 21; added by the audit).** Read-only, as in the README's go-live checks:
+    - `php8.4 artisan tinker --execute 'echo config("generations.submissions_per_minute"), " ", config("auth.registrations_per_hour");'` → `10 3`;
+    - in a browser, six wrong passwords within a minute for a throwaway email → the 6th shows "Too many login attempts. Please try again in N seconds." under Email, never an error page;
+    - `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -X POST -H 'X-Inertia: true' -H 'X-Requested-With: XMLHttpRequest' -H 'Referer: https://prompt.sergiupopa.dev/login' https://prompt.sergiupopa.dev/login` → `303 https://prompt.sergiupopa.dev/login`.
+
+    The 11th-generation and 4th-account refusals are not repeated on production, because they would create 10 billable generations or 3 accounts; `CreateGenerationThrottleTest` and `RegistrationThrottleTest` cover them.
+14. **Final smoke (E2E).** After the last deploy, wait until `/health/reconciler` reads `ok`, then run `make smoke-production` again.
 
 ## README
 - **Reviewer guide (task 19, AC 24), near the top:**
