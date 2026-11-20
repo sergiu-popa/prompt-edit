@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Generation\ValueObjects;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Models\Generation;
 use Carbon\CarbonImmutable;
 use Illuminate\Container\Attributes\Config;
 use LogicException;
@@ -20,6 +21,11 @@ final readonly class ReconcilePolicy
      * A row waits a quarter of its age between checks, so 15 min at 1 h.
      */
     public const int AGE_DIVISOR = 4;
+
+    /**
+     * What History says of a generation that takes longer than usual (AC 19).
+     */
+    public const string STUCK_NOTE = 'Taking longer than usual — we\'re checking with Pixelforge';
 
     public function __construct(
         #[Config('pixelforge.reconcile.queued_after_seconds')]
@@ -38,6 +44,8 @@ final readonly class ReconcilePolicy
         private int $redispatchAfterSeconds,
         #[Config('pixelforge.reconcile.give_up_after_seconds')]
         private int $giveUpAfterSeconds,
+        #[Config('pixelforge.reconcile.stuck_after_seconds')]
+        private int $stuckAfterSeconds,
     ) {}
 
     /**
@@ -109,5 +117,26 @@ final readonly class ReconcilePolicy
     public function hasBeenNotFoundTooLong(CarbonImmutable $notFoundSince, CarbonImmutable $now): bool
     {
         return $now->greaterThan($notFoundSince->addSeconds($this->giveUpAfterSeconds));
+    }
+
+    /**
+     * A non-terminal generation created at or before this instant is stuck: 15 min
+     * ago by default, on the server's clock (D-56).
+     */
+    public function stuckBefore(CarbonImmutable $now): CarbonImmutable
+    {
+        return $now->subSeconds($this->stuckAfterSeconds);
+    }
+
+    /**
+     * The stuck note for a non-terminal generation past the stuck age, else null. It
+     * needs no column, so it shows on time even while the reconciler is down.
+     */
+    public function stuckNoteFor(Generation $generation, CarbonImmutable $now): ?string
+    {
+        $isStuck = ! $generation->status->isTerminal()
+            && $generation->created_at->lessThanOrEqualTo($this->stuckBefore($now));
+
+        return $isStuck ? self::STUCK_NOTE : null;
     }
 }

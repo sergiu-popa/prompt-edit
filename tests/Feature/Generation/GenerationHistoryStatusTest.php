@@ -377,6 +377,40 @@ final class GenerationHistoryStatusTest extends TestCase
         $this->assertNull($this->onlyHistoryItemOf($user)['status_note']);
     }
 
+    /**
+     * AC 19: 15 min after creation, a generation not yet terminal says so, in place
+     * of any older note; a minute earlier it keeps its own.
+     *
+     * @return array<string, array{string, int, ?string}>
+     */
+    public static function stuckNotes(): array
+    {
+        $stuck = 'Taking longer than usual — we\'re checking with Pixelforge';
+
+        return [
+            'queued at 15:00' => ['queued', 900, $stuck],
+            'queued at 14:59' => ['queued', 899, null],
+            'processing at 15:00' => ['processing', 900, $stuck],
+            'processing at 14:59' => ['processing', 899, null],
+            'pending at 15:00' => ['pending', 900, $stuck],
+            'pending at 14:59, with its retry note' => ['pending', 899, 'Pixelforge is busy — retrying automatically'],
+            'pending at 16:00, with its retry note' => ['pending', 960, $stuck],
+            'succeeded a day later' => ['succeeded', 86_400, null],
+            'failed a day later' => ['failed', 86_400, null],
+        ];
+    }
+
+    #[DataProvider('stuckNotes')]
+    public function test_a_generation_that_takes_longer_than_usual_says_so(string $status, int $ageSeconds, ?string $note): void
+    {
+        $user = User::factory()->create();
+        $generation = $this->givenAGenerationIn(GenerationStatus::from($status));
+        $generation->forceFill(['user_id' => $user->id, 'submit_retry_note' => SubmitRetryNote::Retrying])->save();
+        $this->travel($ageSeconds)->seconds();
+
+        $this->assertSame($note, $this->onlyHistoryItemOf($user)['status_note']);
+    }
+
     public function test_history_carries_the_servers_time_to_the_millisecond(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-19T23:59:58.250Z'));

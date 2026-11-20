@@ -7,6 +7,7 @@ namespace App\Http\Resources;
 use App\Domain\Generation\Enums\GenerationFailureCode;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Models\Generation;
+use App\Domain\Generation\ValueObjects\ReconcilePolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,9 +21,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * and whenever it is neither `https://` nor root-relative, so a page never requests
  * a dead URL and a provider URL never becomes a `javascript:` link (D-42). A
  * failed generation sends one composed message, from GenerationFailureCode, and
- * neither its raw code nor Pixelforge's text beside it (D-43). A generation still
- * `pending` sends why it is waiting, when the submit job is retrying it (D-45); any
- * other status leaves a stale note behind.
+ * neither its raw code nor Pixelforge's text beside it (D-43). A non-terminal
+ * generation past the stuck age says it is taking longer than usual (D-56), by the
+ * server's clock; otherwise one still `pending` sends why it is waiting, when the
+ * submit job is retrying it (D-45), and any other status leaves a stale note behind.
  * Every instant is UTC to the second. It reads no relation, so a page of items
  * costs one query.
  *
@@ -79,9 +81,8 @@ final class GenerationResource extends JsonResource
             'failure_message' => $this->resource->status === GenerationStatus::Failed
                 ? GenerationFailureCode::messageFor($this->resource)
                 : null,
-            'status_note' => $this->resource->status === GenerationStatus::Pending
-                ? $this->resource->submit_retry_note?->message()
-                : null,
+            'status_note' => app(ReconcilePolicy::class)->stuckNoteFor($this->resource, CarbonImmutable::now())
+                ?? ($this->resource->status === GenerationStatus::Pending ? $this->resource->submit_retry_note?->message() : null),
         ];
     }
 

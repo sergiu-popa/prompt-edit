@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\ValueObjects;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Models\Generation;
 use App\Domain\Generation\ValueObjects\ReconcilePolicy;
 use Carbon\CarbonImmutable;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 /**
  * The reconciler's rules with production's bounds and a fixed now: when a row is
- * stale, and when it is next checked (D-50).
+ * stale, next checked, re-dispatched, given up or stuck. The app is booted only so
+ * a Generation model can be built in memory.
  */
 final class ReconcilePolicyTest extends TestCase
 {
@@ -168,6 +170,38 @@ final class ReconcilePolicyTest extends TestCase
         $this->assertFalse(self::policy()->hasBeenNotFoundTooLong(self::now()->subMinute(), self::now()));
     }
 
+    /**
+     * AC 19: stuck at 15 min after creation, whatever non-terminal status it is in.
+     *
+     * @return array<string, array{GenerationStatus, int, bool}>
+     */
+    public static function stuck(): array
+    {
+        $cases = [];
+
+        foreach (GenerationStatus::cases() as $status) {
+            $cases["{$status->value}, 14:59 old"] = [$status, 899, false];
+            $cases["{$status->value}, 15:00 old"] = [$status, 900, ! $status->isTerminal()];
+            $cases["{$status->value}, a day old"] = [$status, 86_400, ! $status->isTerminal()];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('stuck')]
+    public function test_a_non_terminal_generation_is_stuck_15_minutes_after_creation(GenerationStatus $status, int $ageSeconds, bool $stuck): void
+    {
+        $generation = (new Generation)->forceFill(['status' => $status, 'created_at' => self::now()->subSeconds($ageSeconds)]);
+
+        $this->assertSame($stuck ? ReconcilePolicy::STUCK_NOTE : null, self::policy()->stuckNoteFor($generation, self::now()));
+    }
+
+    public function test_the_stuck_note_reads_as_the_story_says(): void
+    {
+        $this->assertSame('Taking longer than usual — we\'re checking with Pixelforge', ReconcilePolicy::STUCK_NOTE);
+        $this->assertSame('2026-11-20T11:45:00Z', self::policy()->stuckBefore(self::now())->toIso8601ZuluString());
+    }
+
     private static function now(): CarbonImmutable
     {
         return CarbonImmutable::parse(self::NOW);
@@ -182,6 +216,7 @@ final class ReconcilePolicyTest extends TestCase
         int $submitReserve = 10,
         int $redispatchAfterSeconds = 300,
         int $giveUpAfterSeconds = 86_400,
+        int $stuckAfterSeconds = 900,
     ): ReconcilePolicy {
         return new ReconcilePolicy(
             queuedAfterSeconds: $queuedAfterSeconds,
@@ -192,6 +227,7 @@ final class ReconcilePolicyTest extends TestCase
             submitReserve: $submitReserve,
             redispatchAfterSeconds: $redispatchAfterSeconds,
             giveUpAfterSeconds: $giveUpAfterSeconds,
+            stuckAfterSeconds: $stuckAfterSeconds,
         );
     }
 }

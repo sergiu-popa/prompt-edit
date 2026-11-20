@@ -111,6 +111,7 @@ final class LocalEnvTemplateTest extends TestCase
             'the submit reserve' => ['PIXELFORGE_SUBMIT_RESERVE'],
             'the re-dispatch age' => ['PIXELFORGE_REDISPATCH_AFTER'],
             'the give-up age' => ['PIXELFORGE_GIVE_UP_AFTER'],
+            'the stuck age' => ['PIXELFORGE_STUCK_AFTER'],
         ];
     }
 

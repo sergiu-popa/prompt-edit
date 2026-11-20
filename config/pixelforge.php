@@ -153,6 +153,12 @@ return [
          * after its creation (D-49). One Pixelforge confirmed is never given up.
          */
         'give_up_after_seconds' => filter_var(env('PIXELFORGE_GIVE_UP_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 86_400]]),
+
+        /**
+         * A non-terminal generation this long after its creation shows History's
+         * "Taking longer than usual" note, and is logged once (D-56).
+         */
+        'stuck_after_seconds' => filter_var(env('PIXELFORGE_STUCK_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 900]]),
     ],
 
     /**
