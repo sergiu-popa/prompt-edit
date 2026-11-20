@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Reconciler;
 
+use App\Domain\Generation\Actions\GiveUpUnconfirmedGenerationAction;
 use App\Domain\Generation\Enums\GenerationStatus;
 use App\Domain\Generation\Enums\LocalFailureReason;
 use App\Domain\Generation\Enums\SubmitAttemptOutcome;
@@ -65,6 +66,36 @@ final class ReconcileGiveUpTest extends TestCase
         $this->assertSame('Gave up on a generation Pixelforge never confirmed; it is failed as lost and not charged.', $errors[0]->message);
         $this->assertSame($redFox->id, $errors[0]->context['generation_id']);
         $this->assertSame('applied', $errors[0]->context['outcome']);
+    }
+
+    /**
+     * The give-up race: a re-dispatched create lands between the selection and the
+     * transition. The transition refuses and logs the conflict, and nothing claims
+     * the generation went free.
+     */
+    public function test_a_row_confirmed_after_its_selection_is_not_given_up(): void
+    {
+        $redFox = $this->givenTheHandedOverRedFox();
+        $this->travel(self::DAY_SECONDS)->seconds();
+        $selected = $this->reloadedGeneration($redFox);
+        $this->transitionGeneration($redFox, self::snapshotFor($redFox, GenerationStatus::Queued));
+        $confirmed = $this->reloadedGeneration($redFox);
+
+        app(GiveUpUnconfirmedGenerationAction::class)->execute($selected);
+
+        $row = $this->reloadedGeneration($redFox);
+        $this->assertSame(GenerationStatus::Queued, $row->status);
+        $this->assertSame($confirmed->provider_id, $row->provider_id);
+        $this->assertNull($row->local_failure_reason);
+        $this->assertSame([['hold', -self::RED_FOX_HOLD]], $this->ledgerEntriesFor($redFox));
+
+        $messages = $this->loggedMessages();
+        $this->assertSame([], array_values(array_filter($messages, fn (MessageLogged $message): bool => str_starts_with($message->message, 'Gave up'))));
+        $movedOn = array_values(array_filter($messages, fn (MessageLogged $message): bool => str_starts_with($message->message, 'A generation moved on before the reconciler gave up on it')));
+        $this->assertCount(1, $movedOn);
+        $this->assertSame('info', $movedOn[0]->level);
+        $this->assertSame($redFox->id, $movedOn[0]->context['generation_id']);
+        $this->assertSame('refused_conflict', $movedOn[0]->context['outcome']);
     }
 
     public function test_a_second_before_the_day_it_is_redispatched_instead(): void
