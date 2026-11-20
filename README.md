@@ -101,11 +101,12 @@ make setup   # .env from .env.example, containers, composer + npm, key, migratio
 
 The app is served at http://prompt-edit.localhost. `make npm-dev` runs Vite in dev mode.
 
-`make seed` creates a local demo account, and running it again resets it:
+`make seed` creates the local accounts, and running it again resets them:
 
-| Email | Password |
-| --- | --- |
-| `demo@promptedit.test` | `promptedit-demo` |
+| Email | Password | Role |
+| --- | --- | --- |
+| `demo@promptedit.test` | `promptedit-demo` | user |
+| `operator@promptedit.test` | `promptedit-operator` | operator: opens Report |
 
 These credentials are local-only: the seeder refuses to run in production.
 
