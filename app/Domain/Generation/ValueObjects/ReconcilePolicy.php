@@ -13,7 +13,8 @@ use LogicException;
 /**
  * The scheduled reconciler's rules, pure and from config (PE-014): when a confirmed
  * generation is stale enough to poll, when an unsubmitted one is re-dispatched, and
- * when any generation it handled is checked again (D-50, D-52). Every instant is compared in whole seconds, as the rows store them.
+ * when any generation it handled is checked again (D-50, D-52). Every instant is
+ * compared in whole seconds, as the rows store them.
  */
 final readonly class ReconcilePolicy
 {

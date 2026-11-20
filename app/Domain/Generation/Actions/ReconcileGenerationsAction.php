@@ -16,15 +16,15 @@ use Throwable;
 
 /**
  * One run of the scheduled reconciler (PE-014): it catches up generations whose
- * webhooks never arrived. It first logs one warning per generation that takes longer
- * than usual (D-56), a database-only step with its own limit. Confirmed generations with no news for a while are polled,
- * oldest last provider update first, up to the batch, and only while more than the
- * reserve of D-44's budget is left for submits (D-51). A spent budget or Pixelforge's
- * 429 stops the run's polls. Generations Pixelforge never confirmed, whose submit job
- * was handed over, stopped or died, then take the rest of the batch, oldest created
- * first: each is re-dispatched (D-52), or given up as `lost` once it is a day old
- * (D-49). Every row is isolated: an exception on one is
- * logged with its ULID, and the run goes on.
+ * webhooks never arrived. It first logs one warning per generation that takes
+ * longer than usual (D-56), a database-only step with its own limit. Confirmed
+ * generations with no news for a while are polled, oldest last provider update
+ * first, up to the batch, and only while more than the reserve of D-44's budget is
+ * left for submits (D-51). A spent budget or Pixelforge's 429 stops the run's polls.
+ * Generations Pixelforge never confirmed, whose submit job was handed over, stopped
+ * or died, then take the rest of the batch, oldest created first: each is
+ * re-dispatched (D-52), or given up as `lost` once it is a day old (D-49). Every row
+ * is isolated: an exception on one is logged with its ULID, and the run goes on.
  */
 final class ReconcileGenerationsAction
 {

@@ -18,13 +18,14 @@ import type { Generation, GenerationStatus } from '@/types/generation';
  * when it completed; once it failed, that it was free and the server's one message
  * saying why, rendered as text. Until Pixelforge accepts it, the server's note on why
  * it waits (retrying, or waiting for a free slot) sits above the money, as text, and
- * the badge stays a neutral "Queued". Any card not yet terminal 15 min after creation
- * shows the server's "Taking longer than usual" note there instead, whatever its badge. Every time is read on `now`, the server-aligned
- * clock History ticks, so a processing badge counts up live. From `sm` the badge has its own
- * column, with the image under it, and the time sits on the right; on a phone the image
- * comes first, then the badge and time share a line. It owns its row's padding, so the
- * highlight fills the row; inside a list's rounded card, the first and last rows round
- * their corners to match.
+ * the badge stays a neutral "Queued". Any card not yet terminal 15 min after
+ * creation shows the server's "Taking longer than usual" note there instead,
+ * whatever its badge. Every time is read on `now`, the server-aligned clock History
+ * ticks, so a processing badge counts up live. From `sm` the badge has its own
+ * column, with the image under it, and the time sits on the right; on a phone the
+ * image comes first, then the badge and time share a line. It owns its row's
+ * padding, so the highlight fills the row; inside a list's rounded card, the first
+ * and last rows round their corners to match.
  */
 const props = withDefaults(
     defineProps<{
