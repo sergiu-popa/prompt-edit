@@ -75,11 +75,12 @@ final class CreateNewUser implements CreatesNewUsers
         return $user;
     }
 
+    /**
+     * `config/auth.php` owns the default, so it is never repeated here.
+     */
     private static function registrationsPerHour(): int
     {
-        $limit = config('auth.registrations_per_hour');
-
-        return is_int($limit) ? $limit : 3;
+        return config()->integer('auth.registrations_per_hour');
     }
 
     /**
