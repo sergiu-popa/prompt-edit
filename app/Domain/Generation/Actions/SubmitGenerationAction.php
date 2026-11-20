@@ -239,12 +239,19 @@ final class SubmitGenerationAction
     }
 
     /**
-     * Pixelforge's error envelope is stored with the reason when there is one.
+     * Pixelforge's error envelope is stored with the reason when there is one. The
+     * submit path never gives up on a generation (`lost`): only the reconciler does
+     * (D-49), so that reason is refused before anything is written.
      *
      * @throws ConcurrentGenerationTransitionException
+     * @throws LogicException for `lost`
      */
     private function failLocally(Generation $generation, LocalFailureReason $reason, ReportsPixelforgeContext $failure): void
     {
+        if ($reason === LocalFailureReason::Lost) {
+            throw new LogicException('The submit path never gives up on a generation; only the reconciler does (D-49).');
+        }
+
         $envelope = $failure instanceof PixelforgeApiException ? $failure : null;
 
         $outcome = $this->transitionGeneration->execute($generation, new LocalGenerationFailureData(

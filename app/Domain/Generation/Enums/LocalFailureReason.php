@@ -46,4 +46,10 @@ enum LocalFailureReason: string
      * `429 daily_limit_exceeded`: the account's 500 a UTC day are used (AC 8).
      */
     case DailyLimit = 'daily_limit';
+
+    /**
+     * Given up by the reconciler: still unconfirmed by Pixelforge a day after
+     * creation (D-49). Only the reconciler records it, never the submit path.
+     */
+    case Lost = 'lost';
 }

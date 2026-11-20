@@ -24,6 +24,7 @@ enum GenerationFailureCode: string
     case ProviderBusy = 'provider_busy';
     case ServiceUnavailable = 'service_unavailable';
     case DailyLimit = 'daily_limit';
+    case Lost = 'lost';
 
     /**
      * What any other, or a missing, code reads.
@@ -67,6 +68,7 @@ enum GenerationFailureCode: string
             self::ProviderBusy => 'Pixelforge stayed busy for too long, so we stopped waiting. You were not charged.',
             self::ServiceUnavailable => 'Service unavailable — this generation wasn\'t sent. You were not charged.',
             self::DailyLimit => 'Daily capacity reached, try after 00:00 UTC. You were not charged.',
+            self::Lost => 'We couldn\'t confirm this generation with Pixelforge. You were not charged.',
         };
     }
 

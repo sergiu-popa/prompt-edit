@@ -225,6 +225,10 @@ final class GenerationHistoryStatusTest extends TestCase
                 ['local_failure_reason' => LocalFailureReason::DailyLimit, 'error_code' => 'daily_limit_exceeded', 'error_message' => 'Daily limit reached.'],
                 'Daily capacity reached, try after 00:00 UTC. You were not charged.',
             ],
+            'given up on, never confirmed by Pixelforge' => [
+                ['local_failure_reason' => LocalFailureReason::Lost, 'error_code' => null, 'error_message' => null],
+                'We couldn\'t confirm this generation with Pixelforge. You were not charged.',
+            ],
             'a provider generation_failed' => [
                 ['local_failure_reason' => null, 'error_code' => 'generation_failed'],
                 'Pixelforge couldn\'t produce an image for this prompt. Try rephrasing it.',
