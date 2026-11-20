@@ -10,6 +10,11 @@ declare(strict_types=1);
  */
 $fakeChaosPercent = filter_var(env('PIXELFORGE_FAKE_CHAOS_PERCENT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100, 'default' => 0]]);
 
+/**
+ * The submit job's own timeout. The request timeout stays below it (AC 19).
+ */
+$submitJobTimeoutSeconds = 60;
+
 return [
     /**
      * Which PixelforgeClient the container builds: `http` for the real API,
@@ -31,11 +36,12 @@ return [
     /**
      * Both stay below the submit job's timeout, so a hung request can never
      * overlap its own retry (D-33). Anything but a positive integer means the
-     * default, because Guzzle reads 0 as "wait forever".
+     * default, because Guzzle reads 0 as "wait forever"; so does a request
+     * timeout that is not below the job's, which the worker would cut short.
      */
     'connect_timeout_seconds' => filter_var(env('PIXELFORGE_CONNECT_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 5]]),
 
-    'request_timeout_seconds' => filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 30]]),
+    'request_timeout_seconds' => filter_var(env('PIXELFORGE_REQUEST_TIMEOUT'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => $submitJobTimeoutSeconds - 1, 'default' => 30]]),
 
     /**
      * The account-wide budget every call through the client takes from (D-44),
@@ -80,7 +86,7 @@ return [
          * Above the request timeout and below the queue's `retry_after` (90),
          * so one job never runs twice at once (AC 19).
          */
-        'job_timeout_seconds' => 60,
+        'job_timeout_seconds' => $submitJobTimeoutSeconds,
     ],
 
     /**

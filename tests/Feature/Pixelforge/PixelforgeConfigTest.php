@@ -160,6 +160,37 @@ final class PixelforgeConfigTest extends TestCase
     }
 
     /**
+     * AC 19: a request that could outlast the submit job's timeout would let the worker
+     * kill the job mid-request, so such a value means the default too.
+     */
+    #[DataProvider('requestTimeoutsNotBelowTheJobTimeout')]
+    public function test_a_request_timeout_not_below_the_job_timeout_means_the_default(string $value): void
+    {
+        $this->assertSame(30, $this->pixelforgeConfigWith(['PIXELFORGE_REQUEST_TIMEOUT' => $value])['request_timeout_seconds']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function requestTimeoutsNotBelowTheJobTimeout(): array
+    {
+        return [
+            'the job timeout' => ['60'],
+            'just above it' => ['61'],
+            'far above it' => ['600'],
+        ];
+    }
+
+    public function test_a_request_timeout_just_below_the_job_timeout_applies(): void
+    {
+        $config = $this->pixelforgeConfigWith(['PIXELFORGE_REQUEST_TIMEOUT' => '59']);
+
+        $this->assertSame(59, $config['request_timeout_seconds']);
+        $this->assertIsArray($config['submit']);
+        $this->assertLessThan($config['submit']['job_timeout_seconds'], $config['request_timeout_seconds']);
+    }
+
+    /**
      * A budget of 0 would never send anything, and a typo must never lift it.
      */
     #[DataProvider('invalidTimeouts')]
