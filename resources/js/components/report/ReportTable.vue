@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import ReportAmount from '@/components/report/ReportAmount.vue';
 import { formatCount } from '@/lib/counting';
+import { useId } from 'vue';
+
 import type { ReportFigures, ReportTableRow } from '@/types/report';
 
 /**
- * A captioned table of report figures, one row per day or user, with an optional totals
- * footer. It scrolls sideways inside its card on a narrow screen, so the page never does.
+ * A titled table of report figures, one row per day or user, with an optional totals
+ * footer. It scrolls sideways inside its card on a narrow screen, so the page never does;
+ * the title sits outside the scroll box, so it stays in view, and names the table.
  * The header row sits above the first body row, so that row's exact-value tip stays inside
  * the scroll box.
  */
@@ -18,18 +21,16 @@ defineProps<{
     emptyText?: string;
 }>();
 
+const titleId = useId();
+
 const cell = 'px-4 py-2.5 text-right whitespace-nowrap tabular-nums';
 </script>
 
 <template>
     <section class="rounded-xl border border-zinc-200 bg-white shadow-xs">
+        <h2 :id="titleId" class="px-4 pt-4 pb-2 text-base font-semibold text-zinc-900">{{ caption }}</h2>
         <div class="overflow-x-auto">
-            <table class="w-full text-sm text-zinc-900">
-                <caption class="px-4 pt-4 pb-2 text-left text-base font-semibold">
-                    {{
-                        caption
-                    }}
-                </caption>
+            <table :aria-labelledby="titleId" class="w-full text-sm text-zinc-900">
                 <thead>
                     <tr class="border-b border-zinc-200 text-zinc-600">
                         <th scope="col" class="px-4 py-2 text-left font-medium whitespace-nowrap">{{ labelHeader }}</th>

@@ -53,10 +53,11 @@ afterEach(() => {
 });
 
 describe('ReportTable', () => {
-    it('captions the table and heads its columns', () => {
+    it('titles the table, naming it, and heads its columns', () => {
         const table = mountTable();
 
-        expect(table.get('caption').text()).toBe('Per day (by Pixelforge completion date, UTC)');
+        expect(table.get('h2').text()).toBe('Per day (by Pixelforge completion date, UTC)');
+        expect(table.get('table').attributes('aria-labelledby')).toBe(table.get('h2').attributes('id'));
         expect(table.findAll('thead th').map((header) => header.text())).toStrictEqual([
             'Date',
             'Succeeded',
