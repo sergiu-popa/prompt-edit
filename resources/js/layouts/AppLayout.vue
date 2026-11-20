@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 import Button from '@/components/ui/Button.vue';
+import Notice from '@/components/ui/Notice.vue';
 import { paths } from '@/lib/paths';
 
 defineSlots<{
@@ -11,6 +12,7 @@ defineSlots<{
 
 const page = usePage();
 const userName = computed(() => page.props.auth.user?.name ?? '');
+const notice = computed(() => page.flash.notice);
 
 const navItems = [
     { label: 'Generate', href: paths.dashboard },
@@ -67,6 +69,7 @@ function signOut(): void {
         </header>
 
         <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+            <Notice v-if="notice" :message="notice" class="mb-6" />
             <slot />
         </main>
     </div>
