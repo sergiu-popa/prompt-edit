@@ -4,9 +4,9 @@
 
 **Verdict: APPROVE**
 
-Scope reviewed: the 23 `[PE-013]` commits `b78cae6..5301b82` on `pe-013-provider-limits-retries-and-throttle` (`origin/main..HEAD`), against `story.md` and `plan.md`. That is the plan, 19 task commits, two test-isolation fix-ups (`88c95d1`, `13c289e`), the decisions and the bookkeeping. All 19 plan tasks are checked.
+Scope reviewed: the 23 `[PE-013]` commits `b78cae6..0aa9ac3` on `pe-013-provider-limits-retries-and-throttle` (`origin/main..HEAD`), against `story.md` and `plan.md`. That is the plan, 19 task commits, two test-isolation fix-ups (`88c95d1`, `13c289e`; squashed before push into `83914fa` and `3e2d3d8`, see W1), the decisions and the bookkeeping. All 19 plan tasks are checked.
 
-Checks run on HEAD (`5301b82`):
+Checks run on HEAD (`0aa9ac3`):
 - `make check` exits 0. Pint and Larastan are clean. PHPUnit runs 1,431 tests (35,758 assertions), all passing. ESLint, Prettier and vue-tsc are clean. Vitest runs 496 tests in 31 files, all passing.
 - `make e2e` (after `make restart-worker`) exits 0, with 40 passed and 2 skipped. The skips are the existing touch-only and mouse-only rows, one per project. The new AC 22 test passes on desktop (19.5 s) and mobile (19.3 s).
 
@@ -55,14 +55,14 @@ Performance: the bookkeeping adds at most two single-row UPDATEs per attempt and
 
 ### Commit hygiene
 
-- Each task commit carries its code with its tests. The plan (`b78cae6`), the decisions (`8972b88`) and the bookkeeping (`5301b82`) have their own commits.
-- Task 16 (`f8eba50`) adds `status_note` to the TS type together with the fixtures that need it, so vue-tsc stays green at that commit.
-- All subjects start with `[PE-013]`, are imperative and are at most 68 characters. All 23 messages end with the trailer. Bodies appear where the reason isn't obvious (`0550679`, `791d411`, `88c95d1`, `13c289e`).
-- The cut point after task 12 (`636f03a`) is clean. Until tasks 13–15 land, a concurrency 429, a daily limit and a 401 are retried like a rate limit, which `791d411`'s body explains.
+- Each task commit carries its code with its tests. The plan (`b78cae6`), the decisions (`02de125`) and the bookkeeping (`0aa9ac3`) have their own commits.
+- Task 16 (`cd5108e`) adds `status_note` to the TS type together with the fixtures that need it, so vue-tsc stays green at that commit.
+- All subjects start with `[PE-013]`, are imperative and are at most 68 characters. All 23 messages end with the trailer. Bodies appear where the reason isn't obvious (`83914fa`, `5c8ae5c`, `3e2d3d8`).
+- The cut point after task 12 (`5847e67`) is clean. Until tasks 13–15 land, a concurrency 429, a daily limit and a 401 are retried like a rate limit, which `5c8ae5c`'s body explains.
 
 ### Warnings
 
-- [x] **W1. Two commits were red until a later fix-up commit.** — acknowledged: fixing it needs a history rewrite, which the pipeline forbids. Each fix-up names what it fixes, HEAD is green, and the user can squash the pairs at merge if they want.
+- [x] **W1. Two commits were red until a later fix-up commit.** — resolved before push: the orchestrator squashed `88c95d1` into `0550679` (now `83914fa`) and `13c289e` into `ad2a4dd` (now `3e2d3d8`), moving each fix-up's explanation into the commit message. It also moved `phpunit.xml`'s clearing of `PIXELFORGE_OVERLOADED_DEADLINE` into `5c8ae5c`, the commit that first reads it, so no commit sees a recreated dev container's 15 s deadline. The final tree is identical, and every code commit was then checked on its own. The SHAs below are the pre-squash ones.
   - `ad2a4dd` (`[PE-013] Prove two job runs share one rate budget`) fails in the full suite. `13c289e`'s body says so: "ad2a4dd's budget test failed in the full suite until this". `SubmitGenerationAfterCommitTest` commits for real and left `cache` rows behind, and those rows spent the budget of the next test.
   - `0550679` (`[PE-013] Take every Pixelforge call from one shared rate budget`) says "The suite forces the budget variable empty, so a dev container's 600 never reaches a test". That held only for `$_ENV`. After `make up` recreated the containers with the anchor, `PixelforgeConfigTest`'s default-50 rows read 600 from `$_SERVER` until `88c95d1` cleared it there too.
   - Why it matters: the rule is that every commit passes its tests, so `git bisect` and a commit-by-commit review never land on a red tree.

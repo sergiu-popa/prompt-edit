@@ -2,7 +2,7 @@
 
 **Verdict: QA PASSED**
 
-Run on branch `pe-013-provider-limits-retries-and-throttle` at `199c7a3`. Prerequisites checked: story status `qa-ready`, review round 1 verdict `APPROVE`, no Critical review items open. The worker was restarted (`make restart-worker`) before the run, so it runs this branch's code. The app and worker were up, and the frontend was built (`npm run build`).
+Run on branch `pe-013-provider-limits-retries-and-throttle` at `b07dd69`. Prerequisites checked: story status `qa-ready`, review round 1 verdict `APPROVE`, no Critical review items open. The worker was restarted (`make restart-worker`) before the run, so it runs this branch's code. The app and worker were up, and the frontend was built (`npm run build`).
 
 Scratch root: `/private/tmp/claude-501/-Users-sergiu-Code-prompt-edit/a37effb5-ef14-4542-a0cd-a0d99bb692ed/scratchpad/PE-013/`
 
