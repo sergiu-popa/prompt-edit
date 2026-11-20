@@ -79,7 +79,7 @@ The constant-field check finds no constant field in the `usage` prop. `availabil
 
 ### Warnings
 
-- [ ] **W1. The README's Status table still says the product is planned, not delivered (AC 18).**
+- [x] **W1. The README's Status table still says the product is planned, not delivered (AC 18).**
   - `README.md:39` reads "Product features | Planned as 18 stories (below); each is delivered as one reviewable PR".
   - This PR is the last of the 18, and the story calls it the README's "final pass" for hand-in. A grader who reads the Status table first is told the features are only planned. The table sits right above the list of stories that the rest of the README describes as live.
   - **Fix:** change the row to "Delivered as 18 stories (below), each as one reviewable PR". `README.md:38` says "Done as stacked PRs, to merge in order: #3 → #2 → …". If those bootstrap PRs are merged, drop "to merge in order" in the same edit. Use one commit, for example `[PE-018] Mark the product features delivered in the README`.
