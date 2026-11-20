@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Database;
 
 use App\Domain\Billing\Actions\GrantStarterCreditsAction;
+use App\Domain\Billing\Actions\PurchaseCreditsAction;
+use App\Domain\Billing\Models\CreditLedgerEntry;
 use App\Models\User;
 use Database\Seeders\DemoUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,7 +52,7 @@ final class DemoUserSeederTest extends TestCase
         $this->app['env'] = 'production';
 
         try {
-            (new DemoUserSeeder)->run($this->app->make(GrantStarterCreditsAction::class));
+            (new DemoUserSeeder)->run($this->app->make(GrantStarterCreditsAction::class), $this->app->make(PurchaseCreditsAction::class));
             $this->fail('The demo user seeder ran in production.');
         } catch (RuntimeException $exception) {
             $this->assertSame('The demo user is local-only and is never seeded in production.', $exception->getMessage());
@@ -62,12 +64,14 @@ final class DemoUserSeederTest extends TestCase
     /**
      * AC 2: the seeded account has exactly one starter grant, however often it is seeded.
      */
-    public function test_seeding_twice_leaves_one_starter_grant(): void
+    public function test_seeding_twice_leaves_one_starter_grant_and_one_demo_purchase(): void
     {
         $this->seed();
         $this->seed();
 
-        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor(User::query()->where('email', DemoUserSeeder::EMAIL)->sole()));
+        $demoUser = User::query()->where('email', DemoUserSeeder::EMAIL)->sole();
+        $this->assertSame([['grant', 1_000_000_000], ['purchase', 1_000_000_000]], $this->topUpsFor($demoUser));
+        $this->assertSame(2_000_000_000, CreditLedgerEntry::query()->ownedBy($demoUser)->balance()->available->amount);
     }
 
     public function test_reseeding_grants_a_demo_account_from_before_balances(): void
@@ -76,6 +80,6 @@ final class DemoUserSeederTest extends TestCase
 
         $this->seed(DemoUserSeeder::class);
 
-        $this->assertSame([['grant', 1_000_000_000]], $this->topUpsFor($legacy));
+        $this->assertSame([['grant', 1_000_000_000], ['purchase', 1_000_000_000]], $this->topUpsFor($legacy));
     }
 }

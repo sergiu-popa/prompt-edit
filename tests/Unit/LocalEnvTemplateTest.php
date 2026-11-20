@@ -38,6 +38,7 @@ final class LocalEnvTemplateTest extends TestCase
             'a processing generation polled after 5 s' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER', '5'],
             'a 2 s recheck' => ['PIXELFORGE_RECONCILE_RECHECK', '2'],
             'an account limit E2E never reaches' => ['AUTH_REGISTRATIONS_PER_HOUR', '1000'],
+            'a starter credit below the cheapest request (D-71)' => ['CREDITS_STARTER_GRANT', '10000000'],
         ];
     }
 
@@ -69,6 +70,7 @@ final class LocalEnvTemplateTest extends TestCase
             'the processing threshold' => ['PIXELFORGE_RECONCILE_PROCESSING_AFTER'],
             'the recheck' => ['PIXELFORGE_RECONCILE_RECHECK'],
             'the account limit' => ['AUTH_REGISTRATIONS_PER_HOUR'],
+            'the starter credit' => ['CREDITS_STARTER_GRANT'],
         ];
     }
 
