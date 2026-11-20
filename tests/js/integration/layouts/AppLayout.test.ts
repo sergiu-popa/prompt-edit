@@ -76,8 +76,31 @@ describe('AppLayout', () => {
     });
 
     it('does not mark Generate current on another page', () => {
-        givenThePageIsAt('/history');
+        givenThePageIsAt('/generations');
 
         expect(mount(AppLayout).get('header nav a').attributes('aria-current')).toBeUndefined();
+    });
+
+    it('links to History after Generate in the header nav', () => {
+        const links = mount(AppLayout).findAll('header nav a');
+
+        expect(links.map((link) => [link.text(), link.attributes('href')])).toStrictEqual([
+            ['Generate', '/dashboard'],
+            ['History', '/generations'],
+        ]);
+    });
+
+    it.each(['/generations', '/generations?page=2'])('marks History, and only History, current at %s', (url) => {
+        givenThePageIsAt(url);
+
+        const links = mount(AppLayout).findAll('header nav a');
+
+        expect(links.map((link) => link.attributes('aria-current'))).toStrictEqual([undefined, 'page']);
+    });
+
+    it('does not mark History current on the Generate page', () => {
+        givenThePageIsAt('/dashboard');
+
+        expect(mount(AppLayout).findAll('header nav a')[1]!.attributes('aria-current')).toBeUndefined();
     });
 });

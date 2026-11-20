@@ -397,6 +397,19 @@ final class HttpPixelforgeClientTest extends TestCase
         }
     }
 
+    public function test_with_a_key_it_is_configured(): void
+    {
+        $this->assertTrue($this->client()->isConfigured());
+    }
+
+    #[DataProvider('missingKeys')]
+    public function test_without_a_key_it_is_not_configured(?string $key): void
+    {
+        config(['pixelforge.api_key' => $key]);
+
+        $this->assertFalse($this->client()->isConfigured());
+    }
+
     #[DataProvider('missingKeys')]
     public function test_no_key_raises_not_configured_and_sends_nothing(?string $key): void
     {

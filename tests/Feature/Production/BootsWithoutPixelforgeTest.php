@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Models\Generation;
 use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
@@ -14,8 +15,11 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\InteractsWithCreditLedger;
 use Tests\Concerns\InteractsWithGenerations;
@@ -122,10 +126,39 @@ final class BootsWithoutPixelforgeTest extends TestCase
         ];
     }
 
-    public function test_the_signed_in_home_answers(): void
+    public function test_the_signed_in_home_answers_with_generate_closed(): void
     {
         $this->actingAs(User::factory()->create())
             ->get('/dashboard')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('can_submit', false));
+    }
+
+    public function test_a_submission_creates_nothing_and_says_generation_is_not_available(): void
+    {
+        Queue::fake();
+
+        $this->actingAs(User::factory()->create())
+            ->from('/dashboard')
+            ->post('/generations', [
+                'prompt' => self::LIGHTHOUSE_PROMPT,
+                'size' => '1536x1024',
+                'quality' => 'high',
+                'reference_images' => ['https://example.com/style.png'],
+                'submission_token' => (string) Str::uuid(),
+            ])
+            ->assertRedirect('/dashboard')
+            ->assertSessionHasErrors(['submission' => "Image generation isn't available yet."]);
+
+        $this->assertSame(0, Generation::query()->count());
+        $this->assertSame(0, DB::table('credit_ledger_entries')->count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_history_answers(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get('/generations')
             ->assertOk();
     }
 

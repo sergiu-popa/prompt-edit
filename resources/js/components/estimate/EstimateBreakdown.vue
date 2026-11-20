@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 
 import AmountRange from '@/components/estimate/AmountRange.vue';
+import Badge from '@/components/ui/Badge.vue';
 import { formatCount } from '@/lib/counting';
 import { MARKUP_PERCENT } from '@/lib/estimate';
 import { describeImage } from '@/lib/imageOptions';
@@ -116,11 +117,12 @@ const totalLines = computed<TotalLine[]>(() => {
 <template>
     <!--
         A container query, not a viewport one: the panel is narrow both on a phone and in
-        the desktop sidebar. Below 32rem each line stacks its cost under its tokens, so the
-        amounts never run past the card; from 32rem it is an ordinary three-column table.
+        the desktop sidebar. Below 24rem (a phone) each line stacks its cost under its tokens,
+        so the amounts never run past the card; from 24rem (the 30rem desktop sidebar) it is
+        an ordinary three-column table, one row per line.
     -->
     <div class="@container">
-        <table class="block w-full text-sm @lg:table">
+        <table class="block w-full text-sm @sm:table">
             <caption class="sr-only">
                 Cost breakdown
             </caption>
@@ -131,40 +133,39 @@ const totalLines = computed<TotalLine[]>(() => {
                     <th scope="col">Pixelforge cost</th>
                 </tr>
             </thead>
-            <tbody class="grid grid-cols-[max-content_minmax(0,1fr)] @lg:table-row-group">
-                <tr v-for="line in tokenLines" :key="line.label" class="col-span-2 grid grid-cols-subgrid py-1.5 align-top @lg:table-row">
-                    <th scope="row" class="pr-3 text-left font-medium whitespace-nowrap text-zinc-800 @lg:py-1.5">{{ line.label }}</th>
-                    <td class="text-zinc-600 tabular-nums @lg:py-1.5 @lg:pr-3">
-                        <span class="whitespace-nowrap">{{ line.tokens }}</span>
+            <tbody class="grid grid-cols-[max-content_minmax(0,1fr)] @sm:table-row-group">
+                <tr v-for="line in tokenLines" :key="line.label" class="col-span-2 grid grid-cols-subgrid py-1.5 align-top @sm:table-row">
+                    <th scope="row" class="pr-3 text-left font-medium whitespace-nowrap text-zinc-800 @sm:py-1.5">{{ line.label }}</th>
+                    <td class="text-zinc-600 tabular-nums @sm:py-1.5 @sm:pr-3">
+                        <!-- A token count never breaks; the empty-prompt message is a sentence, so it wraps inside its cell. -->
+                        <span :class="{ 'whitespace-nowrap': line.flag !== null }">{{ line.tokens }}</span>
                         {{ ' ' }}
-                        <span
-                            v-if="line.flag"
-                            :class="[
-                                'inline-block rounded-sm px-1 text-xs font-medium',
-                                line.flag === 'exact' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
-                            ]"
-                            >{{ line.flag }}</span
-                        >
+                        <Badge v-if="line.flag" :tone="line.flag === 'exact' ? 'success' : 'warning'">{{ line.flag }}</Badge>
                         <span v-if="line.detail" class="block text-xs text-zinc-500">{{ line.detail }}</span>
                     </td>
-                    <td class="col-span-2 text-right whitespace-nowrap text-zinc-900 @lg:py-1.5">
+                    <td class="col-span-2 text-right whitespace-nowrap text-zinc-900 @sm:py-1.5">
                         <AmountRange :min="line.cost.min" :max="line.cost.max" align="end" />
                     </td>
                 </tr>
             </tbody>
-            <tbody class="block border-t border-zinc-200 @lg:table-row-group">
-                <tr v-for="line in totalLines" :key="line.label" class="flex justify-between pt-2 @lg:table-row">
+            <tbody class="block border-t border-zinc-200 pt-1 @sm:table-row-group">
+                <tr v-for="line in totalLines" :key="line.label" class="flex justify-between pt-2 @sm:table-row">
                     <th
                         scope="row"
                         :class="[
-                            'pr-3 text-left whitespace-nowrap @lg:pt-2',
+                            'pr-3 text-left whitespace-nowrap @sm:pt-2.5',
                             line.emphasis ? 'font-semibold text-zinc-900' : 'font-medium text-zinc-800',
                         ]"
                     >
                         {{ line.label }}
                     </th>
-                    <td class="@lg:pt-2 @lg:pr-3" />
-                    <td :class="['text-right whitespace-nowrap @lg:pt-2', line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900']">
+                    <td class="@sm:pt-2.5 @sm:pr-3" />
+                    <td
+                        :class="[
+                            'text-right whitespace-nowrap @sm:pt-2.5',
+                            line.emphasis ? 'font-semibold text-zinc-900' : 'text-zinc-900',
+                        ]"
+                    >
                         <AmountRange :min="line.cost.min" :max="line.cost.max" align="end" />
                     </td>
                 </tr>

@@ -12,12 +12,13 @@ const qualities: { value: Quality; label: string; detail?: string }[] = [
     { value: 'high', label: 'High', detail: 'Most detail' },
 ];
 
-function mountGroup(modelValue: Quality = 'medium') {
+function mountGroup(modelValue: Quality = 'medium', error?: string) {
     const wrapper = mount(RadioGroup<Quality>, {
         props: {
             legend: 'Quality',
             options: qualities,
             modelValue,
+            error,
             'onUpdate:modelValue': (value: Quality) => wrapper.setProps({ modelValue: value }),
         },
     });
@@ -71,5 +72,25 @@ describe('RadioGroup', () => {
 
         const names = new Set(wrapper.findAll('input[type="radio"]').map((radio) => radio.attributes('name')));
         expect(names.size).toBe(2);
+    });
+
+    it('has no description or invalid radio without an error', () => {
+        const wrapper = mountGroup();
+
+        expect(wrapper.attributes('aria-describedby')).toBeUndefined();
+        expect(wrapper.find('[aria-invalid]').exists()).toBe(false);
+    });
+
+    it('describes the group with its error and marks the checked radio invalid, so focus can land on it', () => {
+        const wrapper = mountGroup('high', 'Choose a quality.');
+
+        const describedBy = wrapper.attributes('aria-describedby');
+        expect(describedBy).toBeTruthy();
+        expect(wrapper.get(`[id="${describedBy}"]`).text()).toBe('Choose a quality.');
+        expect(wrapper.findAll('input[type="radio"]').map((radio) => radio.attributes('aria-invalid'))).toStrictEqual([
+            undefined,
+            undefined,
+            'true',
+        ]);
     });
 });

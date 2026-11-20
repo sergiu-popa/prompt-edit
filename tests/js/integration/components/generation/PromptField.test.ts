@@ -9,11 +9,12 @@ import PromptField from '@/components/generation/PromptField.vue';
 const LIGHTHOUSE = 'A lighthouse on a cliff at dawn, in oils';
 const HINT = 'Characters are counted like Pixelforge counts them; some emoji count as more than one character.';
 
-function mountPrompt(modelValue = ''): VueWrapper {
+function mountPrompt(modelValue = '', serverError?: string): VueWrapper {
     const wrapper = mount(PromptField, {
         props: {
             modelValue,
             maxCharacters: 4_000,
+            serverError,
             'onUpdate:modelValue': (value: string | undefined) => wrapper.setProps({ modelValue: value }),
         },
     });
@@ -88,5 +89,19 @@ describe('PromptField', () => {
         expect(descriptionOf(wrapper, textareaOf(wrapper))).toBe(
             `4,012 / 4,000 ${HINT} Pixelforge accepts at most 4,000 characters. Shorten your prompt by 12.`,
         );
+    });
+
+    it("shows the server's error under the prompt and marks it invalid", () => {
+        const wrapper = mountPrompt(LIGHTHOUSE, 'Enter a prompt.');
+
+        expect(textareaOf(wrapper).getAttribute('aria-invalid')).toBe('true');
+        expect(descriptionOf(wrapper, textareaOf(wrapper))).toBe(`40 / 4,000 ${HINT} Enter a prompt.`);
+    });
+
+    it("shows its own over-limit error instead of the server's", () => {
+        const wrapper = mountPrompt('a'.repeat(4_001), 'The prompt must be 4,000 characters or fewer.');
+
+        expect(wrapper.text()).toContain('Shorten your prompt by 1.');
+        expect(wrapper.text()).not.toContain('The prompt must be 4,000 characters or fewer.');
     });
 });

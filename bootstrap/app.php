@@ -24,6 +24,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // URL the app builds for that request would point at the spoofed host (D-21).
         $middleware->trustHosts();
 
+        // The prompt is counted, priced and sent to Pixelforge exactly as typed, as the
+        // Generate page counts it; Str::trim strips more than JS trim() would (D-37).
+        $middleware->trimStrings(except: ['prompt']);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);

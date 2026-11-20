@@ -13,12 +13,12 @@ const UNAVAILABLE = "We couldn't calculate an estimate right now.";
 
 const COPY = [
     "You pay Pixelforge's cost + 25%.",
-    'Output, reference images and the markup are exact. Prompt text and reasoning are estimated until the image finishes.',
-    '“Typically” assumes the average prompt-text and reasoning tokens.',
-    'The actual cost is recorded when the generation finishes, from the tokens Pixelforge actually used.',
+    'Output, reference images and the markup are exact. Prompt text and reasoning are estimates until the image finishes.',
+    '“Typically” assumes average prompt-text and reasoning tokens.',
+    'The actual cost is recorded when the image finishes, from the tokens Pixelforge used.',
     'Failed generations are free.',
-    "The estimate uses Pixelforge's published prices.",
-    'Amounts are rounded to 4 decimals. Hover, focus or tap one for the exact value.',
+    "Prices are Pixelforge's published rates.",
+    'Amounts are rounded to 4 decimals; hover, focus or tap one for the exact value.',
 ];
 
 function mountPanel(prompt: string, quality: ImageQuality, size: ImageSize, referenceImageCount = 0): VueWrapper {
@@ -161,11 +161,14 @@ describe('EstimatePanel', () => {
         expect(wrapper.findAll('button').length).toBe(tips.length);
     });
 
-    it('always shows the pricing copy', () => {
+    it('always shows the pricing copy, one statement per list item', () => {
         for (const wrapper of [mountPanel(LIGHTHOUSE_PROMPT, 'high', '1536x1024'), mountUnavailable()]) {
-            for (const statement of COPY) {
-                expect(visibleText(wrapper)).toContain(statement);
-            }
+            expect(
+                wrapper
+                    .get('footer')
+                    .findAll('li')
+                    .map((item) => visibleText(item)),
+            ).toStrictEqual(COPY);
         }
     });
 

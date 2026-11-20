@@ -90,3 +90,8 @@ steer the work.
 | Run one engineer fix round, then QA again, then the audit, for both? | Fix both |
 | When QA fails for the rest of today, run one fix round automatically instead of stopping? | One automatic fix round |
 | Make one PR per story the explicit rule, even above the ~400-line budget? | One PR per story |
+
+**Prompt 11** (after PE-010 was merged, with a screenshot of the Generate page)
+
+> Merged. The UI might need some more spacing, polish
+> Let's continue with the next stories

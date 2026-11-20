@@ -7,6 +7,7 @@ namespace Tests\Feature\Pixelforge\Fake;
 use App\Support\Pixelforge\Contracts\PixelforgeClient;
 use App\Support\Pixelforge\Drivers\FakePixelforgeClient;
 use App\Support\Pixelforge\Exceptions\PixelforgeNotConfiguredException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -37,5 +38,34 @@ final class FakePixelforgeDriverTest extends TestCase
         $this->expectExceptionMessage('PIXELFORGE_DRIVER=fake is not allowed in production');
 
         $this->app->make(PixelforgeClient::class);
+    }
+
+    /**
+     * The fake can only deliver its webhooks signed, so a secret is what it needs to run.
+     */
+    public function test_with_a_webhook_secret_the_fake_is_configured(): void
+    {
+        config(['pixelforge.driver' => FakePixelforgeClient::DRIVER, 'pixelforge.webhook_secret' => 'whsec_test_fake']);
+
+        $this->assertTrue($this->app->make(PixelforgeClient::class)->isConfigured());
+    }
+
+    #[DataProvider('missingSecrets')]
+    public function test_without_a_webhook_secret_the_fake_is_not_configured(?string $secret): void
+    {
+        config(['pixelforge.driver' => FakePixelforgeClient::DRIVER, 'pixelforge.webhook_secret' => $secret]);
+
+        $this->assertFalse($this->app->make(PixelforgeClient::class)->isConfigured());
+    }
+
+    /**
+     * @return array<string, array{?string}>
+     */
+    public static function missingSecrets(): array
+    {
+        return [
+            'null' => [null],
+            'empty' => [''],
+        ];
     }
 }

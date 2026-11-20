@@ -79,7 +79,7 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData
     {
-        if ($this->webhookSecret === null || $this->webhookSecret === '') {
+        if (! $this->isConfigured()) {
             throw PixelforgeNotConfiguredException::missingWebhookSecret();
         }
 
@@ -127,6 +127,14 @@ final readonly class FakePixelforgeClient implements PixelforgeClient
         }
 
         return new CreatedGenerationData(GenerationSnapshot::from($generation->snapshot), true);
+    }
+
+    /**
+     * Configured once it has a secret to sign its webhooks with.
+     */
+    public function isConfigured(): bool
+    {
+        return $this->webhookSecret !== null && $this->webhookSecret !== '';
     }
 
     /**

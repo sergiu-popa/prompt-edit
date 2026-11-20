@@ -26,4 +26,10 @@ interface PixelforgeClient
      * @throws PixelforgeNotConfiguredException when nothing can be sent
      */
     public function createGeneration(CreateGenerationPayloadData $payload): CreatedGenerationData;
+
+    /**
+     * Whether `createGeneration` can send anything at all. Until it can, Generate stays
+     * closed (D-40): a generation accepted then would sit pending with its hold.
+     */
+    public function isConfigured(): bool;
 }

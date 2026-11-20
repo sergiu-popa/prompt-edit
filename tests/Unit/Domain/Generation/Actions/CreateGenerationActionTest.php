@@ -12,9 +12,12 @@ use App\Domain\Generation\Exceptions\InvalidGenerationRequestException;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Shared\Enums\ImageQuality;
 use App\Domain\Shared\Enums\ImageSize;
+use App\Jobs\SubmitGenerationJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Concerns\InteractsWithCreditLedger;
@@ -283,5 +286,89 @@ final class CreateGenerationActionTest extends TestCase
         $this->assertSame($referenceImages, $reloaded->reference_images);
         $this->assertSame(ImageSize::Portrait, $reloaded->size);
         $this->assertSame(ImageQuality::High, $reloaded->quality);
+    }
+
+    public function test_one_form_submission_sent_twice_creates_one_generation_one_hold_and_one_job(): void
+    {
+        $user = User::factory()->create();
+        $token = (string) Str::uuid();
+
+        $first = $this->createGenerationFor($user, self::lighthouseSubmittedWith($token));
+        $replay = $this->createGenerationFor($user, self::lighthouseSubmittedWith($token));
+
+        $this->assertSame($first->id, $replay->id);
+        $this->assertTrue($first->wasRecentlyCreated);
+        $this->assertFalse($replay->wasRecentlyCreated);
+        $this->assertSame(1, DB::table('generations')->count());
+        $this->assertSame($token, $this->reloadedGeneration($first)->submission_token);
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($first));
+        Queue::assertPushed(SubmitGenerationJob::class, 1);
+        Queue::assertPushed(SubmitGenerationJob::class, fn (SubmitGenerationJob $job): bool => $job->generationId === $first->id);
+    }
+
+    /**
+     * The token names one user's form submission, so two users can never collide.
+     */
+    public function test_another_users_submission_with_the_same_token_creates_its_own_generation(): void
+    {
+        $token = (string) Str::uuid();
+
+        $mine = $this->createGenerationFor(User::factory()->create(), self::lighthouseSubmittedWith($token));
+        $theirs = $this->createGenerationFor(User::factory()->create(), self::lighthouseSubmittedWith($token));
+
+        $this->assertNotSame($mine->id, $theirs->id);
+        $this->assertSame(2, DB::table('generations')->count());
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($theirs));
+        Queue::assertPushed(SubmitGenerationJob::class, 2);
+    }
+
+    /**
+     * Rows not created from the form (factories, scripts) have no token, and any
+     * number of them may exist side by side.
+     */
+    public function test_requests_without_a_token_each_create_a_generation(): void
+    {
+        $user = User::factory()->create();
+
+        $first = $this->createGenerationFor($user, self::lighthouseRequest());
+        $second = $this->createGenerationFor($user, self::lighthouseRequest());
+
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertNull($this->reloadedGeneration($first)->submission_token);
+        $this->assertSame(2, DB::table('generations')->count());
+        Queue::assertPushed(SubmitGenerationJob::class, 2);
+    }
+
+    /**
+     * The first request of a form submission wins: a replay carrying other fields
+     * gets the stored generation back, unchanged, with no second hold.
+     */
+    public function test_a_replay_with_other_fields_returns_the_first_generation_unchanged(): void
+    {
+        $user = User::factory()->create();
+        $token = (string) Str::uuid();
+        $first = $this->createGenerationFor($user, self::lighthouseSubmittedWith($token));
+        $storedRow = $this->rawGenerationRow($first);
+
+        $replay = $this->createGenerationFor($user, new NewGenerationData(
+            'A castle',
+            ImageSize::Square,
+            ImageQuality::Low,
+            [],
+            $token,
+        ));
+
+        $this->assertSame($first->id, $replay->id);
+        $this->assertSame(self::LIGHTHOUSE_PROMPT, $replay->prompt);
+        $this->assertSame($storedRow, $this->rawGenerationRow($first));
+        $this->assertSame([['hold', -457_150_000]], $this->ledgerEntriesFor($first));
+        Queue::assertPushed(SubmitGenerationJob::class, 1);
+    }
+
+    private static function lighthouseSubmittedWith(string $token): NewGenerationData
+    {
+        $request = self::lighthouseRequest();
+
+        return new NewGenerationData($request->prompt, $request->size, $request->quality, $request->referenceImages, $token);
     }
 }
