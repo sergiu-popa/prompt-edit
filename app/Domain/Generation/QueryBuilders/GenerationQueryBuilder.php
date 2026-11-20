@@ -14,7 +14,9 @@ use Illuminate\Database\Eloquent\Builder;
  * Reads of generations. `ownedBy()->newestFirst()` is History's list, which the
  * `(user_id, created_at, id)` index serves. The reconciler's poll step reads
  * `staleAtPixelforge()->dueForRecheck()->oldestProviderUpdateFirst()`, which the
- * partial `generations_reconcile_poll_index` serves.
+ * partial `generations_reconcile_poll_index` serves, and its unsubmitted step
+ * `awaitingRedispatch()->dueForRecheck()->oldestCreatedFirst()`, which the
+ * partial `generations_pending_index` serves.
  *
  * @extends Builder<Generation>
  */
@@ -68,6 +70,36 @@ final class GenerationQueryBuilder extends Builder
     public function oldestProviderUpdateFirst(): self
     {
         return $this->orderBy('last_provider_update_at')->orderBy('id');
+    }
+
+    /**
+     * Never confirmed by Pixelforge and still `pending`, and either handed over by the
+     * submit job (PE-013 AC 23) or with its last attempt, else its creation, strictly
+     * before the instant: its submit job stopped or died (AC 12). A row with a more
+     * recent attempt is left to the job that may still be retrying it.
+     */
+    public function awaitingRedispatch(CarbonImmutable $attemptedBefore): self
+    {
+        $before = self::instant($attemptedBefore);
+
+        return $this->where('status', GenerationStatus::Pending->value)
+            ->whereNull('provider_id')
+            ->where(fn (self $query): self => $query
+                ->whereNotNull('submit_handed_over_at')
+                ->orWhere(fn (self $attempted): self => $attempted
+                    ->whereNotNull('submit_last_attempted_at')
+                    ->where('submit_last_attempted_at', '<', $before))
+                ->orWhere(fn (self $neverAttempted): self => $neverAttempted
+                    ->whereNull('submit_last_attempted_at')
+                    ->where('created_at', '<', $before)));
+    }
+
+    /**
+     * The longest waiting first; the ULID orders a same-second tie.
+     */
+    public function oldestCreatedFirst(): self
+    {
+        return $this->orderBy('created_at')->orderBy('id');
     }
 
     /**

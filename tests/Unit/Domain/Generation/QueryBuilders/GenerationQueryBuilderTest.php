@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain\Generation\QueryBuilders;
 
 use App\Domain\Generation\Enums\GenerationStatus;
+use App\Domain\Generation\Enums\SubmitAttemptOutcome;
 use App\Domain\Generation\Models\Generation;
 use App\Domain\Generation\QueryBuilders\GenerationQueryBuilder;
 use App\Models\User;
@@ -154,6 +155,98 @@ final class GenerationQueryBuilderTest extends TestCase
         $plan = implode("\n", array_map(fn (object $line): string => (string) current((array) $line), DB::select('explain ' . $query->toSql(), $query->getBindings())));
 
         $this->assertStringContainsString('generations_reconcile_poll_index', $plan);
+    }
+
+    /**
+     * AC 12: PE-013 handed it over, so it is due whatever its last attempt.
+     */
+    public function test_a_handed_over_row_awaits_redispatch(): void
+    {
+        $handedOver = Generation::factory()->submitAttempted(SubmitAttemptOutcome::Ambiguous)->submitLatched()->create([
+            'submit_handed_over_at' => self::now()->subSeconds(10),
+        ]);
+
+        $this->assertSame([$handedOver->id], $this->awaitingRedispatchIds());
+    }
+
+    /**
+     * AC 12's example: an attempt 6 min ago is re-dispatched, one 4 min ago is left to
+     * its job; with no attempt, the creation time counts.
+     *
+     * @return array<string, array{?int, int, bool}>
+     */
+    public static function redispatchCutoff(): array
+    {
+        return [
+            'last attempt 6 min ago' => [360, 400, true],
+            'last attempt 4 min ago' => [240, 400, false],
+            'last attempt exactly 5 min ago' => [300, 400, false],
+            'never attempted, created 6 min ago' => [null, 360, true],
+            'never attempted, created 4 min ago' => [null, 240, false],
+        ];
+    }
+
+    #[DataProvider('redispatchCutoff')]
+    public function test_a_row_awaits_redispatch_once_its_last_attempt_or_creation_is_older_than_5_minutes(?int $attemptedSecondsAgo, int $createdSecondsAgo, bool $selected): void
+    {
+        $attemptedAt = $attemptedSecondsAgo === null ? null : self::now()->subSeconds($attemptedSecondsAgo);
+        $generation = Generation::factory()->create([
+            'created_at' => self::now()->subSeconds($createdSecondsAgo),
+            'submit_first_attempted_at' => $attemptedAt,
+            'submit_last_attempted_at' => $attemptedAt,
+            'submit_last_outcome' => $attemptedAt === null ? null : SubmitAttemptOutcome::Overloaded,
+        ]);
+
+        $this->assertSame($selected ? [$generation->id] : [], $this->awaitingRedispatchIds());
+    }
+
+    public function test_confirmed_and_terminal_rows_never_await_redispatch(): void
+    {
+        $longAgo = ['created_at' => self::now()->subDay(), 'submit_handed_over_at' => self::now()->subHour()];
+        Generation::factory()->queued()->create($longAgo);
+        Generation::factory()->processing()->create($longAgo);
+        Generation::factory()->succeeded()->create($longAgo);
+        Generation::factory()->failedLocally()->create($longAgo);
+
+        $this->assertSame([], $this->awaitingRedispatchIds());
+    }
+
+    public function test_oldest_created_first_breaks_a_tie_by_id(): void
+    {
+        $newest = Generation::factory()->create(['created_at' => self::now()->subMinutes(6)]);
+        $tiedA = Generation::factory()->create(['created_at' => self::now()->subMinutes(10)]);
+        $oldest = Generation::factory()->create(['created_at' => self::now()->subHour()]);
+        $tiedB = Generation::factory()->create(['created_at' => self::now()->subMinutes(10)]);
+        $tied = collect([$tiedA->id, $tiedB->id])->sort()->values()->all();
+
+        $this->assertSame([$oldest->id, ...$tied, $newest->id], $this->awaitingRedispatchIds());
+    }
+
+    public function test_the_redispatch_selection_reads_the_partial_pending_index(): void
+    {
+        Generation::factory()->create(['created_at' => self::now()->subHour()]);
+        DB::statement('SET LOCAL enable_seqscan = off');
+        $query = $this->awaitingRedispatchSelection()->limit(20);
+
+        $plan = implode("\n", array_map(fn (object $line): string => (string) current((array) $line), DB::select('explain ' . $query->toSql(), $query->getBindings())));
+
+        $this->assertStringContainsString('generations_pending_index', $plan);
+    }
+
+    private function awaitingRedispatchSelection(): GenerationQueryBuilder
+    {
+        return Generation::query()
+            ->awaitingRedispatch(self::now()->subSeconds(300))
+            ->dueForRecheck(self::now())
+            ->oldestCreatedFirst();
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function awaitingRedispatchIds(): array
+    {
+        return array_values($this->awaitingRedispatchSelection()->pluck('id')->all());
     }
 
     private static function now(): CarbonImmutable

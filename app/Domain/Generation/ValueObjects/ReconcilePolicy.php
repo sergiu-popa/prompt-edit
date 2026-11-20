@@ -11,8 +11,8 @@ use LogicException;
 
 /**
  * The scheduled reconciler's rules, pure and from config (PE-014): when a confirmed
- * generation is stale enough to poll, and when any generation it handled is checked
- * again (D-50). Every instant is compared in whole seconds, as the rows store them.
+ * generation is stale enough to poll, when an unsubmitted one is re-dispatched, and
+ * when any generation it handled is checked again (D-50, D-52). Every instant is compared in whole seconds, as the rows store them.
  */
 final readonly class ReconcilePolicy
 {
@@ -34,6 +34,8 @@ final readonly class ReconcilePolicy
         private int $batchSize,
         #[Config('pixelforge.reconcile.submit_reserve')]
         private int $submitReserve,
+        #[Config('pixelforge.reconcile.redispatch_after_seconds')]
+        private int $redispatchAfterSeconds,
     ) {}
 
     /**
@@ -78,5 +80,14 @@ final readonly class ReconcilePolicy
     public function allowsPoll(int $remainingUnits): bool
     {
         return $remainingUnits > $this->submitReserve;
+    }
+
+    /**
+     * An unsubmitted row is re-dispatched once its last attempt, else its creation, is
+     * strictly before this instant: 5 min ago by default (AC 12).
+     */
+    public function redispatchBefore(CarbonImmutable $now): CarbonImmutable
+    {
+        return $now->subSeconds($this->redispatchAfterSeconds);
     }
 }

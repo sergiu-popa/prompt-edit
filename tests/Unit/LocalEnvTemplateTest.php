@@ -109,6 +109,7 @@ final class LocalEnvTemplateTest extends TestCase
             'the max recheck' => ['PIXELFORGE_RECONCILE_RECHECK_MAX'],
             'the batch' => ['PIXELFORGE_RECONCILE_BATCH'],
             'the submit reserve' => ['PIXELFORGE_SUBMIT_RESERVE'],
+            'the re-dispatch age' => ['PIXELFORGE_REDISPATCH_AFTER'],
         ];
     }
 

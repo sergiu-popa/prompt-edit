@@ -140,6 +140,13 @@ return [
          * Anything else means 60.
          */
         'every_seconds' => in_array($reconcileEverySeconds, [1, 2, 5, 10, 15, 20, 30, 60], true) ? $reconcileEverySeconds : 60,
+
+        /**
+         * A generation Pixelforge never confirmed is re-dispatched once its last
+         * submit attempt, else its creation, is older than this (D-52), so a job
+         * that may still be retrying is left alone. A handed-over one is due at once.
+         */
+        'redispatch_after_seconds' => filter_var(env('PIXELFORGE_REDISPATCH_AFTER'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 300]]),
     ],
 
     /**

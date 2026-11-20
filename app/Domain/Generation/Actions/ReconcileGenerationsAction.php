@@ -19,13 +19,16 @@ use Throwable;
  * webhooks never arrived. Confirmed generations with no news for a while are polled,
  * oldest last provider update first, up to the batch, and only while more than the
  * reserve of D-44's budget is left for submits (D-51). A spent budget or Pixelforge's
- * 429 stops the run's polls. Every row is isolated: an exception on one is logged
- * with its ULID, and the run goes on.
+ * 429 stops the run's polls. Generations Pixelforge never confirmed, whose submit job
+ * was handed over, stopped or died, then take the rest of the batch, oldest created
+ * first, and are re-dispatched (D-52). Every row is isolated: an exception on one is
+ * logged with its ULID, and the run goes on.
  */
 final class ReconcileGenerationsAction
 {
     public function __construct(
         private readonly PollGenerationAction $pollGeneration,
+        private readonly RedispatchGenerationAction $redispatchGeneration,
         private readonly ReconcilePolicy $policy,
         private readonly PixelforgeRequestBudget $budget,
     ) {}
@@ -37,11 +40,17 @@ final class ReconcileGenerationsAction
     {
         $now = CarbonImmutable::now()->startOfSecond();
 
-        $this->pollStaleGenerations($now);
+        $polled = $this->pollStaleGenerations($now);
+        $this->handleUnsubmittedGenerations($now, $this->policy->batchSize() - $polled);
     }
 
-    private function pollStaleGenerations(CarbonImmutable $now): void
+    /**
+     * @return int how many rows it handled, whatever their outcome
+     */
+    private function pollStaleGenerations(CarbonImmutable $now): int
     {
+        $handled = 0;
+
         $stale = Generation::query()
             ->staleAtPixelforge(
                 $this->policy->staleBefore(GenerationStatus::Queued, $now),
@@ -58,8 +67,10 @@ final class ReconcileGenerationsAction
             if (! $this->policy->allowsPoll($remainingUnits)) {
                 Log::info('The reconciler left the rest of this minute\'s budget to submits.', ['remaining_units' => $remainingUnits]);
 
-                return;
+                return $handled;
             }
+
+            $handled++;
 
             try {
                 $this->pollGeneration->execute($generation, $now);
@@ -70,9 +81,36 @@ final class ReconcileGenerationsAction
                     ...$exception->context(),
                 ]);
 
-                return;
+                return $handled;
             } catch (Throwable $exception) {
                 self::logFailedRow('poll', $generation, $exception);
+            }
+        }
+
+        return $handled;
+    }
+
+    /**
+     * Re-dispatches never take a budget unit here: the job takes one when it runs.
+     */
+    private function handleUnsubmittedGenerations(CarbonImmutable $now, int $limit): void
+    {
+        if ($limit < 1) {
+            return;
+        }
+
+        $unsubmitted = Generation::query()
+            ->awaitingRedispatch($this->policy->redispatchBefore($now))
+            ->dueForRecheck($now)
+            ->oldestCreatedFirst()
+            ->limit($limit)
+            ->get();
+
+        foreach ($unsubmitted as $generation) {
+            try {
+                $this->redispatchGeneration->execute($generation, $now);
+            } catch (Throwable $exception) {
+                self::logFailedRow('redispatch', $generation, $exception);
             }
         }
     }

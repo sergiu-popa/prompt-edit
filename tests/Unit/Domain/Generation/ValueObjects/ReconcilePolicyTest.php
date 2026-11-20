@@ -136,6 +136,12 @@ final class ReconcilePolicyTest extends TestCase
         $this->assertSame($allowed, self::policy(submitReserve: $reserve)->allowsPoll($remaining));
     }
 
+    public function test_an_unsubmitted_row_is_redispatched_once_its_last_attempt_is_older_than_5_minutes(): void
+    {
+        $this->assertSame('2026-11-20T11:55:00Z', self::policy()->redispatchBefore(self::now())->toIso8601ZuluString());
+        $this->assertSame('2026-11-20T11:59:00Z', self::policy(redispatchAfterSeconds: 60)->redispatchBefore(self::now())->toIso8601ZuluString());
+    }
+
     private static function now(): CarbonImmutable
     {
         return CarbonImmutable::parse(self::NOW);
@@ -148,6 +154,7 @@ final class ReconcilePolicyTest extends TestCase
         int $maxRecheckSeconds = 900,
         int $batchSize = 20,
         int $submitReserve = 10,
+        int $redispatchAfterSeconds = 300,
     ): ReconcilePolicy {
         return new ReconcilePolicy(
             queuedAfterSeconds: $queuedAfterSeconds,
@@ -156,6 +163,7 @@ final class ReconcilePolicyTest extends TestCase
             maxRecheckSeconds: $maxRecheckSeconds,
             batchSize: $batchSize,
             submitReserve: $submitReserve,
+            redispatchAfterSeconds: $redispatchAfterSeconds,
         );
     }
 }
