@@ -5,6 +5,12 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
+/**
+ * The lowest level the `sentry` channel sends (D-77): error, unless LOG_SENTRY_LEVEL names
+ * another Monolog level.
+ */
+$sentryLevel = strtolower((string) env('LOG_SENTRY_LEVEL'));
+
 return [
 
     /*
@@ -116,6 +122,16 @@ return [
             'driver' => 'errorlog',
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+        ],
+
+        // Lines at that level and above become Sentry events, redacted like every other.
+        // Production puts it in the stack with LOG_STACK=daily,sentry. A record that carries an
+        // exception is skipped, because Integration::handles() has already sent it.
+        'sentry' => [
+            'driver' => 'sentry',
+            'level' => in_array($sentryLevel, ['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'], true) ? $sentryLevel : 'error',
+            'bubble' => true,
+            'report_exceptions' => false,
         ],
 
         'null' => [

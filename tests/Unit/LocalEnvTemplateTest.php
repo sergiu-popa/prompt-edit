@@ -97,6 +97,29 @@ final class LocalEnvTemplateTest extends TestCase
     }
 
     /**
+     * Local and E2E never send to Sentry, and every other setting keeps its default (D-77).
+     */
+    #[DataProvider('sentrySettings')]
+    public function test_sentry_settings_are_left_blank(string $name): void
+    {
+        $this->assertSame('', self::template()[$name] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function sentrySettings(): array
+    {
+        return [
+            'no DSN, so nothing is sent' => ['SENTRY_LARAVEL_DSN'],
+            'no release' => ['SENTRY_RELEASE'],
+            'no tracing' => ['SENTRY_TRACES_SAMPLE_RATE'],
+            'no profiling' => ['SENTRY_PROFILES_SAMPLE_RATE'],
+            'the log channel at error' => ['LOG_SENTRY_LEVEL'],
+        ];
+    }
+
+    /**
      * Only what E2E needs is shortened (Story clarifications, dev bounds): re-dispatch,
      * give-up and stuck keep production's values, so parallel specs never see them.
      */

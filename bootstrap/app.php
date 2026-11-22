@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Route;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -35,6 +36,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Every exception the handler reports also goes to Sentry, redacted, when a DSN is set
+        // (D-77). Laravel still logs it as before; the `sentry` log channel skips that record, so
+        // the exception arrives once.
+        Integration::handles($exceptions);
+
         // An expired session lands back on its page, or on Sign in, with a notice instead of a
         // 419 page or Inertia's error modal (D-60). The app's only respond() callback.
         $exceptions->respond(new RedirectExpiredSession);

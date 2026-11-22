@@ -23,6 +23,7 @@ final class ProductionEnvTemplateTest extends TestCase
         'APP_LOCALE',
         'APP_FALLBACK_LOCALE',
         'LOG_CHANNEL',
+        'LOG_STACK',
         'LOG_DAILY_DAYS',
         'LOG_LEVEL',
         'LOG_DEPRECATIONS_CHANNEL',
@@ -51,6 +52,7 @@ final class ProductionEnvTemplateTest extends TestCase
         'PIXELFORGE_DRIVER',
         'PIXELFORGE_API_KEY',
         'PIXELFORGE_WEBHOOK_SECRET',
+        'SENTRY_LARAVEL_DSN',
     ];
 
     public function test_it_names_exactly_the_production_variables(): void
@@ -66,6 +68,16 @@ final class ProductionEnvTemplateTest extends TestCase
         $pixelforge = array_values(array_filter(array_keys(self::template()), fn (string $name): bool => str_starts_with($name, 'PIXELFORGE_')));
 
         $this->assertSame(['PIXELFORGE_DRIVER', 'PIXELFORGE_API_KEY', 'PIXELFORGE_WEBHOOK_SECRET'], $pixelforge);
+    }
+
+    /**
+     * Every other Sentry setting keeps its default from config/sentry.php: tracing off (D-77).
+     */
+    public function test_it_has_exactly_the_one_sentry_variable(): void
+    {
+        $sentry = array_values(array_filter(array_keys(self::template()), fn (string $name): bool => str_starts_with($name, 'SENTRY_')));
+
+        $this->assertSame(['SENTRY_LARAVEL_DSN'], $sentry);
     }
 
     #[DataProvider('secrets')]
@@ -84,6 +96,7 @@ final class ProductionEnvTemplateTest extends TestCase
             'database password' => ['DB_PASSWORD'],
             'Pixelforge API key' => ['PIXELFORGE_API_KEY'],
             'Pixelforge webhook secret' => ['PIXELFORGE_WEBHOOK_SECRET'],
+            'Sentry DSN, written on the server' => ['SENTRY_LARAVEL_DSN'],
         ];
     }
 
@@ -108,7 +121,8 @@ final class ProductionEnvTemplateTest extends TestCase
             'secure session cookie' => ['SESSION_SECURE_COOKIE', 'true'],
             'http-only session cookie' => ['SESSION_HTTP_ONLY', 'true'],
             'lax session cookie' => ['SESSION_SAME_SITE', 'lax'],
-            'daily log files' => ['LOG_CHANNEL', 'daily'],
+            'a log stack' => ['LOG_CHANNEL', 'stack'],
+            'of daily log files and Sentry' => ['LOG_STACK', 'daily,sentry'],
             'logs kept 14 days' => ['LOG_DAILY_DAYS', '14'],
             'info lines kept' => ['LOG_LEVEL', 'info'],
             'the real Pixelforge' => ['PIXELFORGE_DRIVER', 'http'],

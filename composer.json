@@ -14,7 +14,8 @@
         "inertiajs/inertia-laravel": "^3.7",
         "laravel/fortify": "^1.43",
         "laravel/framework": "^13.33",
-        "laravel/tinker": "^3.0.2"
+        "laravel/tinker": "^3.0.2",
+        "sentry/sentry-laravel": "^4.31"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",

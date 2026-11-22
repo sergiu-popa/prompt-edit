@@ -21,6 +21,8 @@ The app is served at http://prompt-edit.localhost. `make npm-dev` runs Vite in d
 
 These credentials are local-only: the seeder refuses to run in production.
 
+Sentry is production only (D-77): `.env.example` leaves `SENTRY_LARAVEL_DSN` empty, so local and E2E never send, and `phpunit.xml` clears it, so no test sends; the tests that check reporting capture events in memory.
+
 Dev and E2E accounts start at $0.0100 (`CREDITS_STARTER_GRANT=10000000`), below the cheapest request's max, so the blocked flow can be seen and tested (D-71). Buy a pack at `/credits`. The seeded demo account also gets one $1.00 demo purchase, so it has $1.0100 on a fresh database.
 
 ### Pixelforge (used from PE-009 onwards)
