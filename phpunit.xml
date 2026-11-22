@@ -62,6 +62,7 @@
         <env name="SENTRY_RELEASE" value="" force="true"/>
         <env name="SENTRY_TRACES_SAMPLE_RATE" value="" force="true"/>
         <env name="SENTRY_PROFILES_SAMPLE_RATE" value="" force="true"/>
+        <env name="LOG_SENTRY_LEVEL" value="" force="true"/>
         <!-- The dev containers set these in the process env, which Laravel reads from $_SERVER first. -->
         <server name="AUTH_REGISTRATIONS_PER_HOUR" value=""/>
         <server name="CREDITS_STARTER_GRANT" value=""/>
@@ -84,6 +85,7 @@
         <server name="SENTRY_RELEASE" value=""/>
         <server name="SENTRY_TRACES_SAMPLE_RATE" value=""/>
         <server name="SENTRY_PROFILES_SAMPLE_RATE" value=""/>
+        <server name="LOG_SENTRY_LEVEL" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="INERTIA_SSR_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>

@@ -37,7 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Every exception the handler reports also goes to Sentry, redacted, when a DSN is set
-        // (D-77). Laravel still logs it as before.
+        // (D-77). Laravel still logs it as before; the `sentry` log channel skips that record, so
+        // the exception arrives once.
         Integration::handles($exceptions);
 
         // An expired session lands back on its page, or on Sign in, with a notice instead of a
