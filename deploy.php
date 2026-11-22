@@ -24,7 +24,7 @@ set('writable_dirs', []);
 // Symfony-PHP-8_4 backend, whose open_basedir covers the whole domain folder, releases included.
 // The queue worker is the systemd unit prompt-edit-worker (WorkingDirectory current/), the
 // scheduler is a Hestia cron job for admin, and PostgreSQL 17 listens on localhost only
-// (README, "Production").
+// (docs/production.md).
 host('164.90.236.77')
     ->setRemoteUser('admin')
     ->setIdentityFile('~/.ssh/id_rsa')

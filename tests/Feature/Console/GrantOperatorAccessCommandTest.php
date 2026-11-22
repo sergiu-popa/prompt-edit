@@ -66,7 +66,7 @@ final class GrantOperatorAccessCommandTest extends TestCase
         [$exitCode, $output] = $this->grant('grace@example.com');
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('No user has the email grace@example.com. This command never creates users: create the account first (README, "Reviewer account").', $output);
+        $this->assertStringContainsString('No user has the email grace@example.com. This command never creates users: create the account first (docs/production.md, "Reviewer account").', $output);
         $this->assertSame(1, User::query()->count());
         $this->assertFalse($user->refresh()->is_operator);
         $this->assertSame([], $this->loggedMessages());

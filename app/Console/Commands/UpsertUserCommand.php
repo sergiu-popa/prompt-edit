@@ -33,7 +33,7 @@ final class UpsertUserCommand extends Command
         $passwordSource = $this->passwordSource();
 
         if (stream_isatty($passwordSource)) {
-            $this->components->error('Pipe the password on stdin instead of typing it (README, "Reviewer account").');
+            $this->components->error('Pipe the password on stdin instead of typing it (docs/production.md, "Reviewer account").');
 
             return self::FAILURE;
         }

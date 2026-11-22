@@ -12,8 +12,8 @@ use RuntimeException;
 
 /**
  * The local operator, which E2E signs in as to open the report. Like the demo user, its
- * credentials are documented in the README and are local-only: the seeder refuses to run in
- * production, where `app:grant-operator` grants access to existing accounts (D-62).
+ * credentials are documented in docs/development.md and are local-only: the seeder refuses
+ * to run in production, where `app:grant-operator` grants access to existing accounts (D-62).
  */
 final class OperatorUserSeeder extends Seeder
 {

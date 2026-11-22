@@ -29,7 +29,7 @@ final class GrantOperatorAccessCommand extends Command
         $user = User::query()->where('email', $email)->first();
 
         if ($user === null) {
-            $this->components->error("No user has the email {$email}. This command never creates users: create the account first (README, \"Reviewer account\").");
+            $this->components->error("No user has the email {$email}. This command never creates users: create the account first (docs/production.md, \"Reviewer account\").");
 
             return self::FAILURE;
         }
