@@ -246,7 +246,7 @@ Verified on production at go-live (PE-015) and worth repeating after any change 
 | Failed jobs | `php8.4 artisan queue:failed` lists none, or each is explained |
 | No secrets in logs | From the domain folder, each prints `:0` for every file: `grep -c -F -f <(sed -n 's/^PIXELFORGE_API_KEY=//p' shared/.env) shared/storage/logs/laravel-*.log`, the same with `PIXELFORGE_WEBHOOK_SECRET`, and `grep -c -E 'whsec_\|Authorization\|Bearer ' shared/storage/logs/laravel-*.log`. As root, pipe `journalctl -u prompt-edit-worker --since today` through the same three |
 | No arguments in traces | As root: `grep -rhsE 'zend\.exception_ignore_args' /etc/php/8.4/fpm/php.ini /etc/php/8.4/fpm/conf.d /etc/php/8.4/fpm/pool.d` shows `On`, and `php8.4 -r 'var_dump(ini_get("zend.exception_ignore_args"));'` prints `"1"` |
-| Money on real generations | Note `date -u +%FT%TZ`, create generations with the [test keywords](../README.md#reviewer-guide), then `php8.4 artisan app:check-generation-money --since=<that instant>`: every row `OK`, exit 0. It prints the keywords, never the prompt |
+| Money on real generations | Note `date -u +%FT%TZ`, create generations with the [test keywords](reviewer-guide.md), then `php8.4 artisan app:check-generation-money --since=<that instant>`: every row `OK`, exit 0. It prints the keywords, never the prompt |
 
 ### Demo refresh and sign-off
 
