@@ -13,8 +13,8 @@ use RuntimeException;
 
 /**
  * The local demo account, which E2E also signs in as. Its credentials are documented in
- * the README and are local-only: the seeder refuses to run in production, where PE-004
- * creates the reviewer account with its own command.
+ * docs/development.md and are local-only: the seeder refuses to run in production, where
+ * PE-004 creates the reviewer account with its own command.
  */
 final class DemoUserSeeder extends Seeder
 {

@@ -202,7 +202,7 @@ final class UpsertUserCommandTest extends TestCase
         $exitCode = Artisan::all()['app:upsert-user']->run($input, $output);
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Pipe the password on stdin', $output->fetch());
+        $this->assertStringContainsString('Pipe the password on stdin instead of typing it (docs/production.md, "Reviewer account").', $output->fetch());
         $this->assertSame(0, User::query()->count());
         $this->assertSame([], $this->loggedMessages);
     }
