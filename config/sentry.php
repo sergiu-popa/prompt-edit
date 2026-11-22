@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Support\Sentry\RedactSentryEvent;
+
 /**
  * Sentry error monitoring (D-77): reported exceptions and error-level log lines, with nothing
  * that could carry a secret, a prompt or a person. Without a DSN nothing is sent, which is the
@@ -72,6 +74,16 @@ return [
     'send_default_pii' => false,
 
     'max_request_body_size' => 'never',
+
+    /**
+     * The last step before an event or a transaction is sent: secrets, credentials, email
+     * addresses and failed queries' bindings are filtered from every string. A static method,
+     * because `config:cache` cannot store a closure, and a callable the SDK cannot call would
+     * silently mean none.
+     */
+    'before_send' => [RedactSentryEvent::class, 'beforeSend'],
+
+    'before_send_transaction' => [RedactSentryEvent::class, 'beforeSend'],
 
     /**
      * What the SDK collects. Setting it replaces `send_default_pii`, and an invalid value falls

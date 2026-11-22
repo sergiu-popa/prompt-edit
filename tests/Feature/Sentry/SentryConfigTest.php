@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Sentry;
 
+use App\Support\Sentry\RedactSentryEvent;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Sentry\DataCollection\HttpMessageType;
+use Sentry\Event;
 use Sentry\Options;
 use Sentry\State\HubInterface;
 use Tests\TestCase;
@@ -80,6 +82,31 @@ final class SentryConfigTest extends TestCase
         $this->assertFalse($dataCollection->shouldCollectQueues());
         $this->assertTrue($dataCollection->getStackFrameVariables()->isOff());
         $this->assertSame(['inputs' => false, 'outputs' => false], $dataCollection->getGenAi());
+    }
+
+    public function test_every_event_and_transaction_goes_through_the_redactor(): void
+    {
+        $options = $this->clientOptions();
+
+        $this->assertSame([RedactSentryEvent::class, 'beforeSend'], $options->getBeforeSendCallback());
+        $this->assertSame([RedactSentryEvent::class, 'beforeSend'], $options->getBeforeSendTransactionCallback());
+    }
+
+    /**
+     * The secrets come from config at send time, so the redactor knows production's.
+     */
+    public function test_the_redactor_filters_the_configured_pixelforge_secrets(): void
+    {
+        config([
+            'pixelforge.api_key' => 'pf_test_feature_0123456789',
+            'pixelforge.webhook_secret' => 'pfwh_feature_0123456789',
+        ]);
+        $event = Event::createEvent();
+        $event->setMessage('Sent pf_test_feature_0123456789, signed with pfwh_feature_0123456789.');
+
+        RedactSentryEvent::beforeSend($event);
+
+        $this->assertSame('Sent [Filtered], signed with [Filtered].', $event->getMessage());
     }
 
     /**
