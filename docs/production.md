@@ -262,12 +262,28 @@ Shortly before hand-in, within 24 h so the images are still live, after `dep dep
 
 ## Logs
 
-- Laravel: `shared/storage/logs/laravel-YYYY-MM-DD.log`, one file per day, kept 14 days, at level `info`.
+- Laravel: `shared/storage/logs/laravel-YYYY-MM-DD.log`, one file per day, kept 14 days, at level `info`. Lines at `error` and above also reach Sentry (below).
   ```bash
   tail -f /home/admin/web/prompt.sergiupopa.dev/shared/storage/logs/laravel-$(date +%F).log
   ```
 - Apache and nginx: `/var/log/apache2/domains/prompt.sergiupopa.dev.*` and `/var/log/nginx/domains/`.
 - Queue worker: `journalctl -u prompt-edit-worker` (as root).
+
+## Error monitoring
+
+Production reports to Sentry (D-77): every exception Laravel reports, and every log line at `error` and above through the `sentry` channel of `LOG_STACK=daily,sentry`. The daily file still gets every line at `info`. Without a DSN nothing is sent, which is the case everywhere but production.
+
+- **The DSN** goes in `shared/.env` only, as `SENTRY_LARAVEL_DSN`, written in place on the server like the other secrets: never committed, never on a command line. The same file needs `LOG_CHANNEL=stack` and `LOG_STACK=daily,sentry` (`.env.production.example`). The next `dep deploy` caches the config, reloads PHP-FPM and restarts the worker, so every process picks the change up.
+- **After that deploy**, as `admin` in `current/`:
+  ```bash
+  php8.4 artisan about --only=sentry   # Enabled YES, Environment production, Data Collection ENABLED, Sample Rate Errors 100%, Performance and Profiling NOT SET
+  php8.4 artisan sentry:test           # "Test event sent with ID: …"; the event shows in Sentry under production
+  ```
+  `sentry:test` sends a synthetic exception from the command itself, through its own client, so it carries no user data.
+- **Never sent:** request and response bodies (sign-in passwords, prompts, Pixelforge's answers), cookies, any user (no id, email or IP is attached), the headers that carry the visitor's IP, SQL bindings, queue job arguments, function arguments in stack traces, and cache keys (the sign-in throttle's is `email|ip`).
+- **Never sent to Pixelforge:** Sentry's `baggage` and `sentry-trace` headers. The package would add them to every request even with tracing off, and the baggage names the project's public key and organisation.
+- **Filtered from every string before sending** (`RedactSentryEvent`): the Pixelforge API key and webhook secret, the app key and database password, any `whsec_…`, bearer and Authorization values, email addresses, values under keys such as `password`, `prompt` or `…_token`, an Artisan command line's arguments (`app:upsert-user` takes a display name), and a failed query's bindings and PostgreSQL DETAIL values.
+- **Optional settings**, all off by default: `SENTRY_RELEASE` names the release, `SENTRY_TRACES_SAMPLE_RATE` and `SENTRY_PROFILES_SAMPLE_RATE` (0 to 1) turn tracing and profiling on, and `LOG_SENTRY_LEVEL` moves the channel's level from `error`.
 
 ## Backups and restore
 
